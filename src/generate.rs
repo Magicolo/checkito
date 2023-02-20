@@ -199,7 +199,7 @@ impl<G: Generate> Generate for &mut G {
 }
 
 macro_rules! tuple {
-    () => {
+    ($n:ident, $c:tt) => {
         impl FullGenerate for () {
             type Item = <Self::Generate as Generate>::Item;
             type Generate = ();
@@ -224,7 +224,7 @@ macro_rules! tuple {
             fn shrink(&mut self) -> Option<Self> { None }
         }
     };
-    ($($p:ident, $t:ident),*) => {
+    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: FullGenerate,)*> FullGenerate for ($($t,)*) {
             type Item = <Self::Generate as Generate>::Item;
             type Generate = ($($t::Generate,)*);
@@ -239,8 +239,7 @@ macro_rules! tuple {
             type Generate = ($($t::Generate,)*);
 
             fn generator(self) -> Self::Generate {
-                let ($($p,)*) = self;
-                ($($p.generator(),)*)
+                ($(self.$i.generator(),)*)
             }
         }
 
@@ -249,9 +248,8 @@ macro_rules! tuple {
             type Shrink = ($($t::Shrink,)*);
 
             fn generate(&self, _state: &mut State) -> (Self::Item, Self::Shrink) {
-                let ($($p,)*) = self;
-                $(let $p = $p.generate(_state);)*
-                (($($p.0,)*), ($($p.1,)*))
+                let pairs = ($(self.$i.generate(_state),)*);
+                (($(pairs.$i.0,)*), ($(pairs.$i.1,)*))
             }
         }
 
@@ -259,23 +257,21 @@ macro_rules! tuple {
             type Item = ($($t::Item,)*);
 
             fn generate(&self) -> Self::Item {
-                let ($($p,)*) = self;
-                ($($p.generate(),)*)
+                ($(self.$i.generate(),)*)
             }
 
             fn shrink(&mut self) -> Option<Self> {
-                let ($($p,)*) = self;
                 let mut shrunk = false;
-                let ($($p,)*) = ($(
-                    if shrunk { $p.clone() }
+                let shrinks = ($(
+                    if shrunk { self.$i.clone() }
                     else {
-                        match $p.shrink() {
+                        match self.$i.shrink() {
                             Some(shrink) => { shrunk = true; shrink },
-                            None => $p.clone(),
+                            None => self.$i.clone(),
                         }
                     },
                 )*);
-                if shrunk { Some(($($p,)*)) } else { None }
+                if shrunk { Some(shrinks) } else { None }
             }
         }
     };

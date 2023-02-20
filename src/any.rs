@@ -2,7 +2,7 @@ use crate::{
     count,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
-    tuples_with,
+    tuples,
 };
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -182,4 +182,4 @@ macro_rules! tuple {
     };
 }
 
-tuples_with!(tuple);
+tuples!(tuple);

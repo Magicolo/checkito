@@ -86,11 +86,10 @@ impl<T, E> Proof for Result<T, E> {
 }
 
 macro_rules! tuple {
-    ($($p:ident, $t:ident),*) => {
+    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: Proof,)*> Proof for ($($t,)*) {
             fn prove(&self) -> bool {
-                let ($($p,)*) = self;
-                $($p.prove() &&)* true
+                $(self.$i.prove() &&)* true
             }
         }
     };
