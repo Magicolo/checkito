@@ -19,7 +19,7 @@ mod utility;
 
 use self::any::Any;
 pub use crate::{
-    check::Check,
+    check::{Check, CheckParallel, Prove},
     generate::{FullGenerate, Generate, IntoGenerate},
     shrink::Shrink,
 };
