@@ -1,8 +1,18 @@
 use crate::{generate::State, shrink::Shrink, tuples, Generate};
 use fastrand::Rng;
+use std::{error, fmt, thread::scope};
 
 pub trait Check<T> {
-    fn check<P: Proof, F: Fn(&T) -> P>(
+    #[inline]
+    fn check<P: Prove, F: FnMut(&T) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Result<(), Error<P, T>> {
+        self.check_with(count, None, check)
+    }
+
+    fn check_with<P: Prove, F: FnMut(&T) -> P>(
         &self,
         count: usize,
         seed: Option<u64>,
@@ -10,7 +20,25 @@ pub trait Check<T> {
     ) -> Result<(), Error<P, T>>;
 }
 
-pub trait Proof {
+pub trait CheckParallel<T> {
+    #[inline]
+    fn check_parallel<P: Prove + Send + Sync, F: Fn(&T) -> P + Send + Sync>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Result<(), Error<P, T>> {
+        self.check_parallel_with(count, None, check)
+    }
+
+    fn check_parallel_with<P: Prove + Send + Sync, F: Fn(&T) -> P + Send + Sync>(
+        &self,
+        count: usize,
+        seed: Option<u64>,
+        check: F,
+    ) -> Result<(), Error<P, T>>;
+}
+
+pub trait Prove {
     fn prove(&self) -> bool;
 }
 
@@ -33,12 +61,20 @@ impl<P, T> Error<P, T> {
     }
 }
 
+impl<P: fmt::Debug, T: fmt::Debug> fmt::Display for Error<P, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self, f)
+    }
+}
+
+impl<P: fmt::Debug, T: fmt::Debug> error::Error for Error<P, T> {}
+
 impl<G: Generate + ?Sized> Check<G::Item> for G {
-    fn check<P: Proof, F: Fn(&G::Item) -> P>(
+    fn check_with<P: Prove, F: FnMut(&G::Item) -> P>(
         &self,
         count: usize,
         seed: Option<u64>,
-        check: F,
+        mut check: F,
     ) -> Result<(), Error<P, G::Item>> {
         let random = seed.map_or_else(Rng::new, Rng::with_seed);
         for index in 0..count {
@@ -73,21 +109,76 @@ impl<G: Generate + ?Sized> Check<G::Item> for G {
     }
 }
 
-impl Proof for bool {
+impl<G: Generate + ?Sized + Send + Sync> CheckParallel<G::Item> for G
+where
+    G::Item: Send,
+{
+    fn check_parallel_with<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
+        &self,
+        count: usize,
+        seed: Option<u64>,
+        check: F,
+    ) -> Result<(), Error<P, G::Item>> {
+        let parallel = num_cpus::get();
+        let random = seed.map_or_else(Rng::new, Rng::with_seed);
+        let results: Vec<_> =
+            scope(|scope| {
+                let mut handles = Vec::new();
+                for _ in 0..parallel.min(count) {
+                    let seed = random.u64(..);
+                    let check = &check;
+                    handles.push(scope.spawn(move || {
+                        self.check_with((count / parallel).max(1), Some(seed), check)
+                    }));
+                }
+                handles.into_iter().map(|handle| handle.join()).collect()
+            });
+        for result in results {
+            result.unwrap()?;
+        }
+        Ok(())
+    }
+}
+
+impl Prove for bool {
     fn prove(&self) -> bool {
         *self
     }
 }
 
-impl<T, E> Proof for Result<T, E> {
+impl<F: Fn() -> bool> Prove for F {
+    fn prove(&self) -> bool {
+        self()
+    }
+}
+
+impl<T, E> Prove for Result<T, E> {
     fn prove(&self) -> bool {
         self.is_ok()
     }
 }
 
+impl<P: Prove> Prove for [P] {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+}
+
+impl<P: Prove, const N: usize> Prove for [P; N] {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+}
+
+impl<P: Prove> Prove for Vec<P> {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+}
+
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: Proof,)*> Proof for ($($t,)*) {
+        impl<$($t: Prove,)*> Prove for ($($t,)*) {
             fn prove(&self) -> bool {
                 $(self.$i.prove() &&)* true
             }

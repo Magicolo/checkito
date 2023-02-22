@@ -26,12 +26,12 @@ mod range {
                 #[test]
                 #[should_panic]
                 fn empty_range() {
-                    <$t>::generator().bind(|value| value..value).check(1, None, |_| true).unwrap();
+                    <$t>::generator().bind(|value| value..value).check(1, |_| true).unwrap();
                 }
 
                 #[test]
                 fn is_constant() -> Result<($t, $t)> {
-                    number::<$t>().bind(|value| (value, Constant(value))).check(COUNT, None, |&(left, right)| left == right)
+                    number::<$t>().bind(|value| (value, Constant(value))).check(COUNT, |&(left, right)| left == right)
                 }
 
                 #[test]
@@ -40,7 +40,7 @@ mod range {
                         .map(|(low, high)| (low.min($t::MAX - $t::MAX / 100 as $t), high.min($t::MAX - $t::MAX / 100 as $t)))
                         .map(|(low, high)| (low.min(high), low.max(high) + $t::MAX / 100 as $t))
                         .bind(|(low, high)| (low..high, low, high))
-                        .check(COUNT, None, |&(value, low, high)| value >= low && value < high)
+                        .check(COUNT, |&(value, low, high)| value >= low && value < high)
                 }
 
                 #[test]
@@ -48,12 +48,12 @@ mod range {
                     (number::<$t>(), number::<$t>())
                         .map(|(low, high)| (low.min(high), low.max(high)))
                         .bind(|(low, high)| (low..=high, low, high))
-                        .check(COUNT, None, |&(value, low, high)| value >= low && value <= high)
+                        .check(COUNT, |&(value, low, high)| value >= low && value <= high)
                 }
 
                 #[test]
                 fn is_in_range_from() -> Result<($t, $t)> {
-                    number::<$t>().bind(|low| (low, low..)).check(COUNT, None, |&(low, high)| low <= high)
+                    number::<$t>().bind(|low| (low, low..)).check(COUNT, |&(low, high)| low <= high)
                 }
 
                 #[test]
@@ -61,22 +61,22 @@ mod range {
                     number::<$t>()
                         .map(|high| high.max($t::MIN + $t::MAX / 100 as $t))
                         .bind(|high| (..high, high))
-                        .check(COUNT, None, |&(low, high)| low < high)
+                        .check(COUNT, |&(low, high)| low < high)
                 }
 
                 #[test]
                 fn is_in_range_to_inclusive() -> Result<($t, $t)> {
-                    number::<$t>().bind(|high| (..=high, high)).check(COUNT, None, |&(low, high)| low <= high)
+                    number::<$t>().bind(|high| (..=high, high)).check(COUNT, |&(low, high)| low <= high)
                 }
 
                 #[test]
                 fn is_positive() -> Result<$t> {
-                    positive::<$t>().check(COUNT, None, |&value| value >= 0 as $t)
+                    positive::<$t>().check(COUNT, |&value| value >= 0 as $t)
                 }
 
                 #[test]
                 fn keeps_value() -> Result<$t> {
-                    match number::<$t>().keep().check(COUNT, None, |&value| value < 100 as $t) {
+                    match number::<$t>().keep().check(COUNT, |&value| value < 100 as $t) {
                         Err(error) if error.original() == error.shrunk() => Ok(()),
                         result => result,
                     }
@@ -91,11 +91,9 @@ mod range {
         (INNER $t:ident) => {
             #[test]
             fn check_finds_minimum() -> Result<($t, $t)> {
-                match (positive::<$t>(), positive::<$t>().keep()).check(
-                    COUNT,
-                    None,
-                    |&(left, right)| left < right,
-                ) {
+                match (positive::<$t>(), positive::<$t>().keep())
+                    .check(COUNT, |&(left, right)| left < right)
+                {
                     Err(error) => {
                         let &(left, right) = error.shrunk();
                         if right - left <= right / 100 as $t {
@@ -110,11 +108,9 @@ mod range {
 
             #[test]
             fn check_shrinks_irrelevant_items() -> Result<($t, $t, $t)> {
-                match (positive::<$t>(), positive::<$t>().keep(), positive::<$t>()).check(
-                    COUNT,
-                    None,
-                    |&(left, right, _)| left < right,
-                ) {
+                match (positive::<$t>(), positive::<$t>().keep(), positive::<$t>())
+                    .check(COUNT, |&(left, right, _)| left < right)
+                {
                     Err(error) if error.shrunk().2 == 0 as $t => Ok(()),
                     result => result,
                 }
@@ -129,13 +125,13 @@ mod range {
         (INNER $t:ident) => {
             #[test]
             fn is_negative() -> Result<$t> {
-                negative::<$t>().check(COUNT, None, |&value| value <= 0 as $t)
+                negative::<$t>().check(COUNT, |&value| value <= 0 as $t)
             }
 
             #[test]
             fn check_finds_maximum() -> Result<($t, $t)> {
                 match (negative::<$t>(), negative::<$t>().keep())
-                    .check(COUNT, None, |&(left, right)| left > right)
+                    .check(COUNT, |&(left, right)| left > right)
                 {
                     Err(error) => {
                         let &(left, right) = error.shrunk();
@@ -161,7 +157,7 @@ mod range {
         (INNER $t:ident) => {
             #[test]
             fn is_negative() -> Result<$t> {
-                negative::<$t>().check(COUNT, None, |&value| value <= 0 as $t)
+                negative::<$t>().check(COUNT, |&value| value <= 0 as $t)
             }
         };
         ($($t:ident),*) => { $(tests!($t, [tests_floating]);)* };

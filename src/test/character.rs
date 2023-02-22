@@ -10,7 +10,7 @@ use std::{
 fn empty_range() {
     char::generator()
         .bind(|value| value..value)
-        .check(1, None, |_| true)
+        .check(1, |_| true)
         .unwrap();
 }
 
@@ -18,27 +18,27 @@ fn empty_range() {
 fn is_constant() -> Result<(char, char)> {
     char::generator()
         .bind(|value| (value, Constant(value)))
-        .check(COUNT, None, |&(left, right)| left == right)
+        .check(COUNT, |&(left, right)| left == right)
 }
 
 #[test]
 fn is_ascii() -> Result<char> {
-    ascii().check(COUNT, None, |value| value.is_ascii())
+    ascii().check(COUNT, |value| value.is_ascii())
 }
 
 #[test]
 fn is_digit() -> Result<char> {
-    digit().check(COUNT, None, |value| value.is_ascii_digit())
+    digit().check(COUNT, |value| value.is_ascii_digit())
 }
 
 #[test]
 fn is_alphabetic() -> Result<char> {
-    letter().check(COUNT, None, |value| value.is_ascii_alphabetic())
+    letter().check(COUNT, |value| value.is_ascii_alphabetic())
 }
 
 #[test]
 fn full_does_not_panic() -> Result<char> {
-    char::generator().check(COUNT, None, |_| true)
+    char::generator().check(COUNT, |_| true)
 }
 
 macro_rules! collection {
@@ -50,22 +50,22 @@ macro_rules! collection {
             fn has_constant_count() -> Result<(usize, $t)> {
                 (0..COUNT)
                     .bind(|count| (count, char::generator().collect_with::<_, $t>(count)))
-                    .check(COUNT, None, |(count, value)| value $(.$i())? .count() == *count)
+                    .check(COUNT, |(count, value)| value $(.$i())? .count() == *count)
             }
 
             #[test]
             fn is_ascii() -> Result<$t> {
-                ascii().collect::<$t>().check(COUNT, None, |value| value $(.$i())? .all(|value| value.is_ascii()))
+                ascii().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii()))
             }
 
             #[test]
             fn is_digit() -> Result<$t> {
-                digit().collect::<$t>().check(COUNT, None, |value| value $(.$i())? .all(|value| value.is_ascii_digit()))
+                digit().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_digit()))
             }
 
             #[test]
             fn is_alphabetic() -> Result<$t> {
-                letter().collect::<$t>().check(COUNT, None, |value| value $(.$i())? .all(|value| value.is_ascii_alphabetic()))
+                letter().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_alphabetic()))
             }
         }
     };
