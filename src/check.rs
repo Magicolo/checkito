@@ -2,44 +2,34 @@ use crate::{generate::State, shrink::Shrink, tuples, Generate};
 use fastrand::Rng;
 use std::{error, fmt, thread::scope};
 
-pub trait Check<T> {
-    #[inline]
-    fn check<P: Prove, F: FnMut(&T) -> P>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Result<(), Error<P, T>> {
-        self.check_with(count, None, check)
-    }
-
-    fn check_with<P: Prove, F: FnMut(&T) -> P>(
-        &self,
-        count: usize,
-        seed: Option<u64>,
-        check: F,
-    ) -> Result<(), Error<P, T>>;
+pub trait IntoCheck {
+    fn checker(&self, seed: Option<u64>) -> Checker<Self>;
 }
 
-pub trait CheckParallel<T> {
-    #[inline]
-    fn check_parallel<P: Prove + Send + Sync, F: Fn(&T) -> P + Send + Sync>(
+pub trait Check {
+    type Item;
+    fn check<P: Prove, F: FnMut(&Self::Item) -> P>(
         &self,
         count: usize,
         check: F,
-    ) -> Result<(), Error<P, T>> {
-        self.check_parallel_with(count, None, check)
-    }
+    ) -> Result<(), Error<P, Self::Item>>;
+}
 
-    fn check_parallel_with<P: Prove + Send + Sync, F: Fn(&T) -> P + Send + Sync>(
+pub trait CheckParallel: Check {
+    fn check_parallel<P: Prove + Send + Sync, F: Fn(&Self::Item) -> P + Send + Sync>(
         &self,
         count: usize,
-        seed: Option<u64>,
         check: F,
-    ) -> Result<(), Error<P, T>>;
+    ) -> Result<(), Error<P, Self::Item>>;
 }
 
 pub trait Prove {
     fn prove(&self) -> bool;
+}
+
+pub struct Checker<'a, G: ?Sized> {
+    seed: Option<u64>,
+    generator: &'a G,
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +51,12 @@ impl<P, T> Error<P, T> {
     }
 }
 
+impl<'a, G: ?Sized> Checker<'a, G> {
+    pub const fn new(generator: &'a G, seed: Option<u64>) -> Self {
+        Self { generator, seed }
+    }
+}
+
 impl<P: fmt::Debug, T: fmt::Debug> fmt::Display for Error<P, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self, f)
@@ -69,17 +65,18 @@ impl<P: fmt::Debug, T: fmt::Debug> fmt::Display for Error<P, T> {
 
 impl<P: fmt::Debug, T: fmt::Debug> error::Error for Error<P, T> {}
 
-impl<G: Generate + ?Sized> Check<G::Item> for G {
-    fn check_with<P: Prove, F: FnMut(&G::Item) -> P>(
+impl<G: Generate + ?Sized> Check for Checker<'_, G> {
+    type Item = G::Item;
+
+    fn check<P: Prove, F: FnMut(&G::Item) -> P>(
         &self,
         count: usize,
-        seed: Option<u64>,
         mut check: F,
     ) -> Result<(), Error<P, G::Item>> {
-        let random = seed.map_or_else(Rng::new, Rng::with_seed);
+        let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
         for index in 0..count {
             let mut state = State::new(index, count, random.u64(..));
-            let (outer_item, mut outer_shrink) = self.generate(&mut state);
+            let (outer_item, mut outer_shrink) = self.generator.generate(&mut state);
             let outer_proof = check(&outer_item);
             if outer_proof.prove() {
                 continue;
@@ -109,34 +106,68 @@ impl<G: Generate + ?Sized> Check<G::Item> for G {
     }
 }
 
-impl<G: Generate + ?Sized + Send + Sync> CheckParallel<G::Item> for G
+impl<G: Generate + ?Sized + Send + Sync> CheckParallel for Checker<'_, G>
 where
     G::Item: Send,
 {
-    fn check_parallel_with<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
+    fn check_parallel<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
         &self,
         count: usize,
-        seed: Option<u64>,
         check: F,
     ) -> Result<(), Error<P, G::Item>> {
-        let parallel = num_cpus::get();
-        let random = seed.map_or_else(Rng::new, Rng::with_seed);
-        let results: Vec<_> =
-            scope(|scope| {
-                let mut handles = Vec::new();
-                for _ in 0..parallel.min(count) {
-                    let seed = random.u64(..);
-                    let check = &check;
-                    handles.push(scope.spawn(move || {
-                        self.check_with((count / parallel).max(1), Some(seed), check)
-                    }));
-                }
-                handles.into_iter().map(|handle| handle.join()).collect()
-            });
+        let parallel = num_cpus::get().max(1);
+        let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
+        let results: Vec<_> = scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..parallel.min(count) {
+                let seed = random.u64(..);
+                let check = &check;
+                let checker = Checker::new(self.generator, Some(seed));
+                handles.push(scope.spawn(move || checker.check((count / parallel).max(1), check)));
+            }
+            handles.into_iter().map(|handle| handle.join()).collect()
+        });
         for result in results {
             result.unwrap()?;
         }
         Ok(())
+    }
+}
+
+impl<'a, G: Generate + ?Sized> From<&'a G> for Checker<'a, G> {
+    fn from(value: &'a G) -> Self {
+        Self::new(value, None)
+    }
+}
+
+impl<G: Generate + ?Sized> IntoCheck for G {
+    fn checker(&self, seed: Option<u64>) -> Checker<Self> {
+        Checker::new(self, seed)
+    }
+}
+
+impl<G: Generate + ?Sized> Check for G {
+    type Item = G::Item;
+
+    fn check<P: Prove, F: FnMut(&G::Item) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Result<(), Error<P, G::Item>> {
+        Checker::from(self).check(count, check)
+    }
+}
+
+impl<G: Generate + ?Sized + Send + Sync> CheckParallel for G
+where
+    G::Item: Send,
+{
+    fn check_parallel<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Result<(), Error<P, G::Item>> {
+        Checker::from(self).check_parallel(count, check)
     }
 }
 
