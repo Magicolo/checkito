@@ -10,13 +10,18 @@ pub struct Sample<'a, G: ?Sized> {
 }
 
 impl<'a, G: ?Sized> Sample<'a, G> {
-    pub fn new(generate: &'a G, count: usize) -> Self {
+    pub fn new(generate: &'a G, count: usize, seed: Option<u64>) -> Self {
         Self {
             generate,
             index: 0,
             count,
-            random: Rng::new(),
+            random: seed.map_or_else(Rng::new, Rng::with_seed),
         }
+    }
+
+    pub fn with_seed(self, seed: u64) -> Self {
+        self.random.seed(seed);
+        self
     }
 }
 

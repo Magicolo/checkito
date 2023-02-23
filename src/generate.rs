@@ -136,7 +136,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        Sample::new(self, count)
+        Sample::new(self, count, None)
     }
 }
 

@@ -10,7 +10,7 @@ use std::{
 fn empty_range() {
     char::generator()
         .bind(|value| value..value)
-        .check(1, |_| true)
+        .check(COUNT, |_| true)
         .unwrap();
 }
 

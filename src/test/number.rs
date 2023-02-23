@@ -26,7 +26,7 @@ mod range {
                 #[test]
                 #[should_panic]
                 fn empty_range() {
-                    <$t>::generator().bind(|value| value..value).check(1, |_| true).unwrap();
+                    <$t>::generator().bind(|value| value..value).check(COUNT, |_| true).unwrap();
                 }
 
                 #[test]
@@ -114,6 +114,18 @@ mod range {
                     Err(error) if error.shrunk().2 == 0 as $t => Ok(()),
                     result => result,
                 }
+            }
+
+            #[test]
+            fn check_shrink_converges_to_zero() {
+                let mut count = COUNT;
+                let error = number::<$t>()
+                    .check(COUNT, |_| {
+                        count = count.saturating_sub(1);
+                        count > 0
+                    })
+                    .unwrap_err();
+                assert_eq!(0 as $t, *error.shrunk());
             }
         };
         ($t:ident, $m:ident) => {
