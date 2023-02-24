@@ -35,6 +35,7 @@ pub trait Prove {
 pub struct Checker<'a, G: ?Sized> {
     pub generator: &'a G,
     pub count: usize,
+    /// Represents (rejected shrinks since last accepted shrink, accepted shrinks).
     pub shrinks: (usize, usize),
     pub seed: Option<u64>,
 }
@@ -82,7 +83,7 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 }
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn sequential<'b, P: Prove + 'b, F: FnMut(&G::Item) -> P + 'b>(
+    pub fn sequential<'b, P: Prove, F: FnMut(&G::Item) -> P + 'b>(
         &'b self,
         mut check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
@@ -136,35 +137,48 @@ impl<'a, G: Generate + ?Sized + Send + Sync> Checker<'a, G>
 where
     G::Item: Send,
 {
-    pub fn parallel<'b, P: Prove + Send + Sync + 'b, F: Fn(&G::Item) -> P + Send + Sync + 'b>(
-        &'b self,
+    pub fn parallel<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
+        &self,
         check: F,
-    ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
+    ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> {
         let parallel = available_parallelism().map_or(1, NonZeroUsize::get);
-        let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
-        scope(|scope| {
-            let mut handles = Vec::new();
-            for _ in 0..parallel.min(self.count) {
-                let seed = random.u64(..);
-                let check = &check;
-                let mut checker = self.clone();
-                checker.count = (self.count / parallel).max(1);
-                checker.seed = Some(seed);
-                handles.push(scope.spawn(move || checker.sequential(check).collect::<Vec<_>>()));
-            }
-            handles
-                .into_iter()
-                .flat_map(|handle| handle.join())
-                .flatten()
-                .collect::<Vec<_>>()
-                .into_iter()
-        })
+        let split = self.count / parallel;
+        let mut results = Vec::with_capacity(self.count);
+        if split == 0 {
+            results.extend(self.sequential(check));
+        } else {
+            let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
+            scope(|scope| {
+                let mut handles = Vec::with_capacity(parallel);
+                for _ in 0..parallel {
+                    let check = &check;
+                    let mut checker = self.clone();
+                    checker.count = split;
+                    checker.seed = Some(random.u64(..));
+                    handles
+                        .push(scope.spawn(move || checker.sequential(check).collect::<Vec<_>>()));
+                }
+
+                let remain = self.count % parallel;
+                if remain > 0 {
+                    let mut checker = self.clone();
+                    checker.count = split;
+                    checker.seed = Some(random.u64(..));
+                    results.extend(checker.sequential(&check));
+                }
+
+                for handle in handles {
+                    results.extend(handle.join().into_iter().flatten());
+                }
+            });
+        }
+        results.into_iter()
     }
 }
 
 impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self, f)
+        fmt::Debug::fmt(self, f)
     }
 }
 
