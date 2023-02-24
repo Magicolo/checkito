@@ -19,9 +19,8 @@ impl<'a, G: ?Sized> Sample<'a, G> {
         }
     }
 
-    pub fn with_seed(self, seed: u64) -> Self {
+    pub fn seed(&self, seed: u64) {
         self.random.seed(seed);
-        self
     }
 }
 

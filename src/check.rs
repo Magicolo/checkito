@@ -33,10 +33,10 @@ pub trait Prove {
 }
 
 pub struct Checker<'a, G: ?Sized> {
-    generator: &'a G,
-    count: usize,
-    shrinks: (usize, usize),
-    seed: Option<u64>,
+    pub generator: &'a G,
+    pub count: usize,
+    pub shrinks: (usize, usize),
+    pub seed: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -68,37 +68,21 @@ impl<'a, G: ?Sized> Checker<'a, G> {
             seed: None,
         }
     }
+}
 
-    pub fn with_count(&self, count: usize) -> Self {
-        Self {
-            generator: self.generator,
-            count,
-            shrinks: self.shrinks,
-            seed: self.seed,
-        }
-    }
-
-    pub fn with_shrinks(&self, shrinks: (usize, usize)) -> Self {
-        Self {
-            generator: self.generator,
-            count: self.count,
-            shrinks,
-            seed: self.seed,
-        }
-    }
-
-    pub fn with_seed(&self, seed: Option<u64>) -> Self {
+impl<G: ?Sized> Clone for Checker<'_, G> {
+    fn clone(&self) -> Self {
         Self {
             generator: self.generator,
             count: self.count,
             shrinks: self.shrinks,
-            seed,
+            seed: self.seed,
         }
     }
 }
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn check<'b, P: Prove + 'b, F: FnMut(&G::Item) -> P + 'b>(
+    pub fn sequential<'b, P: Prove + 'b, F: FnMut(&G::Item) -> P + 'b>(
         &'b self,
         mut check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
@@ -152,11 +136,7 @@ impl<'a, G: Generate + ?Sized + Send + Sync> Checker<'a, G>
 where
     G::Item: Send,
 {
-    pub fn check_parallel<
-        'b,
-        P: Prove + Send + Sync + 'b,
-        F: Fn(&G::Item) -> P + Send + Sync + 'b,
-    >(
+    pub fn parallel<'b, P: Prove + Send + Sync + 'b, F: Fn(&G::Item) -> P + Send + Sync + 'b>(
         &'b self,
         check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
@@ -167,10 +147,10 @@ where
             for _ in 0..parallel.min(self.count) {
                 let seed = random.u64(..);
                 let check = &check;
-                let checker = self
-                    .with_count((self.count / parallel).max(1))
-                    .with_seed(Some(seed));
-                handles.push(scope.spawn(move || checker.check(check).collect::<Vec<_>>()));
+                let mut checker = self.clone();
+                checker.count = (self.count / parallel).max(1);
+                checker.seed = Some(seed);
+                handles.push(scope.spawn(move || checker.sequential(check).collect::<Vec<_>>()));
             }
             handles
                 .into_iter()
@@ -204,7 +184,7 @@ impl<G: Generate + ?Sized> Check for G {
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checker(count).check(check) {
+        for result in self.checker(count).sequential(check) {
             result?;
         }
         Ok(())
@@ -220,7 +200,7 @@ where
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checker(count).check_parallel(check) {
+        for result in self.checker(count).parallel(check) {
             result?;
         }
         Ok(())
