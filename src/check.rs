@@ -32,11 +32,16 @@ pub trait Prove {
     fn prove(&self) -> bool;
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Shrinks {
+    pub accepted: usize,
+    pub rejected: usize,
+}
+
 pub struct Checker<'a, G: ?Sized> {
     pub generator: &'a G,
     pub count: usize,
-    /// Represents (rejected shrinks since last accepted shrink, accepted shrinks).
-    pub shrinks: (usize, usize),
+    pub shrinks: Shrinks,
     pub seed: Option<u64>,
 }
 
@@ -46,7 +51,7 @@ pub struct Error<T, P> {
     pub count: usize,
     pub state: State,
     pub original: (T, P),
-    pub shrinks: (usize, usize),
+    pub shrinks: Shrinks,
     pub shrunk: Option<(T, P)>,
 }
 
@@ -65,7 +70,10 @@ impl<'a, G: ?Sized> Checker<'a, G> {
         Self {
             generator,
             count,
-            shrinks: (usize::MAX, usize::MAX),
+            shrinks: Shrinks {
+                accepted: usize::MAX,
+                rejected: usize::MAX,
+            },
             seed: None,
         }
     }
@@ -106,19 +114,24 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
                 index,
                 count: self.count,
                 original: (outer_item, outer_prove),
-                shrinks: (0, 0),
+                shrinks: Shrinks {
+                    accepted: 0,
+                    rejected: 0,
+                },
                 shrunk: None,
             };
 
-            while error.shrinks.0 < self.shrinks.0 && error.shrinks.1 < self.shrinks.1 {
+            while error.shrinks.rejected < self.shrinks.rejected
+                && error.shrinks.accepted < self.shrinks.accepted
+            {
                 if let Some(inner_shrink) = outer_shrink.shrink() {
                     let inner_item = inner_shrink.generate();
                     let inner_prove = check(&inner_item);
                     if inner_prove.prove() {
-                        error.shrinks.0 += 1;
+                        error.shrinks.rejected += 1;
                     } else {
-                        error.shrinks.0 = 0;
-                        error.shrinks.1 += 1;
+                        error.shrinks.rejected = 0;
+                        error.shrinks.accepted += 1;
                         error.shrunk = Some((inner_item, inner_prove));
                         outer_shrink = inner_shrink;
                     }
