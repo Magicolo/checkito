@@ -6,7 +6,7 @@ edition = "2021"
 description = "A simple and efficient 'quickcheck' inspired library to generate random data mainly oriented towards generative/property/exploratory testing."
 license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
-keywords = ["test", "generative", "exploratory", "property", "random", "quickcheck", "check"]
+keywords = ["test", "generative", "property", "random", "quickcheck"]
 
 [dependencies]
 fastrand = "1.9.0"
