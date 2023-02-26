@@ -23,8 +23,7 @@ impl<I: Clone, T, F: Clone> Clone for Map<I, T, F> {
 }
 
 impl<G: Generate, T, F: Fn(G::Item) -> T> Map<G, T, F> {
-    #[inline]
-    pub fn generator(generate: G, map: F) -> Self {
+    pub const fn generator(generate: G, map: F) -> Self {
         Self {
             inner: generate,
             map,
@@ -34,8 +33,7 @@ impl<G: Generate, T, F: Fn(G::Item) -> T> Map<G, T, F> {
 }
 
 impl<S: Shrink, T, F: Fn(S::Item) -> T> Map<S, T, F> {
-    #[inline]
-    pub fn shrink(shrink: S, map: F) -> Self {
+    pub const fn shrink(shrink: S, map: F) -> Self {
         Self {
             inner: shrink,
             map,

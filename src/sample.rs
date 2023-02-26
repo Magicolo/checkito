@@ -39,7 +39,6 @@ impl<G: Generate + ?Sized> Iterator for Sample<'_, G> {
 }
 
 impl<G: Generate + ?Sized> ExactSizeIterator for Sample<'_, G> {
-    #[inline]
     fn len(&self) -> usize {
         self.count - self.index
     }

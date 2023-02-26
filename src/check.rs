@@ -1,4 +1,4 @@
-use crate::{generate::State, shrink::Shrink, tuples, Generate};
+use crate::{generate::State, prove::Prove, shrink::Shrink, tuples, Generate};
 use fastrand::Rng;
 use std::{
     error, fmt,
@@ -26,10 +26,6 @@ pub trait CheckParallel: Check {
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>>;
-}
-
-pub trait Prove {
-    fn prove(&self) -> bool;
 }
 
 #[derive(Clone, Copy, Debug)]

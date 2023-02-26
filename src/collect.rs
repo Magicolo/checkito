@@ -34,8 +34,7 @@ pub struct Shrinker<I, F: ?Sized> {
 }
 
 impl<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>> Collect<G, C, F> {
-    #[inline]
-    pub fn new(generate: G, count: C) -> Self {
+    pub const fn new(generate: G, count: C) -> Self {
         Self {
             inner: generate,
             count,
@@ -45,7 +44,6 @@ impl<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>> Collect<G
 }
 
 impl<G: Generate, F: FromIterator<G::Item>> Generator<G, F> {
-    #[inline]
     pub fn new(generates: impl IntoIterator<Item = G>) -> Self {
         Self {
             inner: generates.into_iter().collect(),
@@ -55,8 +53,7 @@ impl<G: Generate, F: FromIterator<G::Item>> Generator<G, F> {
 }
 
 impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
-    #[inline]
-    pub fn new(shrinks: Vec<S>) -> Self {
+    pub const fn new(shrinks: Vec<S>) -> Self {
         Self {
             inner: shrinks,
             index: 0,
@@ -66,7 +63,6 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
 }
 
 impl<I: Clone, C: Clone, F> Clone for Collect<I, C, F> {
-    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -77,7 +73,6 @@ impl<I: Clone, C: Clone, F> Clone for Collect<I, C, F> {
 }
 
 impl<I: Clone, F> Clone for Shrinker<I, F> {
-    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),

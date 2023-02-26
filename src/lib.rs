@@ -6,21 +6,22 @@ pub mod constant;
 pub mod filter;
 pub mod filter_map;
 pub mod flatten;
-pub mod function;
 pub mod generate;
 pub mod keep;
 pub mod map;
-pub mod option;
 pub mod primitive;
+pub mod prove;
 pub mod sample;
 pub mod shrink;
 pub mod size;
+pub mod standard;
 mod utility;
 
 use self::any::Any;
 pub use crate::{
-    check::{Check, CheckParallel, IntoCheck, Prove},
+    check::{Check, CheckParallel, IntoCheck},
     generate::{FullGenerate, Generate, IntoGenerate},
+    prove::Prove,
     shrink::Shrink,
 };
 use primitive::Range;
@@ -78,16 +79,6 @@ pub fn ascii() -> impl Generate<Item = char> {
         digit(),
         (0..=0x7Fu8).generator().map(|value| value as char),
     ))
-}
-
-pub fn option<T: FullGenerate>() -> impl Generate<Item = Option<T::Item>> {
-    let none: fn() -> Option<T::Item> = || None;
-    Any((T::generator().map(Some), none))
-}
-
-pub fn result<T: FullGenerate, E: FullGenerate>() -> impl Generate<Item = Result<T::Item, E::Item>>
-{
-    Any((T::generator().map(Ok), E::generator().map(Err)))
 }
 
 #[cfg(test)]

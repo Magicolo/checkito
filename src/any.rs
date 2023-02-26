@@ -35,7 +35,6 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
 }
 
 impl<T> Weight<T> {
-    #[inline]
     pub const fn new(value: T, weight: f64) -> Self {
         Self { value, weight }
     }

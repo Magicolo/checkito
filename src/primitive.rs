@@ -1,4 +1,5 @@
 use crate::{
+    any::Any,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
     size::Size,
@@ -41,14 +42,12 @@ pub struct Shrinker<T> {
 }
 
 impl<T: ?Sized> Full<T> {
-    #[inline]
     pub const fn new() -> Self {
         Self(PhantomData)
     }
 }
 
 impl<T> Range<T> {
-    #[inline]
     pub fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Range<U> {
         Range {
             start: map(self.start),
@@ -58,7 +57,6 @@ impl<T> Range<T> {
 }
 
 impl<T> Shrinker<T> {
-    #[inline]
     pub const fn new(range: Range<T>, item: T) -> Self {
         Self {
             range,
@@ -67,7 +65,6 @@ impl<T> Shrinker<T> {
         }
     }
 
-    #[inline]
     pub fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Shrinker<U> {
         let item = map(self.item);
         Shrinker {
@@ -79,14 +76,12 @@ impl<T> Shrinker<T> {
 }
 
 impl From<Range<char>> for Range<u32> {
-    #[inline]
     fn from(value: Range<char>) -> Self {
         value.map(|value| value as u32)
     }
 }
 
 impl From<Shrinker<char>> for Shrinker<u32> {
-    #[inline]
     fn from(value: Shrinker<char>) -> Self {
         value.map(|value| value as u32)
     }
@@ -95,7 +90,6 @@ impl From<Shrinker<char>> for Shrinker<u32> {
 impl TryFrom<Range<u32>> for Range<char> {
     type Error = <char as TryFrom<u32>>::Error;
 
-    #[inline]
     fn try_from(value: Range<u32>) -> Result<Self, Self::Error> {
         Ok(Self {
             start: value.start.try_into()?,
@@ -107,7 +101,6 @@ impl TryFrom<Range<u32>> for Range<char> {
 impl TryFrom<Shrinker<u32>> for Shrinker<char> {
     type Error = <char as TryFrom<u32>>::Error;
 
-    #[inline]
     fn try_from(value: Shrinker<u32>) -> Result<Self, Self::Error> {
         Ok(Self {
             range: value.range.try_into()?,
@@ -118,12 +111,10 @@ impl TryFrom<Shrinker<u32>> for Shrinker<char> {
 }
 
 impl<T> ops::RangeBounds<T> for Range<T> {
-    #[inline]
     fn start_bound(&self) -> Bound<&T> {
         Bound::Included(&self.start)
     }
 
-    #[inline]
     fn end_bound(&self) -> Bound<&T> {
         Bound::Included(&self.end)
     }
@@ -158,7 +149,7 @@ macro_rules! range {
     ($t:ty, $r:ty) => {
         impl TryFrom<$r> for Range<$t> {
             type Error = Error;
-            #[inline]
+
             fn try_from(range: $r) -> Result<Self, Self::Error> {
                 Range::<$t>::new(range)
             }
@@ -166,7 +157,7 @@ macro_rules! range {
 
         impl TryFrom<$r> for Size<Range<$t>> {
             type Error = Error;
-            #[inline]
+
             fn try_from(range: $r) -> Result<Self, Self::Error> {
                 Ok(Range::<$t>::try_from(range)?.size())
             }
@@ -203,7 +194,7 @@ macro_rules! ranges {
 
         impl TryFrom<ops::RangeFull> for Range<$t> {
             type Error = Error;
-            #[inline]
+
             fn try_from(range: ops::RangeFull) -> Result<Self, Self::Error> {
                 Range::<$t>::new(range)
             }
@@ -211,7 +202,7 @@ macro_rules! ranges {
 
         impl TryFrom<ops::RangeFull> for Size<Range<$t>> {
             type Error = Error;
-            #[inline]
+
             fn try_from(range: ops::RangeFull) -> Result<Self, Self::Error> {
                 Ok(Range::<$t>::try_from(range)?.size())
             }
@@ -250,7 +241,27 @@ macro_rules! shrinked {
         }
     };
 }
-
+/*
+property: item < 35
+let item = 88; -> error
+Shrinker { range: 0..u8::MAX, old: 88, new: 88 }
+Shrinker { range: 0..u8::MAX, old: 88, new: 44 } -> error
+Shrinker { range: 0..u8::MAX, old: 44, new: 22 } -> ok
+Shrinker { range: 0..u8::MAX, old: 44, new: 33 } -> ok
+Shrinker { range: 0..u8::MAX, old: 44, new: 38 } -> error
+Shrinker { range: 0..u8::MAX, old: 38, new: 19 } -> ok
+Shrinker { range: 0..u8::MAX, old: 38, new: 28 } -> ok
+Shrinker { range: 0..u8::MAX, old: 38, new: 33 } -> ok
+Shrinker { range: 0..u8::MAX, old: 38, new: 35 } -> error
+Shrinker { range: 0..u8::MAX, old: 35, new: 17 } -> ok
+Shrinker { range: 0..u8::MAX, old: 35, new: 25 } -> ok
+Shrinker { range: 0..u8::MAX, old: 35, new: 30 } -> ok
+Shrinker { range: 0..u8::MAX, old: 35, new: 32 } -> ok
+Shrinker { range: 0..u8::MAX, old: 35, new: 33 } -> ok
+Shrinker { range: 0..u8::MAX, old: 35, new: 34 } -> ok
+None -> shrunk: 35
+*/
+// (l / 2 + l % 2) - (r / 2 + r % 2)
 macro_rules! shrink {
     ($s:expr, $t:ident) => {{
         let range = &mut $s.range;
@@ -373,7 +384,6 @@ mod character {
     }
 
     impl Full<char> {
-        #[inline]
         const fn low_range() -> Range<char> {
             Range {
                 start: '\u{0000}',
@@ -381,7 +391,6 @@ mod character {
             }
         }
 
-        #[inline]
         const fn high_range() -> Range<char> {
             Range {
                 start: '\u{E000}',
@@ -389,7 +398,6 @@ mod character {
             }
         }
 
-        #[inline]
         fn shrink(item: char) -> Shrinker {
             let low = Self::low_range();
             let range = if item <= low.end {
@@ -407,7 +415,6 @@ mod character {
     }
 
     impl Shrinker {
-        #[inline]
         pub fn new(item: char) -> Self {
             let mut low = Full::<char>::low_range();
             let range = if item <= low.end {
@@ -525,20 +532,16 @@ mod number {
     macro_rules! integer {
         ($t:ident) => {
             impl Full<$t> {
-                #[inline]
                 const fn range() -> Range<$t> {
                     Range { start: $t::MIN, end: $t::MAX }
                 }
 
-                #[inline]
                 const fn shrink(item: $t) -> Shrinker<$t> {
                     Shrinker::new(Self::range(), item)
                 }
 
-                #[inline]
-                fn special() -> impl Generate<Item = $t> {
-                    const SPECIAL: [$t; 3] = [0 as $t, $t::MIN, $t::MAX];
-                    SPECIAL.any().map(Option::unwrap)
+                const fn special() -> impl Generate<Item = $t> {
+                    Any((0 as $t, $t::MIN, $t::MAX))
                 }
             }
 
@@ -562,12 +565,12 @@ mod number {
                 }
 
                 fn delta(left: $t, right: $t, ratio: $t) -> $t {
-                    let range = if left < right {
-                        (right as u128).wrapping_sub(left as u128)
+                    // Divide each component by `ratio` to prevent overflows.
+                    if left < right {
+                        right / ratio - left / ratio
                     } else {
-                        (left as u128).wrapping_sub(right as u128)
-                    };
-                    (range / ratio as u128) as $t
+                        left / ratio - right / ratio
+                    }
                 }
             }
             shrinked!($t);
@@ -636,17 +639,14 @@ mod number {
     macro_rules! floating {
         ($t:ident, $e:expr) => {
             impl Full<$t> {
-                fn special() -> impl Generate<Item = $t> {
-                    const SPECIAL: [$t; 8] = [0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN];
-                    SPECIAL.any().map(Option::unwrap)
+                const fn special() -> impl Generate<Item = $t> {
+                    Any((0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN))
                 }
 
-                #[inline]
                 const fn range() -> Range<$t> {
                     Range { start: $t::MIN, end: $t::MAX }
                 }
 
-                #[inline]
                 const fn shrink(item: $t) -> Shrinker<$t> {
                     Shrinker::new(Self::range(), item)
                 }
@@ -678,12 +678,12 @@ mod number {
                 }
 
                 fn delta(left: $t, right: $t, ratio: $t) -> $t {
-                    let range = if left < right {
-                        right as f64 - left as f64
+                    // Divide each component by `ratio` to prevent overflows.
+                    if left < right {
+                        right / ratio - left / ratio
                     } else {
-                        left as f64 - right as f64
-                    };
-                    (range / ratio as f64) as $t
+                        left / ratio - right / ratio
+                    }
                 }
             }
             shrinked!($t);

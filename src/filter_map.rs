@@ -21,7 +21,6 @@ pub struct Shrinker<I, T: ?Sized, F = fn(<I as Shrink>::Item) -> Option<T>> {
 }
 
 impl<I: Clone, T, F: Clone> Clone for FilterMap<I, T, F> {
-    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -33,7 +32,6 @@ impl<I: Clone, T, F: Clone> Clone for FilterMap<I, T, F> {
 }
 
 impl<I: Clone, T, F: Clone> Clone for Shrinker<I, T, F> {
-    #[inline]
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -44,8 +42,7 @@ impl<I: Clone, T, F: Clone> Clone for Shrinker<I, T, F> {
 }
 
 impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, T, F> {
-    #[inline]
-    pub fn new(generate: G, map: F, iterations: usize) -> Self {
+    pub const fn new(generate: G, map: F, iterations: usize) -> Self {
         Self {
             inner: generate,
             map,

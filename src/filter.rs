@@ -8,8 +8,7 @@ pub struct Filter<I: ?Sized, F = fn(&<I as Generate>::Item) -> bool> {
 }
 
 impl<G: Generate, F: Fn(&G::Item) -> bool> Filter<G, F> {
-    #[inline]
-    pub fn new(generate: G, filter: F, iterations: usize) -> Self {
+    pub const fn new(generate: G, filter: F, iterations: usize) -> Self {
         Self {
             inner: generate,
             filter,

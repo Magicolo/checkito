@@ -71,7 +71,6 @@ macro_rules! unzip {
         impl<$($t,)* const N: usize> Unzip for [($($t,)*); N] {
             type Target = ($([$t; N],)*);
 
-            #[inline]
             fn unzip(self) -> Self::Target {
                 let mut _uninits = ($(MaybeUninit::<[$t; N]>::uninit(),)*);
                 let mut _pointers = ($(_uninits.$i.as_mut_ptr() as *mut $t,)*);
