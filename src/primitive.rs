@@ -1,5 +1,4 @@
 use crate::{
-    any::Any,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
     size::Size,
@@ -241,27 +240,7 @@ macro_rules! shrinked {
         }
     };
 }
-/*
-property: item < 35
-let item = 88; -> error
-Shrinker { range: 0..u8::MAX, old: 88, new: 88 }
-Shrinker { range: 0..u8::MAX, old: 88, new: 44 } -> error
-Shrinker { range: 0..u8::MAX, old: 44, new: 22 } -> ok
-Shrinker { range: 0..u8::MAX, old: 44, new: 33 } -> ok
-Shrinker { range: 0..u8::MAX, old: 44, new: 38 } -> error
-Shrinker { range: 0..u8::MAX, old: 38, new: 19 } -> ok
-Shrinker { range: 0..u8::MAX, old: 38, new: 28 } -> ok
-Shrinker { range: 0..u8::MAX, old: 38, new: 33 } -> ok
-Shrinker { range: 0..u8::MAX, old: 38, new: 35 } -> error
-Shrinker { range: 0..u8::MAX, old: 35, new: 17 } -> ok
-Shrinker { range: 0..u8::MAX, old: 35, new: 25 } -> ok
-Shrinker { range: 0..u8::MAX, old: 35, new: 30 } -> ok
-Shrinker { range: 0..u8::MAX, old: 35, new: 32 } -> ok
-Shrinker { range: 0..u8::MAX, old: 35, new: 33 } -> ok
-Shrinker { range: 0..u8::MAX, old: 35, new: 34 } -> ok
-None -> shrunk: 35
-*/
-// (l / 2 + l % 2) - (r / 2 + r % 2)
+
 macro_rules! shrink {
     ($s:expr, $t:ident) => {{
         let range = &mut $s.range;
@@ -408,9 +387,20 @@ mod character {
             Shrinker(super::Shrinker::new(range.into(), item as u32))
         }
 
-        fn special() -> impl Generate<Item = char> {
-            const SPECIAL: [char; 3] = ['\u{0000}', char::MAX, char::REPLACEMENT_CHARACTER];
-            SPECIAL.any().map(Option::unwrap)
+        const fn special() -> impl Generate<Item = char> {
+            struct Special;
+            impl Generate for Special {
+                type Item = char;
+                type Shrink = char;
+
+                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                    let (item, shrink) = ('\u{0000}', char::MAX, char::REPLACEMENT_CHARACTER)
+                        .any()
+                        .generate(state);
+                    (item.fuse(), shrink.fuse())
+                }
+            }
+            Special
         }
     }
 
@@ -541,7 +531,17 @@ mod number {
                 }
 
                 const fn special() -> impl Generate<Item = $t> {
-                    Any((0 as $t, $t::MIN, $t::MAX))
+                    struct Special;
+                    impl Generate for Special {
+                        type Item = $t;
+                        type Shrink = $t;
+
+                        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                            let (item, shrink) = (0 as $t, $t::MIN, $t::MAX).any().generate(state);
+                            (item.fuse(), shrink.fuse())
+                        }
+                    }
+                    Special
                 }
             }
 
@@ -640,7 +640,17 @@ mod number {
         ($t:ident, $e:expr) => {
             impl Full<$t> {
                 const fn special() -> impl Generate<Item = $t> {
-                    Any((0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN))
+                    struct Special;
+                    impl Generate for Special {
+                        type Item = $t;
+                        type Shrink = $t;
+
+                        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                            let (item, shrink) = (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN).any().generate(state);
+                            (item.fuse(), shrink.fuse())
+                        }
+                    }
+                    Special
                 }
 
                 const fn range() -> Range<$t> {

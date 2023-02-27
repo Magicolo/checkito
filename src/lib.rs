@@ -17,7 +17,6 @@ pub mod size;
 pub mod standard;
 mod utility;
 
-use self::any::Any;
 pub use crate::{
     check::{Check, CheckParallel, IntoCheck},
     generate::{FullGenerate, Generate, IntoGenerate},
@@ -30,11 +29,6 @@ use std::{
     fmt,
     ops::{self, Neg},
 };
-
-pub fn default<T: Default>() -> impl Generate<Item = T> {
-    let default: fn() -> T = T::default;
-    default
-}
 
 pub fn number<T>() -> impl Generate<Item = T>
 where
@@ -60,25 +54,15 @@ where
 }
 
 pub fn letter() -> impl Generate<Item = char> {
-    const LETTERS: [char; 52] = [
-        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
-        's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-    ];
-    LETTERS.any().map(Option::unwrap)
+    ('a'..='z', 'A'..='Z').any().bind(|item| item.fuse())
 }
 
 pub fn digit() -> impl Generate<Item = char> {
-    const DIGITS: [char; 10] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    DIGITS.any().map(Option::unwrap)
+    '0'..='9'
 }
 
 pub fn ascii() -> impl Generate<Item = char> {
-    Any((
-        letter(),
-        digit(),
-        (0..=0x7Fu8).generator().map(|value| value as char),
-    ))
+    0 as char..127 as char
 }
 
 #[cfg(test)]

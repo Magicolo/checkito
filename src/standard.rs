@@ -1,7 +1,7 @@
 use std::{rc::Rc, sync::Arc};
 
 use crate::{
-    any::Any,
+    any::{tuples2::One, Any},
     generate::{Generate, State},
     map::Map,
     shrink::Shrink,
@@ -10,12 +10,13 @@ use crate::{
 
 impl<G: FullGenerate> FullGenerate for Option<G> {
     type Item = Option<G::Item>;
-    type Generate = Any<(Map<G::Generate, Self::Item>, fn() -> Self::Item)>;
+    type Generate = Map<Any<(G::Generate, ())>, Self::Item>;
 
     fn generator() -> Self::Generate {
-        let none: fn() -> Option<G::Item> = || None;
-        let some: fn(G::Item) -> Option<G::Item> = Some;
-        Any((G::generator().map(some), none))
+        Any((G::generator(), ())).map(|item| match item {
+            One::T0(item) => Some(item),
+            One::T1(_) => None,
+        })
     }
 }
 
@@ -48,12 +49,13 @@ impl<S: Shrink> Shrink for Option<S> {
 
 impl<G: FullGenerate, E: FullGenerate> FullGenerate for Result<G, E> {
     type Item = Result<G::Item, E::Item>;
-    type Generate = Any<(Map<G::Generate, Self::Item>, Map<E::Generate, Self::Item>)>;
+    type Generate = Map<Any<(G::Generate, E::Generate)>, Self::Item>;
 
     fn generator() -> Self::Generate {
-        let ok: fn(G::Item) -> Self::Item = Ok;
-        let error: fn(E::Item) -> Self::Item = Err;
-        Any((G::generator().map(ok), E::generator().map(error)))
+        Any((G::generator(), E::generator())).map(|item| match item {
+            One::T0(item) => Result::Ok(item),
+            One::T1(item) => Result::Err(item),
+        })
     }
 }
 
