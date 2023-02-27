@@ -24,10 +24,10 @@ impl<P> error::Error for Proof<P> {}
 macro_rules! prove {
     ($prove:expr) => {{
         let prove = $prove;
-        if Prove::prove(&prove) {
+        if $crate::prove::Prove::prove(&prove) {
             Ok(())
         } else {
-            Err(Proof(stringify!($prove), prove))
+            Err($crate::prove::Proof(stringify!($prove), prove))
         }
     }};
 }
