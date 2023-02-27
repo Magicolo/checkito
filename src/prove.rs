@@ -4,17 +4,21 @@ pub trait Prove {
     fn prove(&self) -> bool;
 }
 
-pub struct Proof<P>(&'static str, P);
+#[derive(Clone, Copy)]
+pub struct Proof<P> {
+    pub name: &'static str,
+    pub prove: P,
+}
 
 impl<P> fmt::Debug for Proof<P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.name)
     }
 }
 
 impl<P> fmt::Display for Proof<P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
+        fmt::Debug::fmt(&self.name, f)
     }
 }
 
@@ -27,7 +31,10 @@ macro_rules! prove {
         if $crate::prove::Prove::prove(&prove) {
             Ok(())
         } else {
-            Err($crate::prove::Proof(stringify!($prove), prove))
+            Err($crate::prove::Proof {
+                name: stringify!($prove),
+                prove,
+            })
         }
     }};
 }
