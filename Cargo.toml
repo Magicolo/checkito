@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 description = "A simple and efficient 'quickcheck' inspired library to generate random data mainly oriented towards generative/property/exploratory testing."
