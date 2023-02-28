@@ -1,43 +1,30 @@
-use crate::{generate::State, prove::Prove, shrink::Shrink, tuples, Generate};
+use crate::{generate::State, prove::Prove, shrink::Shrink, Generate};
 use fastrand::Rng;
 use std::{
     error, fmt,
     num::NonZeroUsize,
+    sync::atomic::{AtomicUsize, Ordering},
     thread::{available_parallelism, scope},
 };
 
-pub trait IntoCheck {
-    fn checker(&self, count: usize) -> Checker<Self>;
-}
-
-pub trait Check {
-    type Item;
-
-    fn check<P: Prove, F: FnMut(&Self::Item) -> P>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Result<(), Error<Self::Item, P>>;
-}
-
-pub trait CheckParallel: Check {
-    fn check_parallel<P: Prove + Send + Sync, F: Fn(&Self::Item) -> P + Send + Sync>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Result<(), Error<Self::Item, P>>;
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct Shrinks {
-    pub accepted: usize,
-    pub rejected: usize,
+    /// Maximum number of successful attemps at reducing the 'size' of the input before aborting the shrinking process.
+    pub accept: usize,
+    /// Maximum number of failed attempts at reducing the 'size' of the input before aborting the shrinking process.
+    pub reject: usize,
 }
 
 pub struct Checker<'a, G: ?Sized> {
+    /// A generator that will provide the values and shrinkers for the checking and shrinking processes.
     pub generator: &'a G,
-    pub count: usize,
+    /// Number of iterations that the checking process will run for.
+    pub checks: usize,
+    /// Maximum number of errors that the results of a `check` call will contain. When it is reached, the checking process aborts.
+    pub errors: usize,
+    /// Limits the shrinking process.
     pub shrinks: Shrinks,
+    /// Seed for the random number generator used to generate random primitives.
     pub seed: Option<u64>,
 }
 
@@ -45,6 +32,7 @@ pub struct Checker<'a, G: ?Sized> {
 pub struct Error<T, P> {
     pub index: usize,
     pub count: usize,
+    /// The generator state that generated the error.
     pub state: State,
     pub original: (T, P),
     pub shrinks: Shrinks,
@@ -65,10 +53,11 @@ impl<'a, G: ?Sized> Checker<'a, G> {
     pub const fn new(generator: &'a G, count: usize) -> Self {
         Self {
             generator,
-            count,
+            checks: count,
+            errors: 1,
             shrinks: Shrinks {
-                accepted: usize::MAX,
-                rejected: usize::MAX,
+                accept: usize::MAX,
+                reject: usize::MAX,
             },
             seed: None,
         }
@@ -79,7 +68,8 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
     fn clone(&self) -> Self {
         Self {
             generator: self.generator,
-            count: self.count,
+            checks: self.checks,
+            errors: self.errors,
             shrinks: self.shrinks,
             seed: self.seed,
         }
@@ -87,94 +77,96 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 }
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn sequential<'b, P: Prove, F: FnMut(&G::Item) -> P + 'b>(
+    pub fn check_sequential<'b, P: Prove + 'b, F: FnMut(&G::Item) -> P + 'b>(
         &'b self,
         mut check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
         let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
-        let mut fail = false;
-        Iterator::map_while(0..self.count, move |index| {
-            if fail {
-                return None;
-            }
-
-            let mut state = State::new(index, self.count, random.u64(..));
-            let (outer_item, mut outer_shrink) = self.generator.generate(&mut state);
-            let outer_prove = check(&outer_item);
-            if outer_prove.prove() {
-                return Some(Ok(outer_item));
-            }
-
-            let mut error = Error {
-                state,
+        let mut errors = (0, self.errors);
+        Iterator::map_while(0..self.checks, move |index| {
+            match next(
+                self.generator,
                 index,
-                count: self.count,
-                original: (outer_item, outer_prove),
-                shrinks: Shrinks {
-                    accepted: 0,
-                    rejected: 0,
-                },
-                shrunk: None,
-            };
-
-            while error.shrinks.rejected < self.shrinks.rejected
-                && error.shrinks.accepted < self.shrinks.accepted
-            {
-                if let Some(inner_shrink) = outer_shrink.shrink() {
-                    let inner_item = inner_shrink.generate();
-                    let inner_prove = check(&inner_item);
-                    if inner_prove.prove() {
-                        error.shrinks.rejected += 1;
-                    } else {
-                        error.shrinks.rejected = 0;
-                        error.shrinks.accepted += 1;
-                        error.shrunk = Some((inner_item, inner_prove));
-                        outer_shrink = inner_shrink;
-                    }
-                } else {
-                    break;
+                self.checks,
+                self.shrinks,
+                &random,
+                &mut check,
+            ) {
+                Ok(item) if errors.0 < errors.1 => Some(Ok(item)),
+                Err(error) if errors.0 < errors.1 => {
+                    errors.0 += 1;
+                    Some(Err(error))
                 }
+                _ => None,
             }
-
-            fail = true;
-            return Some(Err(error));
         })
     }
 }
 
-impl<'a, G: Generate + ?Sized + Send + Sync> Checker<'a, G>
+impl<'a, G: Generate + ?Sized + Sync> Checker<'a, G>
 where
     G::Item: Send,
 {
-    pub fn parallel<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
-        &self,
+    pub fn check_parallel<'b, P: Prove + Send + 'b, F: Fn(&G::Item) -> P + Sync + 'b>(
+        &'b self,
+        parallel: Option<usize>,
         check: F,
-    ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> {
-        let parallel = available_parallelism().map_or(1, NonZeroUsize::get);
-        let split = self.count / parallel;
-        let mut results = Vec::with_capacity(self.count);
-        if split == 0 {
-            results.extend(self.sequential(check));
+    ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
+        let parallel = match parallel {
+            Some(parallel) => parallel.max(1),
+            None => available_parallelism().map_or(1, NonZeroUsize::get),
+        };
+        let mut results = Vec::with_capacity(self.checks);
+        let errors = AtomicUsize::new(0);
+        let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
+        let capacity = divide_ceiling(self.checks, parallel);
+        if capacity <= 8 || self.checks < 32 {
+            batch(
+                self.generator,
+                &mut results,
+                0,
+                1,
+                self.checks,
+                self.shrinks,
+                (&errors, self.errors),
+                &random,
+                check,
+            );
         } else {
-            let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
             scope(|scope| {
-                let mut handles = Vec::with_capacity(parallel);
-                for _ in 0..parallel {
+                let mut handles = Vec::with_capacity(parallel - 1);
+                for offset in 0..parallel - 1 {
                     let check = &check;
-                    let mut checker = self.clone();
-                    checker.count = split;
-                    checker.seed = Some(random.u64(..));
-                    handles
-                        .push(scope.spawn(move || checker.sequential(check).collect::<Vec<_>>()));
+                    let errors = &errors;
+                    let seed = random.u64(..);
+                    handles.push(scope.spawn(move || {
+                        let mut results = Vec::with_capacity(capacity);
+                        batch(
+                            self.generator,
+                            &mut results,
+                            offset,
+                            parallel,
+                            self.checks,
+                            self.shrinks,
+                            (errors, self.errors),
+                            &Rng::with_seed(seed),
+                            check,
+                        );
+                        results
+                    }));
                 }
 
-                let remain = self.count % parallel;
-                if remain > 0 {
-                    let mut checker = self.clone();
-                    checker.count = split;
-                    checker.seed = Some(random.u64(..));
-                    results.extend(checker.sequential(&check));
-                }
+                batch(
+                    self.generator,
+                    &mut results,
+                    parallel - 1,
+                    parallel,
+                    self.checks,
+                    self.shrinks,
+                    (&errors, self.errors),
+                    &random,
+                    &check,
+                );
 
                 for handle in handles {
                     results.extend(handle.join().into_iter().flatten());
@@ -185,6 +177,84 @@ where
     }
 }
 
+fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
+    generator: &G,
+    index: usize,
+    count: usize,
+    shrinks: Shrinks,
+    random: &Rng,
+    mut check: F,
+) -> Result<G::Item, Error<G::Item, P>> {
+    let mut state = State::from_iteration(index, count, Some(random.u64(..)));
+    let (outer_item, mut outer_shrink) = generator.generate(&mut state);
+    let outer_prove = check(&outer_item);
+    if outer_prove.prove() {
+        return Ok(outer_item);
+    }
+
+    let mut error = Error {
+        state,
+        index,
+        count,
+        original: (outer_item, outer_prove),
+        shrinks: Shrinks {
+            accept: 0,
+            reject: 0,
+        },
+        shrunk: None,
+    };
+
+    while error.shrinks.reject < shrinks.reject && error.shrinks.accept < shrinks.accept {
+        if let Some(inner_shrink) = outer_shrink.shrink() {
+            let inner_item = inner_shrink.generate();
+            let inner_prove = check(&inner_item);
+            if inner_prove.prove() {
+                error.shrinks.reject += 1;
+            } else {
+                error.shrinks.reject = 0;
+                error.shrinks.accept += 1;
+                error.shrunk = Some((inner_item, inner_prove));
+                outer_shrink = inner_shrink;
+            }
+        } else {
+            break;
+        }
+    }
+    Err(error)
+}
+
+fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
+    generator: &G,
+    results: &mut Vec<Result<G::Item, Error<G::Item, P>>>,
+    offset: usize,
+    step: usize,
+    count: usize,
+    shrinks: Shrinks,
+    errors: (&AtomicUsize, usize),
+    random: &Rng,
+    check: F,
+) {
+    for index in (offset..count).step_by(step) {
+        match next(generator, index, count, shrinks, random, &check) {
+            Ok(item) if errors.0.load(Ordering::Relaxed) < errors.1 => results.push(Ok(item)),
+            Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
+                results.push(Err(error))
+            }
+            _ => break,
+        }
+    }
+}
+
+const fn divide_ceiling(left: usize, right: usize) -> usize {
+    let value = left / right;
+    let remain = left % right;
+    if remain > 0 && right > 0 {
+        value + 1
+    } else {
+        value
+    }
+}
+
 impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
@@ -192,88 +262,3 @@ impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {
 }
 
 impl<T: fmt::Debug, P: fmt::Debug> error::Error for Error<T, P> {}
-
-impl<G: Generate + ?Sized> IntoCheck for G {
-    fn checker(&self, count: usize) -> Checker<Self> {
-        Checker::new(self, count)
-    }
-}
-
-impl<G: Generate + ?Sized> Check for G {
-    type Item = G::Item;
-
-    fn check<P: Prove, F: FnMut(&G::Item) -> P>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checker(count).sequential(check) {
-            result?;
-        }
-        Ok(())
-    }
-}
-
-impl<G: Generate + ?Sized + Send + Sync> CheckParallel for G
-where
-    G::Item: Send,
-{
-    fn check_parallel<P: Prove + Send + Sync, F: Fn(&G::Item) -> P + Send + Sync>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checker(count).parallel(check) {
-            result?;
-        }
-        Ok(())
-    }
-}
-
-impl Prove for bool {
-    fn prove(&self) -> bool {
-        *self
-    }
-}
-
-impl<F: Fn() -> bool> Prove for F {
-    fn prove(&self) -> bool {
-        self()
-    }
-}
-
-impl<T, E> Prove for Result<T, E> {
-    fn prove(&self) -> bool {
-        self.is_ok()
-    }
-}
-
-impl<P: Prove> Prove for [P] {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
-    }
-}
-
-impl<P: Prove, const N: usize> Prove for [P; N] {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
-    }
-}
-
-impl<P: Prove> Prove for Vec<P> {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
-    }
-}
-
-macro_rules! tuple {
-    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: Prove,)*> Prove for ($($t,)*) {
-            fn prove(&self) -> bool {
-                $(self.$i.prove() &&)* true
-            }
-        }
-    };
-}
-
-tuples!(tuple);

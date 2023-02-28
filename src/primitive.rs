@@ -301,7 +301,7 @@ mod boolean {
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-            let item = state.random.bool();
+            let item = state.random().bool();
             (item, Shrinker(item))
         }
     }
@@ -467,7 +467,7 @@ mod character {
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-            match state.random.u8(..) {
+            match state.random().u8(..) {
                 0..=250 => Self::low_range().generate(state),
                 251..=254 => Self::high_range().generate(state),
                 255 => {
@@ -490,9 +490,9 @@ mod character {
                 (item.try_into().unwrap(), Shrinker(shrink))
             }
 
-            match state.random.u8(..) {
-                0..=250 => range(Full::<char>::low_range(), state.size, state),
-                251..=254 => range(Full::<char>::high_range(), state.size, state),
+            match state.random().u8(..) {
+                0..=250 => range(Full::<char>::low_range(), state.size(), state),
+                251..=254 => range(Full::<char>::high_range(), state.size(), state),
                 255 => {
                     let (item, _) = Full::<char>::special().generate(state);
                     (item, Full::<char>::shrink(item))
@@ -580,7 +580,7 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    let item = state.random.$t(self.start..=self.end);
+                    let item = state.random().$t(self.start..=self.end);
                     (item, Shrinker::new(self.clone(), item))
                 }
             }
@@ -602,7 +602,7 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    self.shrinked(state.size).generate(state)
+                    self.shrinked(state.size()).generate(state)
                 }
             }
 
@@ -611,7 +611,7 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    match state.random.u8(..) {
+                    match state.random().u8(..) {
                         0..=254 => Self::range().generate(state),
                         255 => { let (item, _) = Self::special().generate(state); (item, Self::shrink(item)) },
                     }
@@ -623,8 +623,8 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    match state.random.u8(..) {
-                        0..=254 => Full::<$t>::range().shrinked(state.size.powi(size_of::<$t>() as i32)).generate(state),
+                    match state.random().u8(..) {
+                        0..=254 => Full::<$t>::range().shrinked(state.size().powi(size_of::<$t>() as i32)).generate(state),
                         255 => { let (item, _) = Full::<$t>::special().generate(state); (item, Full::<$t>::shrink(item)) },
                     }
                 }
@@ -703,7 +703,7 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    let ratio = state.random.$t();
+                    let ratio = state.random().$t();
                     let range = self.end - self.start;
                     let item = (range * ratio + self.start).max(self.start).min(self.end);
                     (item, Shrinker::new(self.clone(), item))
@@ -715,7 +715,7 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    self.shrinked(state.size).generate(state)
+                    self.shrinked(state.size()).generate(state)
                 }
             }
 
@@ -724,7 +724,7 @@ mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    match state.random.u8(..) {
+                    match state.random().u8(..) {
                         0..=126 => Self::range().generate(state),
                         127..=253 => Self::range().map(|value| 1 as $t / value).generate(state),
                         254..=255 => { let (item, _) = Self::special().generate(state); (item, Self::shrink(item)) },
@@ -741,9 +741,9 @@ mod number {
                         Full::<$t>::range().shrinked(size.powi(size_of::<$t>() as i32))
                     }
 
-                    match state.random.u8(..) {
-                        0..=126 => range(state.size).generate(state),
-                        127..=253 => range(state.size).map(|value| 1 as $t / value).generate(state),
+                    match state.random().u8(..) {
+                        0..=126 => range(state.size()).generate(state),
+                        127..=253 => range(state.size()).map(|value| 1 as $t / value).generate(state),
                         254..=255 => { let (item, _) = Full::<$t>::special().generate(state); (item, Full::<$t>::shrink(item)) },
                     }
                 }

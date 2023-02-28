@@ -1,16 +1,27 @@
 use crate::{
-    any::Any, array::Array, collect::Collect, filter::Filter, filter_map::FilterMap,
-    flatten::Flatten, keep::Keep, map::Map, primitive::Range, sample::Sample, shrink::Shrink,
-    size::Size, tuples,
+    any::Any,
+    array::Array,
+    check::{Checker, Error},
+    collect::Collect,
+    filter::Filter,
+    filter_map::FilterMap,
+    flatten::Flatten,
+    keep::Keep,
+    map::Map,
+    primitive::Range,
+    sample::{Sampler, Samples},
+    shrink::Shrink,
+    size::Size,
+    tuples, Prove,
 };
 use fastrand::Rng;
 use std::iter::FromIterator;
 
 #[derive(Clone, Debug)]
 pub struct State {
-    pub size: f64,
-    pub seed: u64,
-    pub random: Rng,
+    size: f64,
+    seed: u64,
+    random: Rng,
 }
 
 pub trait FullGenerate {
@@ -132,21 +143,60 @@ pub trait Generate {
         Keep(self)
     }
 
-    fn sample(&self, count: usize) -> Sample<Self>
+    fn sampler(&self, count: usize) -> Sampler<Self>
     where
         Self: Sized,
     {
-        Sample::new(self, count, None)
+        Sampler::new(self, count, None)
+    }
+
+    fn sample(&self, count: usize) -> Samples<Self>
+    where
+        Self: Sized,
+    {
+        self.sampler(count).into_iter()
+    }
+
+    fn checker(&self, count: usize) -> Checker<Self> {
+        Checker::new(self, count)
+    }
+
+    fn check<P: Prove, F: FnMut(&Self::Item) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Result<(), Error<Self::Item, P>> {
+        for result in self.checker(count).check_sequential(check) {
+            result?;
+        }
+        Ok(())
     }
 }
 
 impl State {
-    pub fn new(index: usize, count: usize, seed: u64) -> Self {
+    pub fn new(size: f64, seed: Option<u64>) -> Self {
+        let random = seed.map_or_else(Rng::new, Rng::with_seed);
         Self {
-            size: (index as f64 / count as f64 * 1.1).min(1.),
-            seed,
-            random: Rng::with_seed(seed),
+            size: size.min(0.0).max(1.0),
+            seed: random.get_seed(),
+            random,
         }
+    }
+
+    pub fn from_iteration(index: usize, count: usize, seed: Option<u64>) -> Self {
+        Self::new((index as f64 / count as f64 * 1.1).min(1.), seed)
+    }
+
+    pub const fn size(&self) -> f64 {
+        self.size
+    }
+
+    pub const fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    pub const fn random(&self) -> &Rng {
+        &self.random
     }
 }
 

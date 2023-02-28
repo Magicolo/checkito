@@ -18,7 +18,6 @@ pub mod standard;
 mod utility;
 
 pub use crate::{
-    check::{Check, CheckParallel, IntoCheck},
     generate::{FullGenerate, Generate, IntoGenerate},
     prove::Prove,
     shrink::Shrink,

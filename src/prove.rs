@@ -1,5 +1,7 @@
 use std::{error, fmt};
 
+use crate::tuples;
+
 pub trait Prove {
     fn prove(&self) -> bool;
 }
@@ -23,6 +25,54 @@ impl<P> fmt::Display for Proof<P> {
 }
 
 impl<P> error::Error for Proof<P> {}
+
+impl Prove for bool {
+    fn prove(&self) -> bool {
+        *self
+    }
+}
+
+impl<F: Fn() -> bool> Prove for F {
+    fn prove(&self) -> bool {
+        self()
+    }
+}
+
+impl<T, E> Prove for Result<T, E> {
+    fn prove(&self) -> bool {
+        self.is_ok()
+    }
+}
+
+impl<P: Prove> Prove for [P] {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+}
+
+impl<P: Prove, const N: usize> Prove for [P; N] {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+}
+
+impl<P: Prove> Prove for Vec<P> {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+}
+
+macro_rules! tuple {
+    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
+        impl<$($t: Prove,)*> Prove for ($($t,)*) {
+            fn prove(&self) -> bool {
+                $(self.$i.prove() &&)* true
+            }
+        }
+    };
+}
+
+tuples!(tuple);
 
 #[macro_export]
 macro_rules! prove {

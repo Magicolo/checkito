@@ -17,13 +17,13 @@ fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
     if items.len() == 0 {
         None
     } else {
-        Some(&items[state.random.usize(0..items.len())])
+        Some(&items[state.random().usize(0..items.len())])
     }
 }
 
 fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
     let total = items.iter().map(|weight| weight.weight).sum::<f64>();
-    let mut random = state.random.f64() * total;
+    let mut random = state.random().f64() * total;
     for weight in items {
         if random < weight.weight {
             return Some(&weight.value);
@@ -160,7 +160,7 @@ macro_rules! tuple {
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                     const COUNT: u8 = count!($t $(,$ts)*);
-                    match state.random.u8(..COUNT) {
+                    match state.random().u8(..COUNT) {
                         $i => { let (item, shrink) = self.0.$i.generate(state); (One::$t(item), One::$t(shrink)) }
                         $($is => { let (item, shrink) = self.0.$is.generate(state); (One::$ts(item), One::$ts(shrink)) })*
                         _ => unreachable!(),
@@ -174,7 +174,7 @@ macro_rules! tuple {
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                     let total = self.0.$i.weight $(+ self.0.$is.weight)*;
-                    let mut _weight = state.random.f64() * total;
+                    let mut _weight = state.random().f64() * total;
                     let mut _index = 0;
 
                     if _weight < self.0.$i.weight {
