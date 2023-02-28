@@ -2,6 +2,7 @@ use crate::{generate::State, prove::Prove, shrink::Shrink, Generate};
 use fastrand::Rng;
 use std::{
     error, fmt,
+    marker::PhantomData,
     num::NonZeroUsize,
     sync::atomic::{AtomicUsize, Ordering},
     thread::{available_parallelism, scope},
@@ -15,11 +16,10 @@ pub struct Shrinks {
     pub reject: usize,
 }
 
+#[derive(Debug)]
 pub struct Checker<'a, G: ?Sized> {
     /// A generator that will provide the values and shrinkers for the checking and shrinking processes.
     pub generator: &'a G,
-    /// Number of iterations that the checking process will run for.
-    pub checks: usize,
     /// Maximum number of errors that the results of a `check` call will contain. When it is reached, the checking process aborts.
     pub errors: usize,
     /// Limits the shrinking process.
@@ -28,10 +28,19 @@ pub struct Checker<'a, G: ?Sized> {
     pub seed: Option<u64>,
 }
 
+#[derive(Debug)]
+pub struct Checks<'a, G: ?Sized, P, F> {
+    checker: Checker<'a, G>,
+    random: Rng,
+    errors: usize,
+    index: usize,
+    count: usize,
+    check: F,
+    _marker: PhantomData<P>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Error<T, P> {
-    pub index: usize,
-    pub count: usize,
     /// The generator state that generated the error.
     pub state: State,
     pub original: (T, P),
@@ -50,10 +59,9 @@ impl<T, P> Error<T, P> {
 }
 
 impl<'a, G: ?Sized> Checker<'a, G> {
-    pub const fn new(generator: &'a G, count: usize) -> Self {
+    pub const fn new(generator: &'a G) -> Self {
         Self {
             generator,
-            checks: count,
             errors: 1,
             shrinks: Shrinks {
                 accept: usize::MAX,
@@ -68,7 +76,6 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
     fn clone(&self) -> Self {
         Self {
             generator: self.generator,
-            checks: self.checks,
             errors: self.errors,
             shrinks: self.shrinks,
             seed: self.seed,
@@ -77,29 +84,33 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 }
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn check_sequential<'b, P: Prove + 'b, F: FnMut(&G::Item) -> P + 'b>(
-        &'b self,
-        mut check: F,
-    ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
-        let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
-        let mut errors = (0, self.errors);
-        Iterator::map_while(0..self.checks, move |index| {
-            match next(
-                self.generator,
-                index,
-                self.checks,
-                self.shrinks,
-                &random,
-                &mut check,
-            ) {
-                Ok(item) if errors.0 < errors.1 => Some(Ok(item)),
-                Err(error) if errors.0 < errors.1 => {
-                    errors.0 += 1;
-                    Some(Err(error))
-                }
-                _ => None,
-            }
-        })
+    pub fn check<P: Prove, F: FnMut(&G::Item) -> P>(
+        &self,
+        size: f64,
+        check: F,
+    ) -> Result<G::Item, Error<G::Item, P>> {
+        next(
+            self.generator,
+            State::new(size, self.seed),
+            self.shrinks,
+            check,
+        )
+    }
+
+    pub fn check_sequential<P: Prove, F: FnMut(&G::Item) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Checks<'a, G, P, F> {
+        Checks {
+            checker: self.clone(),
+            random: self.seed.map_or_else(Rng::new, Rng::with_seed),
+            errors: 0,
+            index: 0,
+            count,
+            check,
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -109,6 +120,7 @@ where
 {
     pub fn check_parallel<'b, P: Prove + Send + 'b, F: Fn(&G::Item) -> P + Sync + 'b>(
         &'b self,
+        count: usize,
         parallel: Option<usize>,
         check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
@@ -116,17 +128,17 @@ where
             Some(parallel) => parallel.max(1),
             None => available_parallelism().map_or(1, NonZeroUsize::get),
         };
-        let mut results = Vec::with_capacity(self.checks);
+        let mut results = Vec::with_capacity(count);
         let errors = AtomicUsize::new(0);
         let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
-        let capacity = divide_ceiling(self.checks, parallel);
-        if capacity <= 8 || self.checks < 32 {
+        let capacity = divide_ceiling(count, parallel);
+        if capacity <= 8 || count < 32 {
             batch(
                 self.generator,
                 &mut results,
                 0,
                 1,
-                self.checks,
+                count,
                 self.shrinks,
                 (&errors, self.errors),
                 &random,
@@ -146,7 +158,7 @@ where
                             &mut results,
                             offset,
                             parallel,
-                            self.checks,
+                            count,
                             self.shrinks,
                             (errors, self.errors),
                             &Rng::with_seed(seed),
@@ -161,7 +173,7 @@ where
                     &mut results,
                     parallel - 1,
                     parallel,
-                    self.checks,
+                    count,
                     self.shrinks,
                     (&errors, self.errors),
                     &random,
@@ -177,15 +189,38 @@ where
     }
 }
 
+impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Checks<'_, G, P, F> {
+    type Item = Result<G::Item, Error<G::Item, P>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.count || self.errors >= self.checker.errors {
+            None
+        } else {
+            let result = next(
+                self.checker.generator,
+                State::from_iteration(self.index, self.count, Some(self.random.u64(..))),
+                self.checker.shrinks,
+                &mut self.check,
+            );
+            self.index += 1;
+            match result {
+                Ok(item) if self.errors < self.checker.errors => Some(Ok(item)),
+                Err(error) if self.errors < self.checker.errors => {
+                    self.errors += 1;
+                    Some(Err(error))
+                }
+                _ => None,
+            }
+        }
+    }
+}
+
 fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
     generator: &G,
-    index: usize,
-    count: usize,
+    mut state: State,
     shrinks: Shrinks,
-    random: &Rng,
     mut check: F,
 ) -> Result<G::Item, Error<G::Item, P>> {
-    let mut state = State::from_iteration(index, count, Some(random.u64(..)));
     let (outer_item, mut outer_shrink) = generator.generate(&mut state);
     let outer_prove = check(&outer_item);
     if outer_prove.prove() {
@@ -194,8 +229,6 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
 
     let mut error = Error {
         state,
-        index,
-        count,
         original: (outer_item, outer_prove),
         shrinks: Shrinks {
             accept: 0,
@@ -235,7 +268,8 @@ fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     check: F,
 ) {
     for index in (offset..count).step_by(step) {
-        match next(generator, index, count, shrinks, random, &check) {
+        let state = State::from_iteration(index, count, Some(random.u64(..)));
+        match next(generator, state, shrinks, &check) {
             Ok(item) if errors.0.load(Ordering::Relaxed) < errors.1 => results.push(Ok(item)),
             Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
                 results.push(Err(error))

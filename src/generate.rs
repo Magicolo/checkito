@@ -143,22 +143,20 @@ pub trait Generate {
         Keep(self)
     }
 
-    fn sampler(&self, count: usize) -> Sampler<Self>
-    where
-        Self: Sized,
-    {
-        Sampler::new(self, count, None)
+    fn sampler(&self) -> Sampler<Self> {
+        Sampler::new(self, None)
     }
 
-    fn sample(&self, count: usize) -> Samples<Self>
-    where
-        Self: Sized,
-    {
-        self.sampler(count).into_iter()
+    fn sample(&self, size: f64) -> Self::Item {
+        self.sampler().sample(size)
     }
 
-    fn checker(&self, count: usize) -> Checker<Self> {
-        Checker::new(self, count)
+    fn samples(&self, count: usize) -> Samples<Self> {
+        self.sampler().samples(count)
+    }
+
+    fn checker(&self) -> Checker<Self> {
+        Checker::new(self)
     }
 
     fn check<P: Prove, F: FnMut(&Self::Item) -> P>(
@@ -166,7 +164,7 @@ pub trait Generate {
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checker(count).check_sequential(check) {
+        for result in self.checker().check_sequential(count, check) {
             result?;
         }
         Ok(())

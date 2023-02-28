@@ -12,14 +12,14 @@ mod range {
                 #[test]
                 fn has_sample() {
                     for i in 1..COUNT {
-                        <$t>::generator().sample(i).next().unwrap();
+                        <$t>::generator().samples(i).next().unwrap();
                     }
                 }
 
                 #[test]
                 fn sample_has_count() {
                     for i in 0..COUNT {
-                        assert_eq!(<$t>::generator().sample(i).len(), i);
+                        assert_eq!(<$t>::generator().samples(i).len(), i);
                     }
                 }
 
