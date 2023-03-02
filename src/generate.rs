@@ -1,7 +1,7 @@
 use crate::{
     any::Any,
     array::Array,
-    check::{Checker, Error},
+    check::{Checker, Checks, Error},
     collect::Collect,
     filter::Filter,
     filter_map::FilterMap,
@@ -143,20 +143,31 @@ pub trait Generate {
         Keep(self)
     }
 
+    /// Provides a [`Sampler`] that allows to configure sampling settings and generate samples.
     fn sampler(&self) -> Sampler<Self> {
         Sampler::new(self, None)
     }
 
-    fn sample(&self, size: f64) -> Self::Item {
-        self.sampler().sample(size)
-    }
-
+    /// Generates `count` random values the are progressively larger in size. For additional sampling settings, see [`Generate::sampler`].
     fn samples(&self, count: usize) -> Samples<Self> {
         self.sampler().samples(count)
     }
 
+    /// Generates a random value of `size` (0.0..=1.0). For additional sampling settings, see [`Generate::sampler`].
+    fn sample(&self, size: f64) -> Self::Item {
+        self.sampler().sample(size)
+    }
+
     fn checker(&self) -> Checker<Self> {
         Checker::new(self)
+    }
+
+    fn checks<P: Prove, F: FnMut(&Self::Item) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Checks<Self, P, F> {
+        self.checker().checks(count, check)
     }
 
     fn check<P: Prove, F: FnMut(&Self::Item) -> P>(
@@ -164,7 +175,7 @@ pub trait Generate {
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checker().check_sequential(count, check) {
+        for result in self.checks(count, check) {
             result?;
         }
         Ok(())

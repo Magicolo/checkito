@@ -4,6 +4,7 @@ use fastrand::Rng;
 #[derive(Debug)]
 pub struct Sampler<'a, G: ?Sized> {
     pub generate: &'a G,
+    /// Seed for the random number generator used to generate random primitives.
     pub seed: Option<u64>,
 }
 

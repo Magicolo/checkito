@@ -10,7 +10,7 @@ use std::{
 
 #[derive(Clone, Copy, Debug)]
 pub struct Shrinks {
-    /// Maximum number of successful attemps at reducing the 'size' of the input before aborting the shrinking process.
+    /// Maximum number of successful attempts at reducing the 'size' of the input before aborting the shrinking process.
     pub accept: usize,
     /// Maximum number of failed attempts at reducing the 'size' of the input before aborting the shrinking process.
     pub reject: usize,
@@ -97,7 +97,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
         )
     }
 
-    pub fn check_sequential<P: Prove, F: FnMut(&G::Item) -> P>(
+    pub fn checks<P: Prove, F: FnMut(&G::Item) -> P>(
         &self,
         count: usize,
         check: F,
