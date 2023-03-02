@@ -2,6 +2,7 @@ use crate::map::Map;
 
 pub trait Shrink: Clone {
     type Item;
+
     fn generate(&self) -> Self::Item;
     fn shrink(&mut self) -> Option<Self>;
 

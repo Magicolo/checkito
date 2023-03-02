@@ -193,6 +193,7 @@ impl State {
     }
 
     pub fn from_iteration(index: usize, count: usize, seed: Option<u64>) -> Self {
+        // This size calculation ensures that 10% of samples are fully sized.
         Self::new((index as f64 / count as f64 * 1.1).min(1.), seed)
     }
 
@@ -209,7 +210,7 @@ impl State {
     }
 }
 
-impl<G: FullGenerate> FullGenerate for &G {
+impl<G: FullGenerate + ?Sized> FullGenerate for &G {
     type Item = G::Item;
     type Generate = G::Generate;
     fn generator() -> Self::Generate {
@@ -217,7 +218,7 @@ impl<G: FullGenerate> FullGenerate for &G {
     }
 }
 
-impl<G: FullGenerate> FullGenerate for &mut G {
+impl<G: FullGenerate + ?Sized> FullGenerate for &mut G {
     type Item = G::Item;
     type Generate = G::Generate;
     fn generator() -> Self::Generate {
@@ -241,19 +242,19 @@ impl<G: IntoGenerate + Clone> IntoGenerate for &mut G {
     }
 }
 
-impl<G: Generate> Generate for &G {
+impl<G: Generate + ?Sized> Generate for &G {
     type Item = G::Item;
     type Shrink = G::Shrink;
     fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        (&**self).generate(state)
+        G::generate(self, state)
     }
 }
 
-impl<G: Generate> Generate for &mut G {
+impl<G: Generate + ?Sized> Generate for &mut G {
     type Item = G::Item;
     type Shrink = G::Shrink;
     fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        (&**self).generate(state)
+        G::generate(self, state)
     }
 }
 
