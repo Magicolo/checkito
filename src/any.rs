@@ -17,7 +17,7 @@ fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
     if items.len() == 0 {
         None
     } else {
-        Some(&items[state.random().usize(0..items.len())])
+        items.get(state.random().usize(0..items.len()))
     }
 }
 
@@ -81,6 +81,8 @@ collection!([T], indexed, []);
 collection!([Weight<T>], weighted, []);
 collection!([T; N], indexed, [N]);
 collection!([Weight<T>; N], weighted, [N]);
+collection!(Box<[T]>, indexed, []);
+collection!(Box<[Weight<T>]>, weighted, []);
 collection!(Vec<T>, indexed, []);
 collection!(Vec<Weight<T>>, weighted, []);
 

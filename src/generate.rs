@@ -50,28 +50,44 @@ pub trait Generate {
         Map::generator(self, map)
     }
 
-    fn filter<F: Fn(&Self::Item) -> bool>(
+    fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
+    where
+        Self: Sized,
+        Filter<Self, F>: Generate,
+    {
+        self.filter_with(256, filter)
+    }
+
+    fn filter_with<F: Fn(&Self::Item) -> bool>(
         self,
-        iterations: Option<usize>,
+        iterations: usize,
         filter: F,
     ) -> Filter<Self, F>
     where
         Self: Sized,
         Filter<Self, F>: Generate,
     {
-        Filter::new(self, filter, iterations.unwrap_or(256))
+        Filter::new(self, filter, iterations)
     }
 
-    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(
+    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, T, F>
+    where
+        Self: Sized,
+        FilterMap<Self, T, F>: Generate,
+    {
+        self.filter_map_with(256, map)
+    }
+
+    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
         self,
-        iterations: Option<usize>,
+        iterations: usize,
         map: F,
     ) -> FilterMap<Self, T, F>
     where
         Self: Sized,
         FilterMap<Self, T, F>: Generate,
     {
-        FilterMap::new(self, map, iterations.unwrap_or(256))
+        FilterMap::new(self, map, iterations)
     }
 
     fn bind<G: Generate, F: Fn(Self::Item) -> G>(self, bind: F) -> Flatten<Map<Self, G, F>>
@@ -186,7 +202,7 @@ impl State {
     pub fn new(size: f64, seed: Option<u64>) -> Self {
         let random = seed.map_or_else(Rng::new, Rng::with_seed);
         Self {
-            size: size.min(0.0).max(1.0),
+            size: size.max(0.0).min(1.0),
             seed: random.get_seed(),
             random,
         }
@@ -259,31 +275,6 @@ impl<G: Generate + ?Sized> Generate for &mut G {
 }
 
 macro_rules! tuple {
-    ($n:ident, $c:tt) => {
-        impl FullGenerate for () {
-            type Item = <Self::Generate as Generate>::Item;
-            type Generate = ();
-            fn generator() -> Self::Generate { () }
-        }
-
-        impl IntoGenerate for () {
-            type Item = <Self::Generate as Generate>::Item;
-            type Generate = ();
-            fn generator(self) -> Self::Generate { self }
-        }
-
-        impl Generate for () {
-            type Item = ();
-            type Shrink = ();
-            fn generate(&self, _state: &mut State) -> (Self::Item, Self::Shrink) { ((), ()) }
-        }
-
-        impl Shrink for () {
-            type Item = ();
-            fn generate(&self) -> Self::Item { () }
-            fn shrink(&mut self) -> Option<Self> { None }
-        }
-    };
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: FullGenerate,)*> FullGenerate for ($($t,)*) {
             type Item = <Self::Generate as Generate>::Item;
@@ -308,30 +299,8 @@ macro_rules! tuple {
             type Shrink = ($($t::Shrink,)*);
 
             fn generate(&self, _state: &mut State) -> (Self::Item, Self::Shrink) {
-                let pairs = ($(self.$i.generate(_state),)*);
-                (($(pairs.$i.0,)*), ($(pairs.$i.1,)*))
-            }
-        }
-
-        impl<$($t: Shrink,)*> Shrink for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-
-            fn generate(&self) -> Self::Item {
-                ($(self.$i.generate(),)*)
-            }
-
-            fn shrink(&mut self) -> Option<Self> {
-                let mut shrunk = false;
-                let shrinks = ($(
-                    if shrunk { self.$i.clone() }
-                    else {
-                        match self.$i.shrink() {
-                            Some(shrink) => { shrunk = true; shrink },
-                            None => self.$i.clone(),
-                        }
-                    },
-                )*);
-                if shrunk { Some(shrinks) } else { None }
+                let _pairs = ($(self.$i.generate(_state),)*);
+                (($(_pairs.$i.0,)*), ($(_pairs.$i.1,)*))
             }
         }
     };

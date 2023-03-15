@@ -7,7 +7,7 @@ use std::{
     convert::TryInto,
     marker::PhantomData,
     mem::size_of,
-    ops::{self, Bound, Deref},
+    ops::{self, Bound},
 };
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -27,17 +27,17 @@ pub enum Error {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum Direction {
+enum Direction {
     None,
-    Left,
-    Right,
+    Low,
+    High,
 }
 
 #[derive(Clone, Debug)]
 pub struct Shrinker<T> {
-    pub range: Range<T>,
-    pub item: T,
-    pub direction: Direction,
+    range: Range<T>,
+    item: T,
+    direction: Direction,
 }
 
 impl<T: ?Sized> Full<T> {
@@ -243,41 +243,36 @@ macro_rules! shrinked {
 
 macro_rules! shrink {
     ($s:expr, $t:ident) => {{
-        let range = &mut $s.range;
-        match $s.direction {
-            Direction::None if range.start < range.end && $s.item > 0 as $t => {
-                let delta = Range::<$t>::delta(range.start, $s.item, 2 as $t).max(1 as $t);
-                let item = ($s.item - delta).max(0 as $t).max(range.start);
-                range.end = $s.item;
-                $s.item = item;
-                $s.direction = Direction::Right;
-                Some(Self::new(range.clone(), $s.item))
+        let target = match $s.direction {
+            Direction::None if $s.item >= 0 as $t => {
+                $s.range.end = $s.item;
+                $s.item = $s.range.start.max(0 as $t);
+                $s.direction = Direction::High;
+                $s.range.end
             }
-            Direction::None if range.start < range.end && $s.item < 0 as $t => {
-                let delta = Range::<$t>::delta(range.end, $s.item, 2 as $t).max(1 as $t);
-                let item = ($s.item + delta).min(0 as $t).min(range.end);
-                range.start = $s.item;
-                $s.item = item;
-                $s.direction = Direction::Left;
-                Some(Self::new(range.clone(), $s.item))
+            Direction::None => {
+                $s.range.start = $s.item;
+                $s.item = $s.range.end.min(0 as $t);
+                $s.direction = Direction::Low;
+                $s.range.start
             }
-            Direction::Left if $s.item > range.start => {
-                $s.item -= Range::<$t>::delta(range.start, $s.item, 2 as $t).max(1 as $t);
-                if $s.item > range.start {
-                    Some(Self::new(range.clone(), $s.item))
-                } else {
-                    None
-                }
-            }
-            Direction::Right if $s.item < range.end => {
-                $s.item += Range::<$t>::delta(range.end, $s.item, 2 as $t).max(1 as $t);
-                if $s.item < range.end {
-                    Some(Self::new(range.clone(), $s.item))
-                } else {
-                    None
-                }
-            }
-            _ => None,
+            Direction::Low => $s.range.start,
+            Direction::High => $s.range.end,
+        };
+
+        let old = $s.item;
+        // Divide both sides of the division by 2 to prevent overflows.
+        let delta = target / 2 as $t - old / 2 as $t;
+        let new = old + delta;
+        if old == new {
+            None
+        } else {
+            $s.item = new;
+            Some(Shrinker {
+                direction: Direction::None,
+                range: $s.range,
+                item: old,
+            })
         }
     }};
 }
@@ -290,9 +285,9 @@ mod boolean {
 
     impl FullGenerate for bool {
         type Item = Self;
-        type Generate = Full<bool>;
+        type Generate = Size<Full<bool>>;
         fn generator() -> Self::Generate {
-            Full::new()
+            Full::new().size()
         }
     }
 
@@ -302,6 +297,16 @@ mod boolean {
 
         fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
             let item = state.random().bool();
+            (item, Shrinker(item))
+        }
+    }
+
+    impl Generate for Size<Full<bool>> {
+        type Item = bool;
+        type Shrink = Shrinker;
+
+        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+            let item = state.random().f64() * state.size() >= 0.5;
             (item, Shrinker(item))
         }
     }
@@ -316,7 +321,7 @@ mod boolean {
         fn shrink(&mut self) -> Option<Self> {
             if self.0 {
                 self.0 = false;
-                Some(self.clone())
+                Some(*self)
             } else {
                 None
             }
@@ -419,33 +424,12 @@ mod character {
         }
     }
 
-    impl Generate for char {
-        type Item = Self;
-        type Shrink = Self;
-
-        fn generate(&self, _: &mut State) -> (Self::Item, Self::Shrink) {
-            (*self, *self)
-        }
-    }
-
-    impl Shrink for char {
-        type Item = Self;
-
-        fn generate(&self) -> Self::Item {
-            *self
-        }
-
-        fn shrink(&mut self) -> Option<Self> {
-            None
-        }
-    }
-
     impl Generate for Range<char> {
         type Item = char;
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-            let (item, shrink) = Into::<Range<u32>>::into(self.clone()).generate(state);
+            let (item, shrink) = Into::<Range<u32>>::into(*self).generate(state);
             (item.try_into().unwrap(), Shrinker(shrink))
         }
     }
@@ -455,9 +439,7 @@ mod character {
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-            let (item, shrink) = Into::<Range<u32>>::into(self.deref().clone())
-                .size()
-                .generate(state);
+            let (item, shrink) = Into::<Range<u32>>::into(**self).size().generate(state);
             (item.try_into().unwrap(), Shrinker(shrink))
         }
     }
@@ -513,6 +495,7 @@ mod character {
         }
     }
 
+    constant!(char);
     ranges!(char);
 }
 
@@ -563,15 +546,6 @@ mod number {
                         Ok(Self { start, end })
                     }
                 }
-
-                fn delta(left: $t, right: $t, ratio: $t) -> $t {
-                    // Divide each component by `ratio` to prevent overflows.
-                    if left < right {
-                        right / ratio - left / ratio
-                    } else {
-                        left / ratio - right / ratio
-                    }
-                }
             }
             shrinked!($t);
 
@@ -581,7 +555,7 @@ mod number {
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                     let item = state.random().$t(self.start..=self.end);
-                    (item, Shrinker::new(self.clone(), item))
+                    (item, Shrinker::new(*self, item))
                 }
             }
 
@@ -686,15 +660,6 @@ mod number {
                         Ok(Self { start: start.min(end), end: end.max(start) })
                     }
                 }
-
-                fn delta(left: $t, right: $t, ratio: $t) -> $t {
-                    // Divide each component by `ratio` to prevent overflows.
-                    if left < right {
-                        right / ratio - left / ratio
-                    } else {
-                        left / ratio - right / ratio
-                    }
-                }
             }
             shrinked!($t);
 
@@ -706,7 +671,7 @@ mod number {
                     let ratio = state.random().$t();
                     let range = self.end - self.start;
                     let item = (range * ratio + self.start).max(self.start).min(self.end);
-                    (item, Shrinker::new(self.clone(), item))
+                    (item, Shrinker::new(*self, item))
                 }
             }
 

@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Size<T: ?Sized>(pub T);
 
 impl<T: ?Sized> Deref for Size<T> {

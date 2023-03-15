@@ -1,4 +1,7 @@
-use super::*;
+use checkito::{constant::Constant, *};
+
+type Result<T> = std::result::Result<(), check::Error<T, bool>>;
+const COUNT: usize = 1024;
 
 mod range {
     use super::*;

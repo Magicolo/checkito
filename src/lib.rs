@@ -63,6 +63,3 @@ pub fn digit() -> impl Generate<Item = char> {
 pub fn ascii() -> impl Generate<Item = char> {
     0 as char..127 as char
 }
-
-#[cfg(test)]
-mod test;

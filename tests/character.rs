@@ -1,9 +1,12 @@
-use super::*;
+use checkito::{constant::Constant, *};
 use std::{
     collections::{LinkedList, VecDeque},
     rc::Rc,
     sync::Arc,
 };
+
+type Result<T> = std::result::Result<(), check::Error<T, bool>>;
+const COUNT: usize = 1024;
 
 #[test]
 #[should_panic]
