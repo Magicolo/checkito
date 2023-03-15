@@ -654,7 +654,7 @@ mod number {
                     } else if (start.1 || end.1) && start.0 == end.0 {
                         Err(Error::Empty)
                     } else {
-                        let epsilon = (end.0 - start.0) * $e;
+                        let epsilon = (end.0 * $e - start.0 * $e);
                         let start = if start.1 { start.0 + epsilon } else { start.0 };
                         let end = if end.1 { end.0 - epsilon } else { end.0 };
                         Ok(Self { start: start.min(end), end: end.max(start) })
@@ -669,8 +669,8 @@ mod number {
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                     let ratio = state.random().$t();
-                    let range = self.end - self.start;
-                    let item = (range * ratio + self.start).max(self.start).min(self.end);
+                    let range = self.end * ratio - self.start * ratio;
+                    let item = (range + self.start).max(self.start).min(self.end);
                     (item, Shrinker::new(*self, item))
                 }
             }
@@ -732,6 +732,6 @@ mod number {
     }
 
     integer!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
-    floating!(f32, 3.45266984e-4);
-    floating!(f64, 1.4901161193847656e-8);
+    floating!(f32, 3.45266984e-4); // f32::EPSILON.sqrt()
+    floating!(f64, 1.4901161193847656e-8); // f64::EPSILON.sqrt()
 }

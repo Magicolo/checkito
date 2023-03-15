@@ -99,7 +99,6 @@ macro_rules! tuple {
             }
 
             impl<$t, $($ts,)*> One<$t, $($ts,)*> {
-                #[inline]
                 pub const fn as_ref(&self) -> One<&$t, $(&$ts,)*> {
                     match self {
                         Self::$t(item) => One::$t(item),
@@ -107,7 +106,6 @@ macro_rules! tuple {
                     }
                 }
 
-                #[inline]
                 pub fn as_mut(&mut self) -> One<&mut $t, $(&mut $ts,)*> {
                     match self {
                         Self::$t(item) => One::$t(item),
@@ -117,7 +115,6 @@ macro_rules! tuple {
             }
 
             impl<$t, $($ts: Into<$t>,)*> One<$t, $($ts,)*> {
-                #[inline]
                 pub fn fuse(self) -> $t {
                     match self {
                         Self::$t(item) => item,
