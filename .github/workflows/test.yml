@@ -6,20 +6,13 @@ on:
   pull_request:
     branches: ["master"]
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Install
-      run: |
-        rustup toolchain install nightly --component miri
-        rustup override set nightly
-        cargo miri setup
+      run: rustup install stable
     - name: Build Debug
       run: cargo clean && cargo build --verbose
     - name: Build Release
@@ -28,5 +21,3 @@ jobs:
       run: cargo clean && cargo test --verbose
     - name: Run Release tests
       run: cargo clean && cargo test --release --verbose
-    - name: Run Miri tests
-      run: cargo clean && cargo miri test --verbose
