@@ -3,7 +3,6 @@ use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     primitive::Range,
     shrink::Shrink,
-    size::Size,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
@@ -149,7 +148,7 @@ macro_rules! full {
     ($t:ty, $f:ty) => {
         impl<G: FullGenerate> FullGenerate for $t {
             type Item = $f;
-            type Generate = Collect<G::Generate, Size<Range<usize>>, Self::Item>;
+            type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
             fn generator() -> Self::Generate {
                 G::generator().collect()
             }
@@ -220,7 +219,7 @@ impl<G: IntoGenerate> IntoGenerate for Box<[G]> {
 
 impl FullGenerate for String {
     type Item = Self;
-    type Generate = Collect<<char as FullGenerate>::Generate, Size<Range<usize>>, Self::Item>;
+    type Generate = Collect<<char as FullGenerate>::Generate, Range<usize>, Self::Item>;
     fn generator() -> Self::Generate {
         char::generator().collect()
     }
@@ -244,7 +243,7 @@ impl Generate for String {
 
 impl<K: FullGenerate<Item = impl Ord>, V: FullGenerate> FullGenerate for BTreeMap<K, V> {
     type Item = BTreeMap<K::Item, V::Item>;
-    type Generate = Collect<<(K, V) as FullGenerate>::Generate, Size<Range<usize>>, Self::Item>;
+    type Generate = Collect<<(K, V) as FullGenerate>::Generate, Range<usize>, Self::Item>;
     fn generator() -> Self::Generate {
         <(K, V)>::generator().collect()
     }
@@ -275,7 +274,7 @@ impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
 
 impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BTreeSet<G> {
     type Item = BTreeSet<G::Item>;
-    type Generate = Collect<G::Generate, Size<Range<usize>>, Self::Item>;
+    type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
     fn generator() -> Self::Generate {
         G::generator().collect()
     }
@@ -301,7 +300,7 @@ impl<K: FullGenerate<Item = impl Eq + Hash>, V: FullGenerate, S: BuildHasher + D
     for HashMap<K, V, S>
 {
     type Item = HashMap<K::Item, V::Item, S>;
-    type Generate = Collect<<(K, V) as FullGenerate>::Generate, Size<Range<usize>>, Self::Item>;
+    type Generate = Collect<<(K, V) as FullGenerate>::Generate, Range<usize>, Self::Item>;
     fn generator() -> Self::Generate {
         <(K, V)>::generator().collect()
     }
@@ -336,7 +335,7 @@ impl<G: FullGenerate<Item = impl Eq + Hash>, S: BuildHasher + Default> FullGener
     for HashSet<G, S>
 {
     type Item = HashSet<G::Item, S>;
-    type Generate = Collect<G::Generate, Size<Range<usize>>, Self::Item>;
+    type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
     fn generator() -> Self::Generate {
         G::generator().collect()
     }
@@ -360,7 +359,7 @@ impl<G: Generate<Item = impl Eq + Hash>> Generate for HashSet<G> {
 
 impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BinaryHeap<G> {
     type Item = BinaryHeap<G::Item>;
-    type Generate = Collect<G::Generate, Size<Range<usize>>, Self::Item>;
+    type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
     fn generator() -> Self::Generate {
         G::generator().collect()
     }

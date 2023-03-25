@@ -7,24 +7,24 @@ pub trait Prove {
 }
 
 #[derive(Clone, Copy)]
-pub struct Proof<P> {
+pub struct Error<P> {
     pub name: &'static str,
     pub prove: P,
 }
 
-impl<P> fmt::Debug for Proof<P> {
+impl<P> fmt::Debug for Error<P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.name)
     }
 }
 
-impl<P> fmt::Display for Proof<P> {
+impl<P> fmt::Display for Error<P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.name, f)
     }
 }
 
-impl<P> error::Error for Proof<P> {}
+impl<P> error::Error for Error<P> {}
 
 impl Prove for bool {
     fn prove(&self) -> bool {
@@ -79,12 +79,10 @@ macro_rules! prove {
     ($prove:expr) => {{
         let prove = $prove;
         if $crate::prove::Prove::prove(&prove) {
-            Ok(())
+            Ok(stringify!($prove))
         } else {
-            Err($crate::prove::Proof {
-                name: stringify!($prove),
-                prove,
-            })
+            Err($crate::prove::Error { name: stringify!($prove), prove })
         }
     }};
+    ($($prove:expr),*) => { Ok(($($crate::prove!($prove)),*)) }
 }

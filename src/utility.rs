@@ -61,6 +61,36 @@ macro_rules! tuples {
     };
 }
 
+pub trait Nudge {
+    fn nudge(self, force: Self) -> Self;
+}
+
+impl Nudge for f32 {
+    #[inline]
+    fn nudge(self, force: Self) -> Self {
+        if self == 0.0 {
+            1.0 / Self::MAX
+        } else if self == -0.0 {
+            1.0 / Self::MIN
+        } else {
+            self * (1.0 + Self::EPSILON * force)
+        }
+    }
+}
+
+impl Nudge for f64 {
+    #[inline]
+    fn nudge(self, force: Self) -> Self {
+        if self == 0.0 {
+            1.0 / Self::MAX
+        } else if self == -0.0 {
+            1.0 / Self::MIN
+        } else {
+            self * (1.0 + Self::EPSILON * force)
+        }
+    }
+}
+
 pub trait Unzip {
     type Target;
     fn unzip(self) -> Self::Target;

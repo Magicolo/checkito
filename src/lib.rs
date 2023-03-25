@@ -21,9 +21,9 @@ pub use crate::{
     generate::{FullGenerate, Generate, IntoGenerate},
     prove::Prove,
     shrink::Shrink,
+    utility::Nudge,
 };
 use primitive::Range;
-use size::Size;
 use std::{
     fmt,
     ops::{self, Neg},
@@ -31,9 +31,9 @@ use std::{
 
 pub fn number<T>() -> impl Generate<Item = T>
 where
-    Size<Range<T>>: Generate<Item = T>,
-    ops::RangeFull: TryInto<Size<Range<T>>>,
-    <ops::RangeFull as TryInto<Size<Range<T>>>>::Error: fmt::Debug,
+    Range<T>: Generate<Item = T>,
+    ops::RangeFull: TryInto<Range<T>>,
+    <ops::RangeFull as TryInto<Range<T>>>::Error: fmt::Debug,
 {
     (..).try_into().unwrap()
 }

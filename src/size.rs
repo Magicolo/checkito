@@ -1,17 +1,17 @@
-use std::ops::{Deref, DerefMut};
+use crate::generate::{Generate, State};
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Size<T: ?Sized>(pub T);
+pub struct Size<G, F>(pub G, pub F);
 
-impl<T: ?Sized> Deref for Size<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
+    type Item = G::Item;
+    type Shrink = G::Shrink;
 
-impl<T: ?Sized> DerefMut for Size<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+        let old = state.size;
+        let new = self.1(old);
+        state.size = new.max(0.0).min(1.0);
+        let (item, shrink) = self.0.generate(state);
+        state.size = old;
+        (item, shrink)
     }
 }

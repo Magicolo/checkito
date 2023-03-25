@@ -19,9 +19,9 @@ use std::iter::FromIterator;
 
 #[derive(Clone, Debug)]
 pub struct State {
-    size: f64,
-    seed: u64,
-    random: Rng,
+    pub(crate) size: f64,
+    pub(crate) seed: u64,
+    pub(crate) random: Rng,
 }
 
 pub trait FullGenerate {
@@ -124,10 +124,10 @@ pub trait Generate {
         Array(self)
     }
 
-    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Size<Range<usize>>, F>
+    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Range<usize>, F>
     where
         Self: Sized,
-        Collect<Self, Size<Range<usize>>, F>: Generate,
+        Collect<Self, Range<usize>, F>: Generate,
     {
         self.collect_with((0..256 as usize).generator())
     }
@@ -143,12 +143,12 @@ pub trait Generate {
         Collect::new(self, count)
     }
 
-    fn size(self) -> Size<Self>
+    fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
-        Size<Self>: Generate,
+        Size<Self, F>: Generate,
     {
-        Size(self)
+        Size(self, map)
     }
 
     fn keep(self) -> Keep<Self>
