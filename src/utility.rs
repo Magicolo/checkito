@@ -65,31 +65,25 @@ pub trait Nudge {
     fn nudge(self, force: Self) -> Self;
 }
 
-impl Nudge for f32 {
-    #[inline]
-    fn nudge(self, force: Self) -> Self {
-        if self == 0.0 {
-            1.0 / Self::MAX
-        } else if self == -0.0 {
-            1.0 / Self::MIN
-        } else {
-            self * (1.0 + Self::EPSILON * force)
+macro_rules! floating {
+    ($t:ty) => {
+        impl Nudge for $t {
+            #[inline]
+            fn nudge(self, force: Self) -> Self {
+                if self == 0.0 {
+                    force / Self::MAX
+                } else if self == -0.0 {
+                    force / Self::MIN
+                } else {
+                    self * (1.0 + Self::EPSILON * force)
+                }
+            }
         }
-    }
+    };
+    ($($t:ty),*) => { $(floating!($t);)* }
 }
 
-impl Nudge for f64 {
-    #[inline]
-    fn nudge(self, force: Self) -> Self {
-        if self == 0.0 {
-            1.0 / Self::MAX
-        } else if self == -0.0 {
-            1.0 / Self::MIN
-        } else {
-            self * (1.0 + Self::EPSILON * force)
-        }
-    }
-}
+floating!(f32, f64);
 
 pub trait Unzip {
     type Target;

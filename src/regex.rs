@@ -15,14 +15,6 @@ use std::str::FromStr;
 
 pub struct Regex(Hir);
 
-impl FromStr for Regex {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Regex(Parser::new().parse(s)?))
-    }
-}
-
 #[derive(Clone)]
 pub enum Shrinker {
     Empty,
@@ -31,6 +23,14 @@ pub enum Shrinker {
     // Repeat(collect::Shrinker<Shrinker, String>),
     // Repeat(Vec<Shrinker>, usize, usize),
     All(collect::Shrinker<Shrinker, String>),
+}
+
+impl FromStr for Regex {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Regex(Parser::new().parse(s)?))
+    }
 }
 
 impl Generate for Regex {
