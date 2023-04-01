@@ -15,7 +15,7 @@ use std::str::FromStr;
 
 pub struct Regex {
     tree: Hir,
-    limit: u32,
+    repeats: u32,
 }
 
 #[derive(Clone)]
@@ -27,8 +27,8 @@ pub enum Shrinker {
 }
 
 impl Regex {
-    pub fn limit(mut self, limit: u32) -> Self {
-        self.limit = limit;
+    pub fn repeats(mut self, repeats: u32) -> Self {
+        self.repeats = repeats;
         self
     }
 }
@@ -39,7 +39,7 @@ impl FromStr for Regex {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Regex {
             tree: Parser::new().parse(s)?,
-            limit: 64,
+            repeats: 64,
         })
     }
 }
@@ -114,7 +114,7 @@ impl Generate for Regex {
         }
 
         let mut buffer = String::new();
-        let shrink = next(self.tree.kind(), &mut buffer, state, self.limit);
+        let shrink = next(self.tree.kind(), &mut buffer, state, self.repeats);
         (buffer, shrink)
     }
 }
