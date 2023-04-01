@@ -30,6 +30,10 @@ use std::{
     ops::{self, Neg},
 };
 
+// TODO: Review `primitive::shrinked`.
+// TODO: Sized ranges should generate 'small' (closer to zero) values first.
+// TODO: Use nudge in float ranges.
+
 pub fn number<T>() -> impl Generate<Item = T>
 where
     Range<T>: Generate<Item = T>,
