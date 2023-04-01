@@ -13,41 +13,43 @@ use regex_syntax::{
 };
 use std::str::FromStr;
 
-pub struct Regex(Hir);
+pub struct Regex {
+    tree: Hir,
+    limit: u32,
+}
 
 #[derive(Clone)]
 pub enum Shrinker {
     Empty,
     Literal(char),
     Range(character::Shrinker),
-    // Repeat(collect::Shrinker<Shrinker, String>),
-    // Repeat(Vec<Shrinker>, usize, usize),
     All(collect::Shrinker<Shrinker, String>),
+}
+
+impl Regex {
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = limit;
+        self
+    }
 }
 
 impl FromStr for Regex {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Regex(Parser::new().parse(s)?))
+        Ok(Regex {
+            tree: Parser::new().parse(s)?,
+            limit: 64,
+        })
     }
 }
 
 impl Generate for Regex {
-    type Item = <Hir as Generate>::Item;
-    type Shrink = <Hir as Generate>::Shrink;
-
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        self.0.generate(state)
-    }
-}
-
-impl Generate for Hir {
     type Item = String;
     type Shrink = Shrinker;
 
     fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        fn next(kind: &HirKind, buffer: &mut String, state: &mut State) -> Shrinker {
+        fn next(kind: &HirKind, buffer: &mut String, state: &mut State, limit: u32) -> Shrinker {
             match kind {
                 HirKind::Empty | HirKind::Anchor(_) | HirKind::WordBoundary(_) => Shrinker::Empty,
                 HirKind::Literal(Literal::Unicode(symbol)) => {
@@ -76,23 +78,29 @@ impl Generate for Hir {
                 HirKind::Repetition(Repetition { hir, kind, .. }) => {
                     let (low, high) = match kind {
                         RepetitionKind::ZeroOrOne => (0, 1),
-                        RepetitionKind::ZeroOrMore => (0, 256),
-                        RepetitionKind::OneOrMore => (1, 256),
+                        RepetitionKind::ZeroOrMore => (0, limit),
+                        RepetitionKind::OneOrMore => (1, limit),
                         RepetitionKind::Range(range) => match range {
                             RepetitionRange::Exactly(low) => (*low, *low),
-                            RepetitionRange::AtLeast(low) => (*low, low.saturating_add(256)),
+                            RepetitionRange::AtLeast(low) => (*low, low.saturating_add(limit)),
                             RepetitionRange::Bounded(low, high) => (*low, *high),
                         },
                     };
-                    let (count, _) = (low..=high).generate(state);
-                    let shrinks =
-                        Iterator::map(0..count, |_| next(hir.kind(), buffer, state)).collect();
-                    Shrinker::All(collect::Shrinker::new(shrinks, low as _))
+                    if low > high || high == 0 {
+                        Shrinker::Empty
+                    } else {
+                        let (count, _) = (low..=high).size(|size| size.powf(2.0)).generate(state);
+                        let limit = limit / (32 - high.leading_zeros());
+                        let shrinks =
+                            Iterator::map(0..count, |_| next(hir.kind(), buffer, state, limit))
+                                .collect();
+                        Shrinker::All(collect::Shrinker::new(shrinks, low as _))
+                    }
                 }
-                HirKind::Group(Group { hir, .. }) => next(hir.kind(), buffer, state),
+                HirKind::Group(Group { hir, .. }) => next(hir.kind(), buffer, state, limit),
                 HirKind::Concat(hirs) => Shrinker::All(collect::Shrinker::new(
                     hirs.iter()
-                        .map(|hir| next(hir.kind(), buffer, state))
+                        .map(|hir| next(hir.kind(), buffer, state, limit))
                         .collect(),
                     hirs.len(),
                 )),
@@ -100,12 +108,13 @@ impl Generate for Hir {
                     hirs[state.random().usize(..hirs.len())].kind(),
                     buffer,
                     state,
+                    limit,
                 ),
             }
         }
 
         let mut buffer = String::new();
-        let shrink = next(self.kind(), &mut buffer, state);
+        let shrink = next(self.tree.kind(), &mut buffer, state, self.limit);
         (buffer, shrink)
     }
 }

@@ -20,8 +20,8 @@ use std::iter::FromIterator;
 #[derive(Clone, Debug)]
 pub struct State {
     pub(crate) size: f64,
-    pub(crate) seed: u64,
-    pub(crate) random: Rng,
+    seed: u64,
+    random: Rng,
 }
 
 pub trait FullGenerate {

@@ -1,13 +1,27 @@
-use checkito::{regex::Regex, *};
+use checkito::{regex::Regex, Generate};
+use std::error;
 
 const COUNT: usize = 1024;
+
+#[test]
+fn generate_matches_regex() -> Result<(), Box<dyn error::Error>> {
+    const REGEX: &'static str = "((a|b)*[A-Z]*[\\u0000-\\u0FFF^\\u00AF-\\u00FF]*c{4}d{2,10})+";
+    let matcher = regex::RegexBuilder::new(REGEX).build().unwrap();
+    REGEX
+        .parse::<Regex>()
+        .unwrap()
+        .check(COUNT, |item| matcher.is_match(dbg!(item)))?;
+    Ok(())
+}
 
 #[test]
 fn range_shrinks() {
     let error = "[a-z]+"
         .parse::<Regex>()
         .unwrap()
-        .check(COUNT, |item| !item.contains('w'))
+        .check(COUNT, |item| {
+            !dbg!(item).contains('w') || !item.contains('y')
+        })
         .err()
         .unwrap();
     assert!(error.original().len() > 5);
@@ -15,5 +29,5 @@ fn range_shrinks() {
         .original()
         .chars()
         .all(|symbol| symbol >= 'a' && symbol <= 'z'));
-    assert_eq!(error.shrunk(), "w");
+    assert!(error.shrunk() == "wy" || error.shrunk() == "yw");
 }
