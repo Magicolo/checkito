@@ -10,7 +10,7 @@ fn generate_matches_regex() -> Result<(), Box<dyn error::Error>> {
     REGEX
         .parse::<Regex>()
         .unwrap()
-        .check(COUNT, |item| matcher.is_match(dbg!(item)))?;
+        .check(COUNT, |item| matcher.is_match(item))?;
     Ok(())
 }
 
