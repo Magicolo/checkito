@@ -80,9 +80,27 @@ impl From<Range<char>> for Range<u32> {
     }
 }
 
+impl From<Range<u8>> for Range<char> {
+    fn from(value: Range<u8>) -> Self {
+        value.map(|value| value as char)
+    }
+}
+
 impl From<Shrinker<char>> for Shrinker<u32> {
     fn from(value: Shrinker<char>) -> Self {
         value.map(|value| value as u32)
+    }
+}
+
+impl From<Shrinker<u8>> for Shrinker<u32> {
+    fn from(value: Shrinker<u8>) -> Self {
+        value.map(|value| value as u32)
+    }
+}
+
+impl From<Shrinker<u8>> for Shrinker<char> {
+    fn from(value: Shrinker<u8>) -> Self {
+        value.map(|value| value as char)
     }
 }
 
@@ -279,7 +297,7 @@ macro_rules! shrink {
     }};
 }
 
-mod boolean {
+pub mod boolean {
     use super::*;
 
     #[derive(Copy, Clone, Debug, Default)]
@@ -323,7 +341,7 @@ mod boolean {
     constant!(bool);
 }
 
-mod character {
+pub mod character {
     use super::*;
 
     #[derive(Clone, Debug)]
@@ -401,6 +419,18 @@ mod character {
         }
     }
 
+    impl From<super::Shrinker<u8>> for Shrinker {
+        fn from(value: super::Shrinker<u8>) -> Self {
+            Self(value.into())
+        }
+    }
+
+    impl From<super::Shrinker<char>> for Shrinker {
+        fn from(value: super::Shrinker<char>) -> Self {
+            Self(value.into())
+        }
+    }
+
     impl Shrinker {
         pub fn new(item: char) -> Self {
             let mut low = Full::<char>::low_range();
@@ -465,7 +495,7 @@ mod character {
     ranges!(char);
 }
 
-mod number {
+pub mod number {
     use super::*;
 
     macro_rules! integer {

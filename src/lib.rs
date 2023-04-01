@@ -11,6 +11,7 @@ pub mod keep;
 pub mod map;
 pub mod primitive;
 pub mod prove;
+pub mod regex;
 pub mod sample;
 pub mod shrink;
 pub mod size;

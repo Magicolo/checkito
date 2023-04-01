@@ -5,8 +5,10 @@ use crate::{
     tuples,
 };
 
+#[repr(transparent)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Any<T: ?Sized>(pub T);
+
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub struct Weight<T: ?Sized> {
     pub weight: f64,
@@ -34,7 +36,7 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
     None
 }
 
-impl<G: FullGenerate> FullGenerate for Any<G>
+impl<G: FullGenerate + ?Sized> FullGenerate for Any<G>
 where
     Any<G::Generate>: Generate,
 {
@@ -55,6 +57,30 @@ where
 
     fn generator(self) -> Self::Generate {
         Any(self.0.generator())
+    }
+}
+
+impl<G: ?Sized> Generate for Any<&G>
+where
+    Any<G>: Generate,
+{
+    type Item = <Any<G> as Generate>::Item;
+    type Shrink = <Any<G> as Generate>::Shrink;
+
+    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+        unsafe { &*(self.0 as *const G as *const Any<G>) }.generate(state)
+    }
+}
+
+impl<G: ?Sized> Generate for Any<&mut G>
+where
+    Any<G>: Generate,
+{
+    type Item = <Any<G> as Generate>::Item;
+    type Shrink = <Any<G> as Generate>::Shrink;
+
+    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+        Any(&*self.0).generate(state)
     }
 }
 

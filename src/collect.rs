@@ -16,6 +16,7 @@ use std::{
 pub struct Collect<I: ?Sized, C, F: ?Sized> {
     _marker: PhantomData<F>,
     count: C,
+    minimum: usize,
     inner: I,
 }
 
@@ -29,14 +30,17 @@ pub struct Generator<I, F: ?Sized> {
 pub struct Shrinker<I, F: ?Sized> {
     inner: Vec<I>,
     index: usize,
+    minimum: usize,
     _marker: PhantomData<F>,
 }
 
 impl<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>> Collect<G, C, F> {
-    pub const fn new(generate: G, count: C) -> Self {
+    pub fn new(generate: G, count: C) -> Self {
+        let minimum = count.sample(0.0);
         Self {
             inner: generate,
             count,
+            minimum,
             _marker: PhantomData,
         }
     }
@@ -52,12 +56,17 @@ impl<G: Generate, F: FromIterator<G::Item>> Generator<G, F> {
 }
 
 impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
-    pub const fn new(shrinks: Vec<S>) -> Self {
+    pub const fn new(shrinks: Vec<S>, minimum: usize) -> Self {
         Self {
             inner: shrinks,
             index: 0,
+            minimum,
             _marker: PhantomData,
         }
+    }
+
+    pub fn shrinks(&self) -> &[S] {
+        &self.inner
     }
 }
 
@@ -66,6 +75,7 @@ impl<I: Clone, C: Clone, F> Clone for Collect<I, C, F> {
         Self {
             inner: self.inner.clone(),
             count: self.count.clone(),
+            minimum: self.minimum,
             _marker: PhantomData,
         }
     }
@@ -76,6 +86,7 @@ impl<I: Clone, F> Clone for Shrinker<I, F> {
         Self {
             inner: self.inner.clone(),
             index: self.index,
+            minimum: self.minimum,
             _marker: PhantomData,
         }
     }
@@ -91,12 +102,12 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> 
         let (count, _) = self.count.generate(state);
         let mut shrinks = Vec::with_capacity(count);
         let items = Iterator::map(0..count, |_| {
-            let (item, state) = self.inner.generate(state);
-            shrinks.push(state);
+            let (item, shrink) = self.inner.generate(state);
+            shrinks.push(shrink);
             item
         })
         .collect();
-        (items, Shrinker::new(shrinks))
+        (items, Shrinker::new(shrinks, self.minimum))
     }
 }
 
@@ -111,7 +122,7 @@ impl<G: Generate, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generate
             .iter()
             .map(|generate| generate.generate(state))
             .unzip();
-        (items, Shrinker::new(shrinks))
+        (items, Shrinker::new(shrinks, 0))
     }
 }
 
@@ -124,11 +135,11 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
 
     fn shrink(&mut self) -> Option<Self> {
         // Try to remove irrelevant generators.
-        if self.index < self.inner.len() {
+        if self.index < self.inner.len() && self.minimum < self.inner.len() {
             let mut shrinks = self.inner.clone();
             shrinks.remove(self.index);
             self.index += 1;
-            return Some(Self::new(shrinks));
+            return Some(Self::new(shrinks, self.minimum));
         }
 
         // Try to shrink each generator and succeed if any generator is shrunk.
@@ -136,7 +147,7 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
             if let Some(shrink) = self.inner[i].shrink() {
                 let mut shrinks = self.inner.clone();
                 shrinks[i] = shrink;
-                return Some(Self::new(shrinks));
+                return Some(Self::new(shrinks, self.minimum));
             }
         }
 
@@ -179,7 +190,8 @@ macro_rules! slice {
             fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                 let (items, shrinks): (Vec<_>, _) =
                     self.iter().map(|generate| generate.generate(state)).unzip();
-                (items.into(), Shrinker::new(shrinks))
+                let minimum = items.len();
+                (items.into(), Shrinker::new(shrinks, minimum))
             }
         }
     };
@@ -196,7 +208,7 @@ macro_rules! collection {
 
             fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                 let (items, shrinks) = self.iter().map(|generate| generate.generate(state)).unzip();
-                (items, Shrinker::new(shrinks))
+                (items, Shrinker::new(shrinks, 0))
             }
         }
     };
@@ -205,6 +217,7 @@ macro_rules! collection {
 collection!(Vec<G>, Vec<G::Generate>, Vec<G::Item>);
 collection!(VecDeque<G>, VecDeque<G::Generate>, VecDeque<G::Item>);
 collection!(LinkedList<G>, LinkedList<G::Generate>, LinkedList<G::Item>);
+slice!([G], Box<[G::Item]>);
 slice!(Box<[G]>, Box<[G::Item]>);
 slice!(Rc<[G]>, Rc<[G::Item]>);
 slice!(Arc<[G]>, Arc<[G::Item]>);
@@ -213,7 +226,7 @@ impl<G: IntoGenerate> IntoGenerate for Box<[G]> {
     type Item = Box<[G::Item]>;
     type Generate = Box<[G::Generate]>;
     fn generator(self) -> Self::Generate {
-        Vec::from(self).generator().into()
+        self.into_vec().into_iter().map(G::generator).collect()
     }
 }
 
@@ -237,7 +250,7 @@ impl Generate for String {
     type Item = Self;
     type Shrink = Shrinker<char, Self::Item>;
     fn generate(&self, _: &mut State) -> (Self::Item, Self::Shrink) {
-        (self.clone(), Shrinker::new(self.chars().collect()))
+        (self.clone(), Shrinker::new(self.chars().collect(), 0))
     }
 }
 
