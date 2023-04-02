@@ -108,3 +108,20 @@ macro_rules! unzip {
 }
 
 tuples!(unzip);
+
+#[test]
+fn unzip2() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::generate::*;
+    usize::generator()
+        .map(|value| (value, value))
+        .array::<100>()
+        .map(|tuples| tuples.unzip())
+        .check(1000, |arrays| {
+            arrays
+                .0
+                .into_iter()
+                .zip(arrays.1)
+                .all(|tuple| tuple.0 == tuple.1)
+        })?;
+    Ok(())
+}

@@ -277,7 +277,7 @@ impl<G: Generate + ?Sized> Generate for &mut G {
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: FullGenerate,)*> FullGenerate for ($($t,)*) {
-            type Item = <Self::Generate as Generate>::Item;
+            type Item = ($($t::Item,)*);
             type Generate = ($($t::Generate,)*);
 
             fn generator() -> Self::Generate {
@@ -286,7 +286,7 @@ macro_rules! tuple {
         }
 
         impl<$($t: IntoGenerate,)*> IntoGenerate for ($($t,)*) {
-            type Item = <Self::Generate as Generate>::Item;
+            type Item = ($($t::Item,)*);
             type Generate = ($($t::Generate,)*);
 
             fn generator(self) -> Self::Generate {
