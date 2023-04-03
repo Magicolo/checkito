@@ -6,7 +6,6 @@ use crate::{
 use std::{
     convert::TryInto,
     marker::PhantomData,
-    mem::size_of,
     ops::{self, Bound},
 };
 
@@ -221,18 +220,29 @@ macro_rules! shrinked {
     ($t:ident) => {
         impl Range<$t> {
             pub(super) fn shrinked(&self, size: f64) -> Self {
+                fn shrink(range: f64, size: f64) -> f64 {
+                    let adjust = size.powf(range.abs().log2() / 8.0);
+                    if adjust.is_normal() {
+                        range * adjust
+                    } else {
+                        range * size
+                    }
+                }
+
                 if self.start >= 0 as $t {
                     debug_assert!(self.end >= 0 as $t);
-                    let range = (self.end - self.start) as f64 * size;
-                    let end = (self.start as f64 + range) as $t;
+                    let range = (self.end - self.start) as f64;
+                    let shrunk = shrink(range, size);
+                    let end = (self.start as f64 + shrunk) as $t;
                     Self {
                         start: self.start,
                         end: end.min(self.end),
                     }
                 } else if self.end <= 0 as $t {
                     debug_assert!(self.start <= 0 as $t);
-                    let range = (self.start - self.end) as f64 * size;
-                    let start = (self.end as f64 + range) as $t;
+                    let range = (self.start - self.end) as f64;
+                    let shrunk = shrink(range, size);
+                    let start = (self.end as f64 + shrunk) as $t;
                     Self {
                         start: start.max(self.start),
                         end: self.end,
@@ -243,8 +253,8 @@ macro_rules! shrinked {
 
                     let start = self.start as f64;
                     let end = self.end as f64;
-                    let left = start * size * 0.5;
-                    let right = end * size * 0.5;
+                    let left = shrink(start, size) * 0.5;
+                    let right = shrink(end, size) * 0.5;
                     let mut ranges = (left - right, right - left);
                     if ranges.0 < start {
                         ranges.1 += start - ranges.0;
@@ -463,7 +473,7 @@ pub mod character {
         fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
             fn range(range: Range<char>, size: f64, state: &mut State) -> (char, Shrinker) {
                 let (item, shrink) = Into::<Range<u32>>::into(range)
-                    .shrinked(size.powi(size_of::<char>() as i32))
+                    .shrinked(size)
                     .generate(state);
                 (item.try_into().unwrap(), Shrinker(shrink))
             }
@@ -574,7 +584,7 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                     match state.random().u8(..) {
-                        0..=254 => Full::<$t>::range().shrinked(state.size().powi(size_of::<$t>() as i32)).generate(state),
+                        0..=254 => Full::<$t>::range().shrinked(state.size()).generate(state),
                         255 => { let (item, _) = Full::<$t>::special().generate(state); (item, Full::<$t>::shrink(item)) },
                     }
                 }
@@ -682,7 +692,7 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
                     fn range(size: f64) -> Range<$t> {
-                        Full::<$t>::range().shrinked(size.powi(size_of::<$t>() as i32))
+                        Full::<$t>::range().shrinked(size)
                     }
 
                     match state.random().u8(..) {

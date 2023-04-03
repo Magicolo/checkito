@@ -30,9 +30,12 @@ use std::{
     ops::{self, Neg},
 };
 
-// TODO: Review `primitive::shrinked`.
-// TODO: Sized ranges should generate 'small' (closer to zero) values first.
-// TODO: Use nudge in float ranges.
+/*
+    TODO: Review `primitive::shrinked`.
+    TODO: Sized ranges should generate 'small' (closer to zero) values first.
+    FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...
+    - See `tests::shrink::integer_shrink_to_minimum`.
+*/
 
 pub fn number<T>() -> impl Generate<Item = T>
 where

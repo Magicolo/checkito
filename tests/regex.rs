@@ -19,9 +19,7 @@ fn range_shrinks() {
     let error = "[a-z]+"
         .parse::<Regex>()
         .unwrap()
-        .check(COUNT, |item| {
-            !dbg!(item).contains('w') || !item.contains('y')
-        })
+        .check(COUNT, |item| !item.contains('w') || !item.contains('y'))
         .err()
         .unwrap();
     assert!(error.original().len() > 5);
