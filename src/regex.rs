@@ -13,6 +13,7 @@ use regex_syntax::{
 };
 use std::str::FromStr;
 
+#[derive(Debug, Clone)]
 pub struct Regex {
     tree: Hir,
     repeats: u32,
@@ -31,25 +32,9 @@ impl Regex {
         self.repeats = repeats;
         self
     }
-}
 
-impl FromStr for Regex {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Regex {
-            tree: Parser::new().parse(s)?,
-            repeats: 64,
-        })
-    }
-}
-
-impl Generate for Regex {
-    type Item = String;
-    type Shrink = Shrinker;
-
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        fn next(kind: &HirKind, buffer: &mut String, state: &mut State, limit: u32) -> Shrinker {
+    pub fn generate_in(&self, buffer: &mut String, state: &mut State) -> Shrinker {
+        fn next(kind: &HirKind, buffer: &mut String, state: &mut State, repeats: u32) -> Shrinker {
             match kind {
                 HirKind::Empty | HirKind::Anchor(_) | HirKind::WordBoundary(_) => Shrinker::Empty,
                 HirKind::Literal(Literal::Unicode(symbol)) => {
@@ -78,11 +63,11 @@ impl Generate for Regex {
                 HirKind::Repetition(Repetition { hir, kind, .. }) => {
                     let (low, high) = match kind {
                         RepetitionKind::ZeroOrOne => (0, 1),
-                        RepetitionKind::ZeroOrMore => (0, limit),
-                        RepetitionKind::OneOrMore => (1, limit),
+                        RepetitionKind::ZeroOrMore => (0, repeats),
+                        RepetitionKind::OneOrMore => (1, repeats),
                         RepetitionKind::Range(range) => match range {
                             RepetitionRange::Exactly(low) => (*low, *low),
-                            RepetitionRange::AtLeast(low) => (*low, low.saturating_add(limit)),
+                            RepetitionRange::AtLeast(low) => (*low, low.saturating_add(repeats)),
                             RepetitionRange::Bounded(low, high) => (*low, *high),
                         },
                     };
@@ -90,17 +75,17 @@ impl Generate for Regex {
                         Shrinker::Empty
                     } else {
                         let (count, _) = (low..=high).size(|size| size.powf(2.0)).generate(state);
-                        let limit = limit / (32 - high.leading_zeros());
+                        let limit = repeats / (32 - high.leading_zeros());
                         let shrinks =
                             Iterator::map(0..count, |_| next(hir.kind(), buffer, state, limit))
                                 .collect();
                         Shrinker::All(collect::Shrinker::new(shrinks, low as _))
                     }
                 }
-                HirKind::Group(Group { hir, .. }) => next(hir.kind(), buffer, state, limit),
+                HirKind::Group(Group { hir, .. }) => next(hir.kind(), buffer, state, repeats),
                 HirKind::Concat(hirs) => Shrinker::All(collect::Shrinker::new(
                     hirs.iter()
-                        .map(|hir| next(hir.kind(), buffer, state, limit))
+                        .map(|hir| next(hir.kind(), buffer, state, repeats))
                         .collect(),
                     hirs.len(),
                 )),
@@ -108,13 +93,33 @@ impl Generate for Regex {
                     hirs[state.random().usize(..hirs.len())].kind(),
                     buffer,
                     state,
-                    limit,
+                    repeats,
                 ),
             }
         }
 
+        next(self.tree.kind(), buffer, state, self.repeats)
+    }
+}
+
+impl FromStr for Regex {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Regex {
+            tree: Parser::new().parse(s)?,
+            repeats: 64,
+        })
+    }
+}
+
+impl Generate for Regex {
+    type Item = String;
+    type Shrink = Shrinker;
+
+    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
         let mut buffer = String::new();
-        let shrink = next(self.tree.kind(), &mut buffer, state, self.repeats);
+        let shrink = self.generate_in(&mut buffer, state);
         (buffer, shrink)
     }
 }
