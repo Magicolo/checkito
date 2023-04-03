@@ -143,10 +143,13 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
         }
 
         // Try to shrink each generator and succeed if any generator is shrunk.
+        let start = self.index;
+        self.index += 1;
         for i in 0..self.inner.len() {
-            if let Some(shrink) = self.inner[i].shrink() {
+            let index = (start + i) % self.inner.len();
+            if let Some(shrink) = self.inner[index].shrink() {
                 let mut shrinks = self.inner.clone();
-                shrinks[i] = shrink;
+                shrinks[index] = shrink;
                 return Some(Self::new(shrinks, self.minimum));
             }
         }
