@@ -26,7 +26,7 @@ fn main() -> Result<(), impl std::error::Error> {
         // The `Generate::check` method will generate 1000 `Input` values that will get gradually larger.
         .check(1000, |input| {
             let result = filter_less_than(input);
-            // - The `prove` macro is not strictly required but keeps some call site information if an error is encountered which can
+            // - The `prove` macro is not strictly required but it keeps some call site information if an error is encountered which can
             // simplify the debugging process. Any type that implements the `Prove` trait (including a simple `bool`) can be returned.
             // - This proof will fail for inputs where `input.value > input.maximum` and when this happens, `checkito` will
             // try to find the minimum sample that reproduces the failure.
@@ -40,17 +40,20 @@ fn main() -> Result<(), impl std::error::Error> {
         A sample error may look like:
         `Error {
             state: State {
-                size: 0.0,
-                seed: 6507210940052631922,
-                random: Rng(Cell { value: 4301107024673349119 }),
+                size: 0.015400000000000002,
+                seed: 3458476899729584474,
+                random: Rng(Cell { value: 1252372984350301671 })
             },
             original: (
-                Input { value: 0, maximum: 0 },
+                Input { value: 3, maximum: 0, },
                 Err(result.is_some()),
             ),
-            shrinks: Shrinks { accept: 0, reject: 0 },
-            shrunk: None,
-        };`
+            shrinks: Shrinks { accept: 1, reject: 0, },
+            shrunk: Some((
+                Input { value: 1, maximum: 0, },
+                Err(result.is_some()),
+            )),
+        }`
     */
     result
 }
