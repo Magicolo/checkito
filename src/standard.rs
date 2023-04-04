@@ -24,22 +24,16 @@ impl<G: Generate> Generate for Option<G> {
     type Item = Option<G::Item>;
     type Shrink = Option<G::Shrink>;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        match self {
-            Some(generate) => {
-                let (item, shrink) = generate.generate(state);
-                (Some(item), Some(shrink))
-            }
-            None => (None, None),
-        }
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        Some(self.as_ref()?.generate(state))
     }
 }
 
 impl<S: Shrink> Shrink for Option<S> {
     type Item = Option<S::Item>;
 
-    fn generate(&self) -> Self::Item {
-        Some(self.as_ref()?.generate())
+    fn item(&self) -> Self::Item {
+        Some(self.as_ref()?.item())
     }
 
     fn shrink(&mut self) -> Option<Self> {
@@ -63,16 +57,10 @@ impl<G: Generate, E: Generate> Generate for Result<G, E> {
     type Item = Result<G::Item, E::Item>;
     type Shrink = Result<G::Shrink, E::Shrink>;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         match self {
-            Ok(generate) => {
-                let (item, shrink) = generate.generate(state);
-                (Ok(item), Ok(shrink))
-            }
-            Err(generate) => {
-                let (item, shrink) = generate.generate(state);
-                (Err(item), Err(shrink))
-            }
+            Ok(generate) => Ok(generate.generate(state)),
+            Err(generate) => Err(generate.generate(state)),
         }
     }
 }
@@ -80,10 +68,10 @@ impl<G: Generate, E: Generate> Generate for Result<G, E> {
 impl<S: Shrink, E: Shrink> Shrink for Result<S, E> {
     type Item = Result<S::Item, E::Item>;
 
-    fn generate(&self) -> Self::Item {
+    fn item(&self) -> Self::Item {
         match self {
-            Ok(shrink) => Ok(shrink.generate()),
-            Err(shrink) => Err(shrink.generate()),
+            Ok(shrink) => Ok(shrink.item()),
+            Err(shrink) => Err(shrink.item()),
         }
     }
 
@@ -119,15 +107,15 @@ impl<T> Generate for fn() -> T {
     type Item = T;
     type Shrink = Self;
 
-    fn generate(&self, _: &mut State) -> (Self::Item, Self::Shrink) {
-        (self(), self.clone())
+    fn generate(&self, _: &mut State) -> Self::Shrink {
+        *self
     }
 }
 
 impl<T> Shrink for fn() -> T {
     type Item = T;
 
-    fn generate(&self) -> Self::Item {
+    fn item(&self) -> Self::Item {
         self()
     }
 

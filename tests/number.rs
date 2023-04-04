@@ -1,4 +1,4 @@
-use checkito::{constant::Constant, *};
+use checkito::{same::Same, *};
 
 type Result<T> = std::result::Result<(), check::Error<T, bool>>;
 const COUNT: usize = 1024;
@@ -33,8 +33,8 @@ mod range {
                 }
 
                 #[test]
-                fn is_constant() -> Result<($t, $t)> {
-                    number::<$t>().bind(|value| (value, Constant(value))).check(COUNT, |&(left, right)| left == right)
+                fn is_same() -> Result<($t, $t)> {
+                    number::<$t>().bind(|value| (value, Same(value))).check(COUNT, |&(left, right)| left == right)
                 }
 
                 #[test]

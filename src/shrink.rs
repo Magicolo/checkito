@@ -3,7 +3,7 @@ use crate::tuples;
 pub trait Shrink: Clone {
     type Item;
 
-    fn generate(&self) -> Self::Item;
+    fn item(&self) -> Self::Item;
     fn shrink(&mut self) -> Option<Self>;
 }
 
@@ -12,8 +12,8 @@ macro_rules! tuple {
         impl<$($t: Shrink,)*> Shrink for ($($t,)*) {
             type Item = ($($t::Item,)*);
 
-            fn generate(&self) -> Self::Item {
-                ($(self.$i.generate(),)*)
+            fn item(&self) -> Self::Item {
+                ($(self.$i.item(),)*)
             }
 
             fn shrink(&mut self) -> Option<Self> {

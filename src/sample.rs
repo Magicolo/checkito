@@ -1,4 +1,7 @@
-use crate::generate::{Generate, State};
+use crate::{
+    generate::{Generate, State},
+    shrink::Shrink,
+};
 use fastrand::Rng;
 
 #[derive(Debug)]
@@ -34,7 +37,7 @@ impl<G: ?Sized> Clone for Sampler<'_, G> {
 impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
     pub fn sample(&self, size: f64) -> G::Item {
         let mut state = State::new(size.min(0.0).max(1.0), self.seed);
-        self.generate.generate(&mut state).0
+        self.generate.generate(&mut state).item()
     }
 
     pub fn samples(&self, count: usize) -> Samples<'a, G> {
@@ -55,7 +58,7 @@ impl<G: Generate + ?Sized> Iterator for Samples<'_, G> {
             let mut state =
                 State::from_iteration(self.index, self.count, Some(self.random.u64(..)));
             self.index += 1;
-            Some(self.sampler.generate.generate(&mut state).0)
+            Some(self.sampler.generate.generate(&mut state).item())
         } else {
             None
         }

@@ -13,7 +13,7 @@ pub struct FilterMap<I: ?Sized, T: ?Sized, F = fn(<I as Generate>::Item) -> Opti
     inner: I,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Shrinker<I, T: ?Sized, F = fn(<I as Shrink>::Item) -> Option<T>> {
     inner: Option<I>,
     map: F,
@@ -56,36 +56,31 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     type Item = Option<T>;
     type Shrink = Shrinker<G::Shrink, T, F>;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         for _ in 0..self.iterations {
-            let (item, shrink) = self.inner.generate(state);
-            if let Some(item) = (self.map)(item) {
-                return (
-                    Some(item),
-                    Shrinker {
-                        inner: Some(shrink),
-                        map: self.map.clone(),
-                        _marker: PhantomData,
-                    },
-                );
+            let shrink = self.inner.generate(state);
+            if let Some(_) = (self.map)(shrink.item()) {
+                return Shrinker {
+                    inner: Some(shrink),
+                    map: self.map.clone(),
+                    _marker: PhantomData,
+                };
             }
         }
-        (
-            None,
-            Shrinker {
-                inner: None,
-                map: self.map.clone(),
-                _marker: PhantomData,
-            },
-        )
+
+        Shrinker {
+            inner: None,
+            map: self.map.clone(),
+            _marker: PhantomData,
+        }
     }
 }
 
 impl<S: Shrink + ?Sized, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, T, F> {
     type Item = Option<T>;
 
-    fn generate(&self) -> Self::Item {
-        (self.map)(self.inner.generate()?)
+    fn item(&self) -> Self::Item {
+        (self.map)(self.inner.item()?)
     }
 
     fn shrink(&mut self) -> Option<Self> {

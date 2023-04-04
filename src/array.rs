@@ -1,7 +1,6 @@
 use crate::{
     generate::{Generate, State},
     shrink::Shrink,
-    utility::Unzip,
     FullGenerate, IntoGenerate,
 };
 
@@ -30,8 +29,8 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     type Item = [G::Item; N];
     type Shrink = [G::Shrink; N];
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-        [(); N].map(|_| self.0.generate(state)).unzip()
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        [(); N].map(|_| self.0.generate(state))
     }
 }
 
@@ -57,27 +56,25 @@ impl<G: Generate, const N: usize> Generate for [G; N] {
     type Item = [G::Item; N];
     type Shrink = [G::Shrink; N];
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut index = 0;
-        [(); N]
-            .map(|_| {
-                let pair = self[index].generate(state);
-                index += 1;
-                pair
-            })
-            .unzip()
+        [(); N].map(|_| {
+            let shrink = self[index].generate(state);
+            index += 1;
+            shrink
+        })
     }
 }
 
 impl<S: Shrink, const N: usize> Shrink for [S; N] {
     type Item = [S::Item; N];
 
-    fn generate(&self) -> Self::Item {
+    fn item(&self) -> Self::Item {
         let mut index = 0;
         [(); N].map(|_| {
-            let item = self[index].generate();
+            let shrink = self[index].item();
             index += 1;
-            item
+            shrink
         })
     }
 

@@ -221,7 +221,8 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
     shrinks: Shrinks,
     mut check: F,
 ) -> Result<G::Item, Error<G::Item, P>> {
-    let (outer_item, mut outer_shrink) = generator.generate(&mut state);
+    let mut outer_shrink = generator.generate(&mut state);
+    let outer_item = outer_shrink.item();
     let outer_prove = check(&outer_item);
     if outer_prove.prove() {
         return Ok(outer_item);
@@ -239,7 +240,7 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
 
     while error.shrinks.reject < shrinks.reject && error.shrinks.accept < shrinks.accept {
         if let Some(inner_shrink) = outer_shrink.shrink() {
-            let inner_item = inner_shrink.generate();
+            let inner_item = inner_shrink.item();
             let inner_prove = check(&inner_item);
             if inner_prove.prove() {
                 error.shrinks.reject += 1;

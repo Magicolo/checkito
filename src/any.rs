@@ -67,7 +67,7 @@ where
     type Item = <Any<G> as Generate>::Item;
     type Shrink = <Any<G> as Generate>::Shrink;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         unsafe { &*(self.0 as *const G as *const Any<G>) }.generate(state)
     }
 }
@@ -79,7 +79,7 @@ where
     type Item = <Any<G> as Generate>::Item;
     type Shrink = <Any<G> as Generate>::Shrink;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         Any(&*self.0).generate(state)
     }
 }
@@ -90,14 +90,8 @@ macro_rules! collection {
             type Item = Option<T::Item>;
             type Shrink = Option<T::Shrink>;
 
-            fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                match $i(self.0.as_ref(), state) {
-                    Some(generate) => {
-                        let (item, shrink) = generate.generate(state);
-                        (Some(item), Some(shrink))
-                    }
-                    None => (None, None)
-                }
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                Some($i(self.0.as_ref(), state)?.generate(state))
             }
         }
     };
@@ -153,10 +147,10 @@ macro_rules! tuple {
                 type Item = One<$t::Item, $($ts::Item,)*>;
                 type Shrink = One<$t::Shrink, $($ts::Shrink,)*>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     match self {
-                        Self::$t(generate) => { let (item, shrink) = generate.generate(state); (One::$t(item), One::$t(shrink)) },
-                        $(Self::$ts(generate) => { let (item, shrink) = generate.generate(state); (One::$ts(item), One::$ts(shrink)) },)*
+                        Self::$t(generate) => One::$t(generate.generate(state)),
+                        $(Self::$ts(generate) => One::$ts(generate.generate(state)),)*
                     }
                 }
             }
@@ -164,10 +158,10 @@ macro_rules! tuple {
             impl<$t: Shrink, $($ts: Shrink,)*> Shrink for One<$t, $($ts,)*> {
                 type Item = One<$t::Item, $($ts::Item,)*>;
 
-                fn generate(&self) -> Self::Item {
+                fn item(&self) -> Self::Item {
                     match self {
-                        One::$t(shrink) => One::$t(shrink.generate()),
-                        $(One::$ts(shrink) => One::$ts(shrink.generate()),)*
+                        One::$t(shrink) => One::$t(shrink.item()),
+                        $(One::$ts(shrink) => One::$ts(shrink.item()),)*
                     }
                 }
 
@@ -183,11 +177,11 @@ macro_rules! tuple {
                 type Item = One<$t::Item, $($ts::Item,)*>;
                 type Shrink = One<$t::Shrink, $($ts::Shrink,)*>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     const COUNT: u8 = count!($t $(,$ts)*);
                     match state.random().u8(..COUNT) {
-                        $i => { let (item, shrink) = self.0.$i.generate(state); (One::$t(item), One::$t(shrink)) }
-                        $($is => { let (item, shrink) = self.0.$is.generate(state); (One::$ts(item), One::$ts(shrink)) })*
+                        $i => One::$t(self.0.$i.generate(state)),
+                        $($is => One::$ts(self.0.$is.generate(state)),)*
                         _ => unreachable!(),
                     }
                 }
@@ -197,14 +191,13 @@ macro_rules! tuple {
                 type Item = One<$t::Item, $($ts::Item,)*>;
                 type Shrink = One<$t::Shrink, $($ts::Shrink,)*>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     let total = self.0.$i.weight $(+ self.0.$is.weight)*;
                     let mut _weight = state.random().f64() * total;
                     let mut _index = 0;
 
                     if _weight < self.0.$i.weight {
-                        let (item, shrink) = self.0.$i.value.generate(state);
-                        return (One::$t(item), One::$t(shrink));
+                        return One::$t(self.0.$i.value.generate(state));
                     } else {
                         _weight -= self.0.$i.weight;
                     }
@@ -212,8 +205,7 @@ macro_rules! tuple {
                     $(
                         _index += 1;
                         if _weight < self.0.$is.weight {
-                            let (item, shrink) = self.0.$is.value.generate(state);
-                            return (One::$ts(item), One::$ts(shrink));
+                            return One::$ts(self.0.$is.value.generate(state));
                         } else {
                             _weight -= self.0.$is.weight;
                         }

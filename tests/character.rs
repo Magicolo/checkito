@@ -1,4 +1,4 @@
-use checkito::{constant::Constant, *};
+use checkito::{same::Same, *};
 use std::{
     collections::{LinkedList, VecDeque},
     rc::Rc,
@@ -18,9 +18,9 @@ fn empty_range() {
 }
 
 #[test]
-fn is_constant() -> Result<(char, char)> {
+fn is_same() -> Result<(char, char)> {
     char::generator()
-        .bind(|value| (value, Constant(value)))
+        .bind(|value| (value, Same(value)))
         .check(COUNT, |&(left, right)| left == right)
 }
 
@@ -50,7 +50,7 @@ macro_rules! collection {
             use super::*;
 
             #[test]
-            fn has_constant_count() -> Result<(usize, $t)> {
+            fn has_same_count() -> Result<(usize, $t)> {
                 (0..COUNT)
                     .bind(|count| (count, char::generator().collect_with::<_, $t>(count)))
                     .check(COUNT, |(count, value)| value $(.$i())? .count() == *count)

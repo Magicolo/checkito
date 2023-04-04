@@ -40,14 +40,14 @@ pub trait Generate {
     type Item;
     type Shrink: Shrink<Item = Self::Item>;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink);
+    fn generate(&self, state: &mut State) -> Self::Shrink;
 
     fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, T, F>
     where
         Self: Sized,
         Map<Self, T, F>: Generate,
     {
-        Map::generator(self, map)
+        Map::new(self, map)
     }
 
     fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
@@ -261,7 +261,7 @@ impl<G: IntoGenerate + Clone> IntoGenerate for &mut G {
 impl<G: Generate + ?Sized> Generate for &G {
     type Item = G::Item;
     type Shrink = G::Shrink;
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
 }
@@ -269,7 +269,7 @@ impl<G: Generate + ?Sized> Generate for &G {
 impl<G: Generate + ?Sized> Generate for &mut G {
     type Item = G::Item;
     type Shrink = G::Shrink;
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
 }
@@ -298,9 +298,8 @@ macro_rules! tuple {
             type Item = ($($t::Item,)*);
             type Shrink = ($($t::Shrink,)*);
 
-            fn generate(&self, _state: &mut State) -> (Self::Item, Self::Shrink) {
-                let _pairs = ($(self.$i.generate(_state),)*);
-                (($(_pairs.$i.0,)*), ($(_pairs.$i.1,)*))
+            fn generate(&self, _state: &mut State) -> Self::Shrink {
+                ($(self.$i.generate(_state),)*)
             }
         }
     };

@@ -1,4 +1,7 @@
-use crate::generate::{Generate, State};
+use crate::{
+    generate::{Generate, State},
+    shrink::Shrink,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Filter<I: ?Sized, F = fn(&<I as Generate>::Item) -> bool> {
@@ -21,13 +24,14 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     type Item = Option<G::Item>;
     type Shrink = Option<G::Shrink>;
 
-    fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         for _ in 0..self.iterations {
-            let (item, shrink) = self.inner.generate(state);
+            let shrink = self.inner.generate(state);
+            let item = shrink.item();
             if (self.filter)(&item) {
-                return (Some(item), Some(shrink));
+                return Some(shrink);
             }
         }
-        (None, None)
+        None
     }
 }

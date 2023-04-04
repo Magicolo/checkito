@@ -136,21 +136,21 @@ impl<T> ops::RangeBounds<T> for Range<T> {
     }
 }
 
-macro_rules! constant {
+macro_rules! same {
     ($t:ty) => {
         impl Generate for $t {
             type Item = Self;
             type Shrink = Self;
 
-            fn generate(&self, _: &mut State) -> (Self::Item, Self::Shrink) {
-                (*self, *self)
+            fn generate(&self, _: &mut State) -> Self::Shrink {
+                *self
             }
         }
 
         impl Shrink for $t {
             type Item = Self;
 
-            fn generate(&self) -> Self::Item {
+            fn item(&self) -> Self::Item {
                 *self
             }
 
@@ -183,7 +183,7 @@ macro_rules! range {
             type Item = <Range<$t> as Generate>::Item;
             type Shrink = <Range<$t> as Generate>::Shrink;
 
-            fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+            fn generate(&self, state: &mut State) -> Self::Shrink {
                 self.clone().generator().generate(state)
             }
         }
@@ -325,16 +325,16 @@ pub mod boolean {
         type Item = bool;
         type Shrink = Shrinker;
 
-        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+        fn generate(&self, state: &mut State) -> Self::Shrink {
             let item = state.random().f64() * state.size() >= 0.5;
-            (item, Shrinker(item))
+            Shrinker(item)
         }
     }
 
     impl Shrink for Shrinker {
         type Item = bool;
 
-        fn generate(&self) -> Self::Item {
+        fn item(&self) -> Self::Item {
             self.0
         }
 
@@ -348,7 +348,7 @@ pub mod boolean {
         }
     }
 
-    constant!(bool);
+    same!(bool);
 }
 
 pub mod character {
@@ -412,17 +412,17 @@ pub mod character {
             Shrinker(super::Shrinker::new(range.into(), item as u32))
         }
 
-        const fn special() -> impl Generate<Item = char> {
+        const fn special<'a>() -> impl Generate<Item = char, Shrink = char> {
             struct Special;
             impl Generate for Special {
                 type Item = char;
                 type Shrink = char;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                    let (item, shrink) = ('\u{0000}', char::MAX, char::REPLACEMENT_CHARACTER)
+                fn generate(&self, state: &mut State) -> Self::Shrink {
+                    ('\u{0000}', char::MAX, char::REPLACEMENT_CHARACTER)
                         .any()
-                        .generate(state);
-                    (item.fuse(), shrink.fuse())
+                        .generate(state)
+                        .fuse()
                 }
             }
             Special
@@ -460,9 +460,8 @@ pub mod character {
         type Item = char;
         type Shrink = Shrinker;
 
-        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-            let (item, shrink) = Into::<Range<u32>>::into(*self).generate(state);
-            (item.try_into().unwrap(), Shrinker(shrink))
+        fn generate(&self, state: &mut State) -> Self::Shrink {
+            Shrinker(Into::<Range<u32>>::into(*self).generate(state))
         }
     }
 
@@ -470,21 +469,18 @@ pub mod character {
         type Item = char;
         type Shrink = Shrinker;
 
-        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-            fn range(range: Range<char>, size: f64, state: &mut State) -> (char, Shrinker) {
-                let (item, shrink) = Into::<Range<u32>>::into(range)
+        fn generate(&self, state: &mut State) -> Self::Shrink {
+            fn range(range: Range<char>, size: f64, state: &mut State) -> Shrinker {
+                let shrink = Into::<Range<u32>>::into(range)
                     .shrinked(size)
                     .generate(state);
-                (item.try_into().unwrap(), Shrinker(shrink))
+                Shrinker(shrink)
             }
 
             match state.random().u8(..) {
                 0..=250 => range(Full::<char>::low_range(), state.size(), state),
                 251..=254 => range(Full::<char>::high_range(), state.size(), state),
-                255 => {
-                    let (item, _) = Full::<char>::special().generate(state);
-                    (item, Full::<char>::shrink(item))
-                }
+                255 => Full::<char>::shrink(Full::<char>::special().generate(state)),
             }
         }
     }
@@ -492,8 +488,8 @@ pub mod character {
     impl Shrink for Shrinker {
         type Item = char;
 
-        fn generate(&self) -> Self::Item {
-            self.0.generate().try_into().unwrap()
+        fn item(&self) -> Self::Item {
+            self.0.item().try_into().unwrap()
         }
 
         fn shrink(&mut self) -> Option<Self> {
@@ -501,7 +497,7 @@ pub mod character {
         }
     }
 
-    constant!(char);
+    same!(char);
     ranges!(char);
 }
 
@@ -519,15 +515,14 @@ pub mod number {
                     Shrinker::new(Self::range(), item)
                 }
 
-                const fn special() -> impl Generate<Item = $t> {
+                const fn special<'a>() -> impl Generate<Item = $t, Shrink = $t> {
                     struct Special;
                     impl Generate for Special {
                         type Item = $t;
                         type Shrink = $t;
 
-                        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                            let (item, shrink) = (0 as $t, $t::MIN, $t::MAX).any().generate(state);
-                            (item.fuse(), shrink.fuse())
+                        fn generate(&self, state: &mut State) -> Self::Shrink {
+                            (0 as $t, $t::MIN, $t::MAX).any().generate(state).fuse()
                         }
                     }
                     Special
@@ -559,17 +554,17 @@ pub mod number {
                 type Item = $t;
                 type Shrink = Shrinker<$t>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     let range = self.shrinked(state.size());
                     let item = state.random().$t(range.start..=range.end);
-                    (item, Shrinker::new(range, item))
+                    Shrinker::new(range, item)
                 }
             }
 
             impl Shrink for Shrinker<$t> {
                 type Item = $t;
 
-                fn generate(&self) -> Self::Item {
+                fn item(&self) -> Self::Item {
                     self.item
                 }
 
@@ -582,15 +577,15 @@ pub mod number {
                 type Item = $t;
                 type Shrink = Shrinker<$t>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
                         0..=254 => Full::<$t>::range().shrinked(state.size()).generate(state),
-                        255 => { let (item, _) = Full::<$t>::special().generate(state); (item, Full::<$t>::shrink(item)) },
+                        255 => { Full::<$t>::shrink(Full::<$t>::special().generate(state)) },
                     }
                 }
             }
 
-            constant!($t);
+            same!($t);
             ranges!($t);
         };
         ($($ts:ident),*) => { $(integer!($ts);)* };
@@ -599,26 +594,16 @@ pub mod number {
     macro_rules! floating {
         ($t:ident) => {
             impl Full<$t> {
-                const fn special() -> impl Generate<Item = $t> {
+                const fn special<'a>() -> impl Generate<Item = $t, Shrink = $t> {
                     struct Special;
                     impl Generate for Special {
                         type Item = $t;
                         type Shrink = $t;
 
-                        fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
-                            let (item, shrink) = (
-                                0 as $t,
-                                $t::MIN,
-                                $t::MAX,
-                                $t::EPSILON,
-                                $t::INFINITY,
-                                $t::NEG_INFINITY,
-                                $t::MIN_POSITIVE,
-                                $t::NAN,
-                            )
+                        fn generate(&self, state: &mut State) -> Self::Shrink {
+                            (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)
                                 .any()
-                                .generate(state);
-                            (item.fuse(), shrink.fuse())
+                                .generate(state).fuse()
                         }
                     }
                     Special
@@ -677,12 +662,12 @@ pub mod number {
                 type Item = $t;
                 type Shrink = Shrinker<$t>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     let range = self.shrinked(state.size());
                     let ratio = state.random().$t();
                     let difference = range.end * ratio - range.start * ratio;
                     let item = (difference + range.start).max(range.start).min(range.end);
-                    (item, Shrinker::new(range, item))
+                    Shrinker::new(range, item)
                 }
             }
 
@@ -690,7 +675,7 @@ pub mod number {
                 type Item = $t;
                 type Shrink = Shrinker<$t>;
 
-                fn generate(&self, state: &mut State) -> (Self::Item, Self::Shrink) {
+                fn generate(&self, state: &mut State) -> Self::Shrink {
                     fn range(size: f64) -> Range<$t> {
                         Full::<$t>::range().shrinked(size)
                     }
@@ -700,10 +685,7 @@ pub mod number {
                         127..=253 => range(state.size())
                             .map(|value| 1 as $t / value)
                             .generate(state),
-                        254..=255 => {
-                            let (item, _) = Full::<$t>::special().generate(state);
-                            (item, Full::<$t>::shrink(item))
-                        }
+                        254..=255 => Full::<$t>::shrink(Full::<$t>::special().generate(state)),
                     }
                 }
             }
@@ -711,7 +693,7 @@ pub mod number {
             impl Shrink for Shrinker<$t> {
                 type Item = $t;
 
-                fn generate(&self) -> Self::Item {
+                fn item(&self) -> Self::Item {
                     self.item
                 }
 
@@ -720,7 +702,7 @@ pub mod number {
                 }
             }
 
-            constant!($t);
+            same!($t);
             ranges!($t);
         };
         ($($ts:ident),*) => { $(floating!($ts);)* };
