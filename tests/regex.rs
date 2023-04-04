@@ -1,13 +1,11 @@
-use checkito::{regex::Regex, Generate};
-use std::{error, result};
-
-type Result = result::Result<(), Box<dyn error::Error>>;
-const COUNT: usize = 1024;
+pub mod common;
+use checkito::regex::Regex;
+use common::*;
 
 #[test]
 fn generate_matches_regex() -> Result {
     const PATTERN: &'static str = "((a|b)*[A-Z]*[\\u0000-\\u0FFF^\\u00AF-\\u00FF]*c{4}d{2,10})+";
-    let matcher = regex::RegexBuilder::new(PATTERN).build().unwrap();
+    let matcher = ::regex::RegexBuilder::new(PATTERN).build().unwrap();
     PATTERN
         .parse::<Regex>()
         .unwrap()

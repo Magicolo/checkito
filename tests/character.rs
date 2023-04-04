@@ -1,12 +1,11 @@
-use checkito::{same::Same, *};
+pub mod common;
+use checkito::same::Same;
+use common::*;
 use std::{
     collections::{LinkedList, VecDeque},
     rc::Rc,
     sync::Arc,
 };
-
-type Result<T> = std::result::Result<(), check::Error<T, bool>>;
-const COUNT: usize = 1024;
 
 #[test]
 #[should_panic]
@@ -18,30 +17,35 @@ fn empty_range() {
 }
 
 #[test]
-fn is_same() -> Result<(char, char)> {
+fn is_same() -> Result {
     char::generator()
         .bind(|value| (value, Same(value)))
-        .check(COUNT, |&(left, right)| left == right)
+        .check(COUNT, |&(left, right)| left == right)?;
+    Ok(())
 }
 
 #[test]
-fn is_ascii() -> Result<char> {
-    ascii().check(COUNT, |value| value.is_ascii())
+fn is_ascii() -> Result {
+    ascii().check(COUNT, |value| value.is_ascii())?;
+    Ok(())
 }
 
 #[test]
-fn is_digit() -> Result<char> {
-    digit().check(COUNT, |value| value.is_ascii_digit())
+fn is_digit() -> Result {
+    digit().check(COUNT, |value| value.is_ascii_digit())?;
+    Ok(())
 }
 
 #[test]
-fn is_alphabetic() -> Result<char> {
-    letter().check(COUNT, |value| value.is_ascii_alphabetic())
+fn is_alphabetic() -> Result {
+    letter().check(COUNT, |value| value.is_ascii_alphabetic())?;
+    Ok(())
 }
 
 #[test]
-fn full_does_not_panic() -> Result<char> {
-    char::generator().check(COUNT, |_| true)
+fn full_does_not_panic() -> Result {
+    char::generator().check(COUNT, |_| true)?;
+    Ok(())
 }
 
 macro_rules! collection {
@@ -50,25 +54,29 @@ macro_rules! collection {
             use super::*;
 
             #[test]
-            fn has_same_count() -> Result<(usize, $t)> {
+            fn has_same_count() -> Result {
                 (0..COUNT)
                     .bind(|count| (count, char::generator().collect_with::<_, $t>(count)))
-                    .check(COUNT, |(count, value)| value $(.$i())? .count() == *count)
+                    .check(COUNT, |(count, value)| value $(.$i())? .count() == *count)?;
+                Ok(())
             }
 
             #[test]
-            fn is_ascii() -> Result<$t> {
-                ascii().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii()))
+            fn is_ascii() -> Result {
+                ascii().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii()))?;
+                Ok(())
             }
 
             #[test]
-            fn is_digit() -> Result<$t> {
-                digit().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_digit()))
+            fn is_digit() -> Result {
+                digit().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_digit()))?;
+                Ok(())
             }
 
             #[test]
-            fn is_alphabetic() -> Result<$t> {
-                letter().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_alphabetic()))
+            fn is_alphabetic() -> Result {
+                letter().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_alphabetic()))?;
+                Ok(())
             }
         }
     };

@@ -1,7 +1,5 @@
-use checkito::*;
-
-const COUNT: usize = 1024;
-type Result = std::result::Result<(), Box<dyn std::error::Error>>;
+pub mod common;
+use common::*;
 
 #[test]
 fn positive_towards_zero() -> Result {

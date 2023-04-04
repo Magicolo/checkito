@@ -1,6 +1,5 @@
-use checkito::*;
-
-const COUNT: usize = 1024;
+pub mod common;
+use common::*;
 
 #[test]
 fn finds_minimum() {
