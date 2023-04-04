@@ -221,6 +221,8 @@ macro_rules! shrinked {
         impl Range<$t> {
             pub(super) fn shrinked(&self, size: f64) -> Self {
                 fn shrink(range: f64, size: f64) -> f64 {
+                    // This adjustment of the size tries to prevent large ranges (such as `u64`) from rushing into huge
+                    // values as soon as the `size > 0`.
                     let adjust = size.powf(range.abs().log2() / 8.0);
                     if adjust.is_normal() {
                         range * adjust
