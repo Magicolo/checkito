@@ -38,4 +38,4 @@ for value in composite.samples(1000) {
 }
 ```
 
-_See the [examples](examples/) folder for more detailed examples._
+_See the [examples](examples/) and [tests](tests/) folder for more detailed examples._
