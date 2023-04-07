@@ -1,6 +1,6 @@
-use checkito::*;
-
 fn main() -> Result<(), impl std::error::Error> {
+    use checkito::*;
+
     #[derive(Debug)]
     struct Input {
         value: usize,
