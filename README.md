@@ -15,12 +15,17 @@ use checkito::{check::Error, regex::Regex, *};
 // Parse this pattern as a `Regex` which implements the `Generate` trait.
 let regex = "[a-zA-Z0-9_]*".parse::<Regex>().unwrap();
 // Generate 1000 `String` values which are checked to be alphanumeric.
-// The check will fail when a `_` will appear in the value and the shrinking process will begin.
-let result = regex.check(1000, |value: &String| value.chars().all(|character| character.is_alphanumeric()));
-// The result which will be `Err`, will hold the original and shrinked values.
+// `Generate::check` will fail when a '_' will appear in the value and the shrinking process will begin.
+let result: Result<_, _> = regex.check(1000, |value: &String| value.chars().all(|character| character.is_alphanumeric()));
+// `result` will be `Err` and will hold the original and shrunk values.
 let error: Error<String, _> = result.unwrap_err();
 let original: &String = error.original();
 let shrunk: &String = error.shrunk();
+
+// Alternatively, generated samples can be retrieved directly, bypassing shrinking.
+for value in regex.samples(1000) {
+    assert!(value.chars().all(|character| character.is_alphanumeric()));
+}
 ```
 
 _See the [examples](examples/) folder for more detailed examples._
