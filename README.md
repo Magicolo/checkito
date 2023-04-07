@@ -10,7 +10,7 @@
 ## Example
 
 ```rust
-use crate::{check::Error, regex::Regex, *};
+use checkito::{check::Error, regex::Regex, *};
 
 struct Composite(String, f64);
 
@@ -21,15 +21,16 @@ let number = 10.0f64..;
 // Combine the previous `Generate` implementations and map them to a custom `struct`.
 let composite = (regex, number).map(|pair| Composite(pair.0, pair.1));
 
-// Generate 1000 `String` values which are checked to be alphanumeric.
-// `Generate::check` will fail when a '_' will appear in the value and the shrinking process will begin.
+// Generate 1000 `Composite` values which are checked to be alphanumeric.
+// `Generate::check` will fail when a '_' will appear in `value.0` and the shrinking process will begin.
 let result: Result<_, _> = composite.check(1000, |value: &Composite| {
     value.0.chars().all(|character| character.is_alphanumeric())
 });
 // `result` will be `Err` and will hold the original and shrunk values.
 let error: Error<Composite, _> = result.unwrap_err();
-let original: &Composite = error.original();
-let shrunk: &Composite = error.shrunk();
+let _original: &Composite = error.original();
+// The expected shrunk value is `Composite("_", 10.0)`.
+let _shrunk: &Composite = error.shrunk();
 
 // Alternatively, generated samples can be retrieved directly, bypassing shrinking.
 for value in composite.samples(1000) {
