@@ -5,7 +5,6 @@ use common::*;
 mod range {
     use super::*;
 
-    // TODO: fix some f32/f64 shrinking never converge...
     macro_rules! tests {
         ($t:ident, [$($m:ident),*]) => {
             mod $t {
