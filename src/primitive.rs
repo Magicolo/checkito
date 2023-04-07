@@ -1,4 +1,5 @@
 use crate::{
+    any::Fuse,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
     Nudge,

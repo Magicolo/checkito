@@ -1,5 +1,4 @@
 use crate::{
-    count,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
     tuples,
@@ -13,6 +12,10 @@ pub struct Any<T: ?Sized>(pub T);
 pub struct Weight<T: ?Sized> {
     pub weight: f64,
     pub value: T,
+}
+
+pub trait Fuse<T> {
+    fn fuse(self) -> T;
 }
 
 fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
@@ -108,109 +111,90 @@ collection!(Vec<Weight<T>>, weighted, []);
 
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
-    ($n:ident, $c:tt, $p:ident, $t:ident, $i:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
+    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
         pub mod $n {
             use super::*;
 
             #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-            pub enum One<$t, $($ts = $t,)*> {
-                $t($t),
+            pub enum One<$($ts,)*> {
                 $($ts($ts),)*
             }
 
-            impl<$t, $($ts,)*> One<$t, $($ts,)*> {
-                pub const fn as_ref(&self) -> One<&$t, $(&$ts,)*> {
+            impl<$($ts,)*> One<$($ts,)*> {
+                pub const fn as_ref(&self) -> One<$(&$ts,)*> {
                     match self {
-                        Self::$t(item) => One::$t(item),
                         $(Self::$ts(item) => One::$ts(item),)*
                     }
                 }
 
-                pub fn as_mut(&mut self) -> One<&mut $t, $(&mut $ts,)*> {
+                pub fn as_mut(&mut self) -> One<$(&mut $ts,)*> {
                     match self {
-                        Self::$t(item) => One::$t(item),
                         $(Self::$ts(item) => One::$ts(item),)*
                     }
                 }
             }
 
-            impl<$t, $($ts: Into<$t>,)*> One<$t, $($ts,)*> {
-                pub fn fuse(self) -> $t {
+            impl<T, $($ts: Into<T>,)*> Fuse<T> for One<$($ts,)*> {
+                fn fuse(self) -> T {
                     match self {
-                        Self::$t(item) => item,
                         $(Self::$ts(item) => item.into(),)*
                     }
                 }
             }
 
-            impl<$t: Generate, $($ts: Generate,)*> Generate for One<$t, $($ts,)*> {
-                type Item = One<$t::Item, $($ts::Item,)*>;
-                type Shrink = One<$t::Shrink, $($ts::Shrink,)*>;
+            impl<$($ts: Generate,)*> Generate for One<$($ts,)*> {
+                type Item = One<$($ts::Item,)*>;
+                type Shrink = One<$($ts::Shrink,)*>;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match self {
-                        Self::$t(generate) => One::$t(generate.generate(state)),
                         $(Self::$ts(generate) => One::$ts(generate.generate(state)),)*
                     }
                 }
             }
 
-            impl<$t: Shrink, $($ts: Shrink,)*> Shrink for One<$t, $($ts,)*> {
-                type Item = One<$t::Item, $($ts::Item,)*>;
+            impl<$($ts: Shrink,)*> Shrink for One<$($ts,)*> {
+                type Item = One<$($ts::Item,)*>;
 
                 fn item(&self) -> Self::Item {
                     match self {
-                        One::$t(shrink) => One::$t(shrink.item()),
                         $(One::$ts(shrink) => One::$ts(shrink.item()),)*
                     }
                 }
 
                 fn shrink(&mut self) -> Option<Self> {
                     match self {
-                        Self::$t(shrink) => Some(Self::$t(shrink.shrink()?)),
                         $(Self::$ts(shrink) => Some(Self::$ts(shrink.shrink()?)),)*
                     }
                 }
             }
 
-            impl<$t: Generate, $($ts: Generate,)*> Generate for Any<($t, $($ts,)*)> {
-                type Item = One<$t::Item, $($ts::Item,)*>;
-                type Shrink = One<$t::Shrink, $($ts::Shrink,)*>;
+            impl<$($ts: Generate,)*> Generate for Any<($($ts,)*)> {
+                type Item = One<$($ts::Item,)*>;
+                type Shrink = One<$($ts::Shrink,)*>;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    const COUNT: u8 = count!($t $(,$ts)*);
-                    match state.random().u8(..COUNT) {
-                        $i => One::$t(self.0.$i.generate(state)),
+                    match state.random().u8(..$c) {
                         $($is => One::$ts(self.0.$is.generate(state)),)*
                         _ => unreachable!(),
                     }
                 }
             }
 
-            impl<$t: Generate, $($ts: Generate,)*> Generate for Any<(Weight<$t>, $(Weight<$ts>,)*)> {
-                type Item = One<$t::Item, $($ts::Item,)*>;
-                type Shrink = One<$t::Shrink, $($ts::Shrink,)*>;
+            impl<$($ts: Generate,)*> Generate for Any<($(Weight<$ts>,)*)> {
+                type Item = One<$($ts::Item,)*>;
+                type Shrink = One<$($ts::Shrink,)*>;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    let total = self.0.$i.weight $(+ self.0.$is.weight)*;
+                    let total = $(self.0.$is.weight +)* 0.0;
                     let mut _weight = state.random().f64() * total;
-                    let mut _index = 0;
-
-                    if _weight < self.0.$i.weight {
-                        return One::$t(self.0.$i.value.generate(state));
-                    } else {
-                        _weight -= self.0.$i.weight;
-                    }
-
                     $(
-                        _index += 1;
                         if _weight < self.0.$is.weight {
                             return One::$ts(self.0.$is.value.generate(state));
                         } else {
                             _weight -= self.0.$is.weight;
                         }
                     )*
-
                     unreachable!();
                 }
             }

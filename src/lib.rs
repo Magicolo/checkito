@@ -24,6 +24,7 @@ pub use crate::{
     shrink::Shrink,
     utility::Nudge,
 };
+use any::Fuse;
 use primitive::Range;
 use std::{
     fmt,
@@ -60,7 +61,7 @@ where
 }
 
 pub fn letter() -> impl Generate<Item = char> {
-    ('a'..='z', 'A'..='Z').any().bind(|item| item.fuse())
+    ('a'..='z', 'A'..='Z').any().map(Fuse::fuse)
 }
 
 pub fn digit() -> impl Generate<Item = char> {
