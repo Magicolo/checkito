@@ -1,6 +1,8 @@
 # checkito
 
-### A simple [quickcheck](https://hackage.haskell.org/package/QuickCheck) inspired library to generate growable/shrinkable random data mainly oriented towards generative/property/exploratory testing. One would use this library to prove that certain properties hold for their programs for a tentatively representative sample of the input space.
+A simple [quickcheck](https://hackage.haskell.org/package/QuickCheck) inspired library to generate growable/shrinkable random data mainly oriented towards generative/property/exploratory testing.
+
+One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space.
 
 -   The [`Generate`](src/generate.rs) trait that is implemented for many of rust's standard types allows the generation of any random composite data through combinator (such as tuples, `Any`, `Map`, `Flatten` and more). It is designed for composability and its usage should feel like working with `Iterator`s.
 -   The [`Shrink`](src/shrink.rs) trait tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk out of its range). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, etc..
