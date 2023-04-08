@@ -1,7 +1,7 @@
 use crate::{
     any::Fuse,
     generate::{FullGenerate, Generate, IntoGenerate, State},
-    shrink::Shrink,
+    shrink::{FullShrink, IntoShrink, Shrink},
     Nudge,
 };
 use std::{
@@ -137,8 +137,26 @@ impl<T> ops::RangeBounds<T> for Range<T> {
     }
 }
 
-macro_rules! same {
+macro_rules! full {
     ($t:ty) => {
+        impl FullGenerate for $t {
+            type Item = $t;
+            type Generate = Full<$t>;
+
+            fn generator() -> Self::Generate {
+                Full::<$t>::new()
+            }
+        }
+
+        impl FullShrink for $t {
+            type Item = $t;
+            type Shrink = <Full<$t> as Generate>::Shrink;
+
+            fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
+                Full::<$t>::new().shrinker(item)
+            }
+        }
+
         impl Generate for $t {
             type Item = Self;
             type Shrink = Self;
@@ -176,16 +194,25 @@ macro_rules! range {
             type Item = $t;
             type Generate = Range<$t>;
             fn generator(self) -> Self::Generate {
-                self.try_into().unwrap()
+                Range::<$t>::try_from(self).unwrap()
             }
         }
 
         impl Generate for $r {
-            type Item = <Range<$t> as Generate>::Item;
+            type Item = $t;
             type Shrink = <Range<$t> as Generate>::Shrink;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                self.clone().generator().generate(state)
+                Range::<$t>::try_from(self.clone()).unwrap().generate(state)
+            }
+        }
+
+        impl IntoShrink for $r {
+            type Item = $t;
+            type Shrink = <Range<$t> as Generate>::Shrink;
+
+            fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+                Range::<$t>::try_from(self.clone()).ok()?.shrinker(item)
             }
         }
     };
@@ -193,14 +220,6 @@ macro_rules! range {
 
 macro_rules! ranges {
     ($t:ident) => {
-        impl FullGenerate for $t {
-            type Item = $t;
-            type Generate = Full<$t>;
-            fn generator() -> Self::Generate {
-                Full(PhantomData)
-            }
-        }
-
         impl TryFrom<ops::RangeFull> for Range<$t> {
             type Error = Error;
 
@@ -239,7 +258,7 @@ macro_rules! shrinked {
                     let end = (self.start as f64 + shrunk) as $t;
                     Self {
                         start: self.start,
-                        end: end.min(self.end),
+                        end: end.max(self.start).min(self.end),
                     }
                 } else if self.end <= 0 as $t {
                     debug_assert!(self.start <= 0 as $t);
@@ -247,7 +266,7 @@ macro_rules! shrinked {
                     let shrunk = shrink(range, size);
                     let start = (self.end as f64 + shrunk) as $t;
                     Self {
-                        start: start.max(self.start),
+                        start: start.min(self.end).max(self.start),
                         end: self.end,
                     }
                 } else {
@@ -316,21 +335,21 @@ pub mod boolean {
     #[derive(Copy, Clone, Debug, Default)]
     pub struct Shrinker(bool);
 
-    impl FullGenerate for bool {
-        type Item = Self;
-        type Generate = Full<bool>;
-        fn generator() -> Self::Generate {
-            Full::new()
-        }
-    }
-
     impl Generate for Full<bool> {
         type Item = bool;
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            let item = state.random().f64() * state.size() >= 0.5;
-            Shrinker(item)
+            Shrinker(state.random().f64() * state.size() >= 0.5)
+        }
+    }
+
+    impl IntoShrink for Full<bool> {
+        type Item = bool;
+        type Shrink = Shrinker;
+
+        fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+            Some(Shrinker(item))
         }
     }
 
@@ -351,7 +370,7 @@ pub mod boolean {
         }
     }
 
-    same!(bool);
+    full!(bool);
 }
 
 pub mod character {
@@ -445,17 +464,21 @@ pub mod character {
     }
 
     impl Shrinker {
-        pub fn new(item: char) -> Self {
+        pub fn new(item: char) -> Option<Self> {
             let mut low = Full::<char>::low_range();
-            let range = if item <= low.end {
+            let range = if item >= low.start && item <= low.end {
                 low.end = item;
                 low
             } else {
                 let mut high = Full::<char>::high_range();
-                high.start = item;
-                high
+                if item >= high.start && item <= high.end {
+                    high.start = item;
+                    high
+                } else {
+                    return None;
+                }
             };
-            Self(super::Shrinker::new(range.into(), item as u32))
+            Some(Self(super::Shrinker::new(range.into(), item as u32)))
         }
     }
 
@@ -488,6 +511,26 @@ pub mod character {
         }
     }
 
+    impl IntoShrink for Range<char> {
+        type Item = char;
+        type Shrink = Shrinker;
+
+        fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+            Some(Shrinker(
+                Into::<Range<u32>>::into(self.clone()).shrinker(item as _)?,
+            ))
+        }
+    }
+
+    impl IntoShrink for Full<char> {
+        type Item = char;
+        type Shrink = Shrinker;
+
+        fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+            Shrinker::new(item)
+        }
+    }
+
     impl Shrink for Shrinker {
         type Item = char;
 
@@ -500,7 +543,7 @@ pub mod character {
         }
     }
 
-    same!(char);
+    full!(char);
     ranges!(char);
 }
 
@@ -564,6 +607,40 @@ pub mod number {
                 }
             }
 
+            impl Generate for Full<$t> {
+                type Item = $t;
+                type Shrink = Shrinker<$t>;
+
+                fn generate(&self, state: &mut State) -> Self::Shrink {
+                    match state.random().u8(..) {
+                        0..=254 => Full::<$t>::range().shrinked(state.size()).generate(state),
+                        255 => Full::<$t>::shrink(Full::<$t>::special().generate(state)),
+                    }
+                }
+            }
+
+            impl IntoShrink for Range<$t> {
+                type Item = $t;
+                type Shrink = Shrinker<$t>;
+
+                fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+                    if item >= self.start && item <= self.end {
+                        Some(Shrinker::new(self.clone(), item))
+                    } else {
+                        None
+                    }
+                }
+            }
+
+            impl IntoShrink for Full<$t> {
+                type Item = $t;
+                type Shrink = Shrinker<$t>;
+
+                fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+                    Some(Self::shrink(item))
+                }
+            }
+
             impl Shrink for Shrinker<$t> {
                 type Item = $t;
 
@@ -576,19 +653,7 @@ pub mod number {
                 }
             }
 
-            impl Generate for Full<$t> {
-                type Item = $t;
-                type Shrink = Shrinker<$t>;
-
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    match state.random().u8(..) {
-                        0..=254 => Full::<$t>::range().shrinked(state.size()).generate(state),
-                        255 => { Full::<$t>::shrink(Full::<$t>::special().generate(state)) },
-                    }
-                }
-            }
-
-            same!($t);
+            full!($t);
             ranges!($t);
         };
         ($($ts:ident),*) => { $(integer!($ts);)* };
@@ -688,8 +753,30 @@ pub mod number {
                         127..=253 => range(state.size())
                             .map(|value| 1 as $t / value)
                             .generate(state),
-                        254..=255 => Full::<$t>::shrink(Full::<$t>::special().generate(state)),
+                        254..=255 => Self::shrink(Self::special().generate(state)),
                     }
+                }
+            }
+
+            impl IntoShrink for Range<$t> {
+                type Item = $t;
+                type Shrink = Shrinker<$t>;
+
+                fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+                    if item >= self.start && item <= self.end {
+                        Some(Shrinker::new(self.clone(), item))
+                    } else {
+                        None
+                    }
+                }
+            }
+
+            impl IntoShrink for Full<$t> {
+                type Item = $t;
+                type Shrink = Shrinker<$t>;
+
+                fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+                    Some(Self::shrink(item))
                 }
             }
 
@@ -701,11 +788,15 @@ pub mod number {
                 }
 
                 fn shrink(&mut self) -> Option<Self> {
-                    shrink!(self, $t)
+                    if self.item.is_finite() {
+                        shrink!(self, $t)
+                    } else {
+                        None
+                    }
                 }
             }
 
-            same!($t);
+            full!($t);
             ranges!($t);
         };
         ($($ts:ident),*) => { $(floating!($ts);)* };

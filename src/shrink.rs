@@ -1,5 +1,17 @@
 use crate::tuples;
 
+pub trait FullShrink {
+    type Item;
+    type Shrink: Shrink<Item = Self::Item>;
+    fn shrinker(item: Self::Item) -> Option<Self::Shrink>;
+}
+
+pub trait IntoShrink {
+    type Item;
+    type Shrink: Shrink<Item = Self::Item>;
+    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink>;
+}
+
 pub trait Shrink: Clone {
     type Item;
 
@@ -9,6 +21,24 @@ pub trait Shrink: Clone {
 
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
+        impl<$($t: FullShrink,)*> FullShrink for ($($t,)*) {
+            type Item = ($($t::Item,)*);
+            type Shrink = ($($t::Shrink,)*);
+
+            fn shrinker(_item: Self::Item) -> Option<Self::Shrink> {
+                Some(($($t::shrinker(_item.$i)?,)*))
+            }
+        }
+
+        impl<$($t: IntoShrink,)*> IntoShrink for ($($t,)*) {
+            type Item = ($($t::Item,)*);
+            type Shrink = ($($t::Shrink,)*);
+
+            fn shrinker(&self, _item: Self::Item) -> Option<Self::Shrink> {
+                Some(($(self.$i.shrinker(_item.$i)?,)*))
+            }
+        }
+
         impl<$($t: Shrink,)*> Shrink for ($($t,)*) {
             type Item = ($($t::Item,)*);
 

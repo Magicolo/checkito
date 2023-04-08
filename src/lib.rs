@@ -21,7 +21,7 @@ mod utility;
 pub use crate::{
     generate::{FullGenerate, Generate, IntoGenerate},
     prove::Prove,
-    shrink::Shrink,
+    shrink::{FullShrink, IntoShrink, Shrink},
     utility::Nudge,
 };
 use any::Fuse;

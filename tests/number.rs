@@ -91,6 +91,43 @@ mod range {
                     Ok(())
                 }
 
+                #[test]
+                fn shrinks_to_zero() -> Result {
+                    number::<$t>().check(COUNT, |&value| {
+                        let mut outer = $t::shrinker(value).unwrap();
+                        while let Some(inner) = outer.shrink() {
+                            outer = inner;
+                        }
+                        prove!(0 as $t == outer.item())
+                    })?;
+                    Ok(())
+                }
+
+                #[test]
+                fn shrinks_to_low_or_high() -> Result {
+                    number::<$t>()
+                        .bind(|value| {
+                            if value < 0 as $t {
+                                (value..=value, value..=0 as $t)
+                            } else {
+                                (0 as $t..=value, value..=value)
+                            }
+                        })
+                        .bind(|(low, high)| (low, high, low..=high))
+                        .check(COUNT, |&(low, high, value)| {
+                            let mut outer = (low..=high).shrinker(value).unwrap();
+                            while let Some(inner) = outer.shrink() {
+                                outer = inner;
+                            }
+                            if low >= 0 as $t {
+                                prove!(low == outer.item())
+                            } else {
+                                prove!(high == outer.item())
+                            }
+                        })?;
+                    Ok(())
+                }
+
                 $($m!(INNER $t);)*
             }
         };
