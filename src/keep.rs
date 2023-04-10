@@ -1,6 +1,7 @@
 use crate::{
     generate::{Generate, State},
     shrink::Shrink,
+    IntoShrink,
 };
 
 #[derive(Clone, Debug)]
@@ -12,6 +13,15 @@ impl<G: Generate + ?Sized> Generate for Keep<G> {
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Keep(self.0.generate(state))
+    }
+}
+
+impl<S: IntoShrink> IntoShrink for Keep<S> {
+    type Item = S::Item;
+    type Shrink = Keep<S::Shrink>;
+
+    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+        Some(Keep(self.0.shrinker(item)?))
     }
 }
 

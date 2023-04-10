@@ -19,6 +19,42 @@ pub trait Shrink: Clone {
     fn shrink(&mut self) -> Option<Self>;
 }
 
+impl<T: FullShrink> FullShrink for &T {
+    type Item = T::Item;
+    type Shrink = T::Shrink;
+
+    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
+        T::shrinker(item)
+    }
+}
+
+impl<T: FullShrink> FullShrink for &mut T {
+    type Item = T::Item;
+    type Shrink = T::Shrink;
+
+    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
+        T::shrinker(item)
+    }
+}
+
+impl<T: IntoShrink> IntoShrink for &T {
+    type Item = T::Item;
+    type Shrink = T::Shrink;
+
+    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+        T::shrinker(self, item)
+    }
+}
+
+impl<T: IntoShrink> IntoShrink for &mut T {
+    type Item = T::Item;
+    type Shrink = T::Shrink;
+
+    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+        T::shrinker(self, item)
+    }
+}
+
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: FullShrink,)*> FullShrink for ($($t,)*) {

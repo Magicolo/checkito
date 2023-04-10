@@ -58,16 +58,12 @@ pub trait Generate {
         self.filter_with(256, filter)
     }
 
-    fn filter_with<F: Fn(&Self::Item) -> bool>(
-        self,
-        iterations: usize,
-        filter: F,
-    ) -> Filter<Self, F>
+    fn filter_with<F: Fn(&Self::Item) -> bool>(self, retry: usize, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
         Filter<Self, F>: Generate,
     {
-        Filter::new(self, filter, iterations)
+        Filter::new(self, filter, retry)
     }
 
     fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, T, F>

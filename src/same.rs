@@ -1,6 +1,6 @@
 use crate::{
     generate::{Generate, State},
-    shrink::Shrink,
+    shrink::{FullShrink, IntoShrink, Shrink},
     FullGenerate,
 };
 
@@ -22,6 +22,24 @@ impl<T: Clone> Generate for Same<T> {
 
     fn generate(&self, _: &mut State) -> Self::Shrink {
         self.clone()
+    }
+}
+
+impl<T: Clone> FullShrink for Same<T> {
+    type Item = T;
+    type Shrink = Self;
+
+    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
+        Some(Self(item))
+    }
+}
+
+impl<T: Clone> IntoShrink for Same<T> {
+    type Item = T;
+    type Shrink = Self;
+
+    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
+        Some(Self(item))
     }
 }
 
