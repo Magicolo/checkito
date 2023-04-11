@@ -3,7 +3,7 @@ use crate::{
     IntoShrink,
 };
 
-pub struct Size<G, F>(pub G, pub F);
+pub struct Size<G, F = fn(f64) -> f64>(pub G, pub F);
 
 impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
     type Item = G::Item;

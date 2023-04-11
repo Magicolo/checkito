@@ -76,14 +76,14 @@ pub trait Generate {
 
     fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
         self,
-        iterations: usize,
+        retry: usize,
         map: F,
     ) -> FilterMap<Self, T, F>
     where
         Self: Sized,
         FilterMap<Self, T, F>: Generate,
     {
-        FilterMap::new(self, map, iterations)
+        FilterMap::new(self, map, retry)
     }
 
     fn bind<G: Generate, F: Fn(Self::Item) -> G>(self, bind: F) -> Flatten<Map<Self, G, F>>

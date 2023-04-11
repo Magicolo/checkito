@@ -9,7 +9,7 @@ use crate::{
 pub struct FilterMap<I: ?Sized, T: ?Sized, F = fn(<I as Generate>::Item) -> Option<T>> {
     _marker: PhantomData<T>,
     map: F,
-    iterations: usize,
+    retry: usize,
     inner: I,
 }
 
@@ -25,7 +25,7 @@ impl<I: Clone, T, F: Clone> Clone for FilterMap<I, T, F> {
         Self {
             inner: self.inner.clone(),
             map: self.map.clone(),
-            iterations: self.iterations,
+            retry: self.retry,
             _marker: PhantomData,
         }
     }
@@ -42,11 +42,11 @@ impl<I: Clone, T, F: Clone> Clone for Shrinker<I, T, F> {
 }
 
 impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, T, F> {
-    pub const fn new(generate: G, map: F, iterations: usize) -> Self {
+    pub const fn new(generate: G, map: F, retry: usize) -> Self {
         Self {
             inner: generate,
             map,
-            iterations,
+            retry,
             _marker: PhantomData,
         }
     }
@@ -57,22 +57,24 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     type Shrink = Shrinker<G::Shrink, T, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        for _ in 0..self.iterations {
-            let shrink = self.inner.generate(state);
-            if let Some(_) = (self.map)(shrink.item()) {
-                return Shrinker {
-                    inner: Some(shrink),
-                    map: self.map.clone(),
-                    _marker: PhantomData,
-                };
-            }
-        }
-
-        Shrinker {
+        let mut outer = Shrinker {
             inner: None,
             map: self.map.clone(),
             _marker: PhantomData,
+        };
+        let old = state.size;
+        for i in 0..self.retry {
+            let new = old + (1.0 - old) * (i as f64 / self.retry as f64);
+            state.size = new.min(1.0).max(0.0);
+            let inner = self.inner.generate(state);
+            let item = inner.item();
+            if let Some(_) = (self.map)(item) {
+                outer.inner = Some(inner);
+                break;
+            }
         }
+        state.size = old;
+        outer
     }
 }
 

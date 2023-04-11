@@ -441,7 +441,13 @@ pub mod character {
                 type Shrink = char;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    ('\u{0000}', char::MAX, char::REPLACEMENT_CHARACTER)
+                    (
+                        '\u{0000}',
+                        '\u{D7FF}',
+                        '\u{E000}',
+                        char::MAX,
+                        char::REPLACEMENT_CHARACTER,
+                    )
                         .any()
                         .generate(state)
                         .fuse()
@@ -496,17 +502,10 @@ pub mod character {
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            fn range(range: Range<char>, size: f64, state: &mut State) -> Shrinker {
-                let shrink = Into::<Range<u32>>::into(range)
-                    .shrinked(size)
-                    .generate(state);
-                Shrinker(shrink)
-            }
-
             match state.random().u8(..) {
-                0..=250 => range(Full::<char>::low_range(), state.size(), state),
-                251..=254 => range(Full::<char>::high_range(), state.size(), state),
-                255 => Full::<char>::shrink(Full::<char>::special().generate(state)),
+                0..=15 => Shrinker(Into::<Range<u32>>::into(Self::low_range()).generate(state)),
+                16..=254 => Shrinker(Into::<Range<u32>>::into(Self::high_range()).generate(state)),
+                255 => Self::shrink(Self::special().generate(state)),
             }
         }
     }
@@ -613,8 +612,8 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
-                        0..=254 => Full::<$t>::range().shrinked(state.size()).generate(state),
-                        255 => Full::<$t>::shrink(Full::<$t>::special().generate(state)),
+                        0..=254 => Self::range().shrinked(state.size()).generate(state),
+                        255 => Self::shrink(Self::special().generate(state)),
                     }
                 }
             }
@@ -671,7 +670,8 @@ pub mod number {
                         fn generate(&self, state: &mut State) -> Self::Shrink {
                             (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)
                                 .any()
-                                .generate(state).fuse()
+                                .generate(state)
+                                .fuse()
                         }
                     }
                     Special
