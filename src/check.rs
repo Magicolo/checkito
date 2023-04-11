@@ -26,8 +26,10 @@ pub struct Checker<'a, G: ?Sized> {
     /// A generator that will provide the values and shrinkers for the checking and shrinking processes.
     pub generator: &'a G,
     /// Maximum number of errors that the results of a `check` call will contain. When it is reached, the checking process aborts.
+    /// Defaults to 1.
     pub errors: usize,
     /// Limits the shrinking process.
+    /// Defaults to a duration limit of 30 seconds.
     pub shrinks: Shrinks,
     /// Seed for the random number generator used to generate random primitives.
     pub seed: Option<u64>,
