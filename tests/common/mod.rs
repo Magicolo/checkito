@@ -1,4 +1,4 @@
-pub use checkito::*;
+pub use checkito::{check::Cause, *};
 use std::{error, result};
 
 pub type Result = result::Result<(), Box<dyn error::Error>>;

@@ -31,9 +31,9 @@ fn range_shrinks() {
         .check(COUNT, |item| !item.contains('w') || !item.contains('y'))
         .err()
         .unwrap();
-    assert!(error.original().len() > 5);
+    assert!(error.original.len() > 5);
     assert!(error
-        .original()
+        .original
         .chars()
         .all(|symbol| symbol >= 'a' && symbol <= 'z'));
     assert!(error.shrunk() == "wy" || error.shrunk() == "yw");

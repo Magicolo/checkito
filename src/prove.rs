@@ -4,9 +4,10 @@ use crate::tuples;
 
 pub trait Prove {
     fn prove(&self) -> bool;
+    fn is(&self, prove: &Self) -> bool;
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Error<P> {
     pub name: &'static str,
     pub prove: P,
@@ -30,43 +31,61 @@ impl Prove for bool {
     fn prove(&self) -> bool {
         *self
     }
-}
 
-impl<F: Fn() -> bool> Prove for F {
-    fn prove(&self) -> bool {
-        self()
+    fn is(&self, prove: &Self) -> bool {
+        self == prove
     }
 }
 
-impl<T, E> Prove for Result<T, E> {
+impl<T: Eq, E: Eq> Prove for Result<T, E> {
     fn prove(&self) -> bool {
         self.is_ok()
     }
-}
 
-impl<P: Prove> Prove for [P] {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
+    fn is(&self, prove: &Self) -> bool {
+        self == prove
     }
 }
 
-impl<P: Prove, const N: usize> Prove for [P; N] {
+impl<P: Prove + Eq> Prove for [P] {
     fn prove(&self) -> bool {
         self.iter().all(|proof| proof.prove())
     }
+
+    fn is(&self, prove: &Self) -> bool {
+        self == prove
+    }
 }
 
-impl<P: Prove> Prove for Vec<P> {
+impl<P: Prove + Eq, const N: usize> Prove for [P; N] {
     fn prove(&self) -> bool {
         self.iter().all(|proof| proof.prove())
+    }
+
+    fn is(&self, prove: &Self) -> bool {
+        self == prove
+    }
+}
+
+impl<P: Prove + Eq> Prove for Vec<P> {
+    fn prove(&self) -> bool {
+        self.iter().all(|proof| proof.prove())
+    }
+
+    fn is(&self, prove: &Self) -> bool {
+        self == prove
     }
 }
 
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: Prove,)*> Prove for ($($t,)*) {
+        impl<$($t: Prove + Eq,)*> Prove for ($($t,)*) {
             fn prove(&self) -> bool {
                 $(self.$i.prove() &&)* true
+            }
+
+            fn is(&self, _prove: &Self) -> bool {
+                $(self.$i == _prove.$i &&)* true
             }
         }
     };

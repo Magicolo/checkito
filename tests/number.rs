@@ -85,7 +85,7 @@ mod range {
                 #[test]
                 fn keeps_value() -> Result {
                     match number::<$t>().keep().check(COUNT, |&value| value < 100 as $t) {
-                        Err(error) if error.original() == error.shrunk() => Ok(()),
+                        Err(error) if &error.original == error.shrunk() => Ok(()),
                         result => result,
                     }?;
                     Ok(())

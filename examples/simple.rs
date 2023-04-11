@@ -31,10 +31,13 @@ fn main() -> Result<(), impl std::error::Error> {
             // - This proof will fail for inputs where `input.value > input.maximum` and when this happens, `checkito` will
             // try to find the minimum sample that reproduces the failure.
             prove!(result.is_some())?;
+            // Assertions can also be used.
+            assert!(input.maximum < 1_000_000);
             // Multiple proofs can be defined.
             prove!(result == Some(input.value))
         });
 
+    let error = result.unwrap_err();
     /*
         An error will hold the original value that triggered a failed proof and the smallest found shrinked version (and a bunch of additional information).
         A sample error may look like:
@@ -55,5 +58,5 @@ fn main() -> Result<(), impl std::error::Error> {
             )),
         }`
     */
-    result
+    Err(error)
 }

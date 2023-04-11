@@ -9,10 +9,11 @@ use crate::{
     keep::Keep,
     map::Map,
     primitive::Range,
+    prove::Prove,
     sample::{Sampler, Samples},
     shrink::Shrink,
     size::Size,
-    tuples, Prove,
+    tuples,
 };
 use fastrand::Rng;
 use std::iter::FromIterator;

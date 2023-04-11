@@ -117,11 +117,9 @@ fn unzip2() -> Result<(), Box<dyn std::error::Error>> {
         .array::<100>()
         .map(|tuples| tuples.unzip())
         .check(1000, |arrays| {
-            arrays
-                .0
-                .into_iter()
-                .zip(arrays.1)
-                .all(|tuple| tuple.0 == tuple.1)
+            for pair in arrays.0.into_iter().zip(arrays.1) {
+                assert_eq!(pair.0, pair.1)
+            }
         })?;
     Ok(())
 }

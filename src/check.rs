@@ -1,11 +1,14 @@
 use crate::{generate::State, prove::Prove, shrink::Shrink, Generate};
 use fastrand::Rng;
 use std::{
+    borrow::Cow,
     error, fmt,
     marker::PhantomData,
     num::NonZeroUsize,
+    panic::{self, AssertUnwindSafe},
     sync::atomic::{AtomicUsize, Ordering},
     thread::{available_parallelism, scope},
+    time::{Duration, Instant},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -14,6 +17,8 @@ pub struct Shrinks {
     pub accept: usize,
     /// Maximum number of failed attempts at reducing the 'size' of the input before aborting the shrinking process.
     pub reject: usize,
+    /// Maximum time spent shrinking.
+    pub duration: Duration,
 }
 
 #[derive(Debug)]
@@ -43,18 +48,22 @@ pub struct Checks<'a, G: ?Sized, P, F> {
 pub struct Error<T, P> {
     /// The generator state that generated the error.
     pub state: State,
-    pub original: (T, P),
+    pub cause: Cause<P>,
+    pub original: T,
+    pub shrunk: Option<T>,
     pub shrinks: Shrinks,
-    pub shrunk: Option<(T, P)>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Cause<P> {
+    Disprove(P),
+    Panic(Cow<'static, str>),
+    Unknown,
 }
 
 impl<T, P> Error<T, P> {
-    pub fn original(&self) -> &T {
-        &self.original.0
-    }
-
     pub fn shrunk(&self) -> &T {
-        &self.shrunk.as_ref().unwrap_or(&self.original).0
+        &self.shrunk.as_ref().unwrap_or(&self.original)
     }
 }
 
@@ -66,6 +75,7 @@ impl<'a, G: ?Sized> Checker<'a, G> {
             shrinks: Shrinks {
                 accept: usize::MAX,
                 reject: usize::MAX,
+                duration: Duration::from_secs(30),
             },
             seed: None,
         }
@@ -215,41 +225,68 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Check
     }
 }
 
+fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, check: &mut F) -> Option<Cause<P>> {
+    let error = match panic::catch_unwind(AssertUnwindSafe(|| check(&item))) {
+        Ok(prove) if prove.prove() => return None,
+        Ok(prove) => return Some(Cause::Disprove(prove)),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<&'static str>() {
+        Ok(error) => return Some(Cause::Panic(Cow::Borrowed(*error))),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<String>() {
+        Ok(error) => return Some(Cause::Panic(Cow::Owned(*error))),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<Box<str>>() {
+        Ok(error) => return Some(Cause::Panic(Cow::Owned(error.to_string()))),
+        Err(error) => error,
+    };
+    match error.downcast::<Cow<'static, str>>() {
+        Ok(error) => Some(Cause::Panic(*error)),
+        Err(_) => Some(Cause::Unknown),
+    }
+}
+
 fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
     generator: &G,
     mut state: State,
     shrinks: Shrinks,
     mut check: F,
 ) -> Result<G::Item, Error<G::Item, P>> {
-    let mut outer_shrink = generator.generate(&mut state);
-    let outer_item = outer_shrink.item();
-    let outer_prove = check(&outer_item);
-    if outer_prove.prove() {
-        return Ok(outer_item);
-    }
-
+    let mut outer = generator.generate(&mut state);
+    let item = outer.item();
+    let Some(cause) = handle(&item, &mut check) else { return Ok(item); };
     let mut error = Error {
         state,
-        original: (outer_item, outer_prove),
+        cause,
+        original: item,
         shrinks: Shrinks {
             accept: 0,
             reject: 0,
+            duration: Duration::ZERO,
         },
         shrunk: None,
     };
 
-    while error.shrinks.reject < shrinks.reject && error.shrinks.accept < shrinks.accept {
-        if let Some(inner_shrink) = outer_shrink.shrink() {
-            let inner_item = inner_shrink.item();
-            let inner_prove = check(&inner_item);
-            if inner_prove.prove() {
-                error.shrinks.reject += 1;
-            } else {
-                error.shrinks.reject = 0;
-                error.shrinks.accept += 1;
-                error.shrunk = Some((inner_item, inner_prove));
-                outer_shrink = inner_shrink;
+    let now = Instant::now();
+    while error.shrinks.reject < shrinks.reject
+        && error.shrinks.accept < shrinks.accept
+        && error.shrinks.duration < shrinks.duration
+    {
+        if let Some(inner) = outer.shrink() {
+            let item = inner.item();
+            match handle(&item, &mut check) {
+                Some(cause) if error.cause == cause => {
+                    error.shrinks.reject = 0;
+                    error.shrinks.accept += 1;
+                    error.shrunk = Some(item);
+                    outer = inner;
+                }
+                _ => error.shrinks.reject += 1,
             }
+            error.shrinks.duration = Instant::now() - now;
         } else {
             break;
         }
@@ -289,6 +326,19 @@ const fn divide_ceiling(left: usize, right: usize) -> usize {
         value
     }
 }
+
+impl<P: Prove> PartialEq for Cause<P> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Disprove(left), Self::Disprove(right)) => left.is(right),
+            (Self::Panic(left), Self::Panic(right)) => left == right,
+            (Self::Unknown, Self::Unknown) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<P: Prove> Eq for Cause<P> {}
 
 impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
