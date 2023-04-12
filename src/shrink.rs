@@ -69,56 +69,52 @@ impl<T> All<T> {
 
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        pub mod $n {
-            use super::*;
+        impl<$($t: FullShrink,)*> FullShrink for ($($t,)*) {
+            type Item = ($($t::Item,)*);
+            type Shrink = All<($($t::Shrink,)*)>;
 
-            impl<$($t: FullShrink,)*> FullShrink for ($($t,)*) {
-                type Item = ($($t::Item,)*);
-                type Shrink = All<($($t::Shrink,)*)>;
+            fn shrinker(_item: Self::Item) -> Option<Self::Shrink> {
+                Some(All::new(($($t::shrinker(_item.$i)?,)*)))
+            }
+        }
 
-                fn shrinker(_item: Self::Item) -> Option<Self::Shrink> {
-                    Some(All::new(($($t::shrinker(_item.$i)?,)*)))
-                }
+        impl<$($t: IntoShrink,)*> IntoShrink for ($($t,)*) {
+            type Item = ($($t::Item,)*);
+            type Shrink = All<($($t::Shrink,)*)>;
+
+            fn shrinker(&self, _item: Self::Item) -> Option<Self::Shrink> {
+                Some(All::new(($(self.$i.shrinker(_item.$i)?,)*)))
+            }
+        }
+
+        impl<$($t: Shrink,)*> Shrink for All<($($t,)*)> {
+            type Item = ($($t::Item,)*);
+
+            fn item(&self) -> Self::Item {
+                ($(self.inner.$i.item(),)*)
             }
 
-            impl<$($t: IntoShrink,)*> IntoShrink for ($($t,)*) {
-                type Item = ($($t::Item,)*);
-                type Shrink = All<($($t::Shrink,)*)>;
-
-                fn shrinker(&self, _item: Self::Item) -> Option<Self::Shrink> {
-                    Some(All::new(($(self.$i.shrinker(_item.$i)?,)*)))
-                }
-            }
-
-            impl<$($t: Shrink,)*> Shrink for All<($($t,)*)> {
-                type Item = ($($t::Item,)*);
-
-                fn item(&self) -> Self::Item {
-                    ($(self.inner.$i.item(),)*)
-                }
-
-                fn shrink(&mut self) -> Option<Self> {
-                    let count = $c;
-                    let start = self.index;
-                    self.index += 1;
-                    for i in 0..count {
-                        let index = (start + i) % count;
-                        match index {
-                            $($i => {
-                                if let Some(shrink) = self.inner.$i.shrink() {
-                                    let mut shrinks = self.inner.clone();
-                                    shrinks.$i = shrink;
-                                    return Some(Self {
-                                        inner: shrinks,
-                                        index: self.index
-                                    });
-                                }
-                             })*
-                            _ => {}
-                        }
+            fn shrink(&mut self) -> Option<Self> {
+                let count = $c;
+                let start = self.index;
+                self.index += 1;
+                for i in 0..count {
+                    let index = (start + i) % count;
+                    match index {
+                        $($i => {
+                            if let Some(shrink) = self.inner.$i.shrink() {
+                                let mut shrinks = self.inner.clone();
+                                shrinks.$i = shrink;
+                                return Some(Self {
+                                    inner: shrinks,
+                                    index: self.index
+                                });
+                            }
+                            })*
+                        _ => {}
                     }
-                    None
                 }
+                None
             }
         }
     };
