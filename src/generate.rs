@@ -11,7 +11,7 @@ use crate::{
     primitive::Range,
     prove::Prove,
     sample::{Sampler, Samples},
-    shrink::Shrink,
+    shrink::{All, Shrink},
     size::Size,
     tuples,
 };
@@ -293,10 +293,10 @@ macro_rules! tuple {
 
         impl<$($t: Generate,)*> Generate for ($($t,)*) {
             type Item = ($($t::Item,)*);
-            type Shrink = ($($t::Shrink,)*);
+            type Shrink = All<($($t::Shrink,)*)>;
 
             fn generate(&self, _state: &mut State) -> Self::Shrink {
-                ($(self.$i.generate(_state),)*)
+                All::new(($(self.$i.generate(_state),)*))
             }
         }
     };

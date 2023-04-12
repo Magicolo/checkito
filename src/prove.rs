@@ -7,25 +7,23 @@ pub trait Prove {
     fn is(&self, prove: &Self) -> bool;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Error<P> {
-    pub name: &'static str,
     pub prove: P,
+    pub expression: &'static str,
+    pub file: &'static str,
+    pub module: &'static str,
+    pub line: u32,
+    pub column: u32,
 }
 
-impl<P> fmt::Debug for Error<P> {
+impl<P: fmt::Debug> fmt::Display for Error<P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.name)
+        fmt::Debug::fmt(self, f)
     }
 }
 
-impl<P> fmt::Display for Error<P> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.name, f)
-    }
-}
-
-impl<P> error::Error for Error<P> {}
+impl<P: fmt::Debug> error::Error for Error<P> {}
 
 impl Prove for bool {
     fn prove(&self) -> bool {
@@ -98,9 +96,16 @@ macro_rules! prove {
     ($prove:expr) => {{
         let prove = $prove;
         if $crate::prove::Prove::prove(&prove) {
-            Ok(stringify!($prove))
+            Ok(prove)
         } else {
-            Err($crate::prove::Error { name: stringify!($prove), prove })
+            Err($crate::prove::Error {
+                prove,
+                expression: stringify!($prove),
+                file: file!(),
+                line: line!(),
+                column: column!(),
+                module: module_path!(),
+            })
         }
     }};
     ($($prove:expr),*) => { Ok(($($crate::prove!($prove)),*)) }

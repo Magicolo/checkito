@@ -2,7 +2,7 @@ use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     primitive::Range,
     same::Same,
-    shrink::Shrink,
+    shrink::{All, Shrink},
 };
 use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
@@ -140,7 +140,12 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
             if let Some(shrink) = self.inner[index].shrink() {
                 let mut shrinks = self.inner.clone();
                 shrinks[index] = shrink;
-                return Some(Self::new(shrinks, self.minimum));
+                return Some(Self {
+                    inner: shrinks,
+                    index: self.index,
+                    minimum: self.minimum,
+                    _marker: PhantomData,
+                });
             }
         }
 
@@ -273,7 +278,7 @@ impl<K: Ord + Clone, V: IntoGenerate> IntoGenerate for BTreeMap<K, V> {
 
 impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
     type Item = BTreeMap<K, V::Item>;
-    type Shrink = Shrinker<(Same<K>, V::Shrink), Self::Item>;
+    type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(
             self.into_iter()
@@ -332,7 +337,7 @@ impl<K: Eq + Hash + Clone, V: IntoGenerate, S: BuildHasher + Default> IntoGenera
 
 impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for HashMap<K, V, S> {
     type Item = HashMap<K, V::Item, S>;
-    type Shrink = Shrinker<(Same<K>, V::Shrink), Self::Item>;
+    type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(
             self.into_iter()

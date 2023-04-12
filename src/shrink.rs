@@ -1,5 +1,11 @@
 use crate::tuples;
 
+#[derive(Clone, Debug)]
+pub struct All<T: ?Sized> {
+    pub index: usize,
+    pub inner: T,
+}
+
 pub trait FullShrink {
     type Item;
     type Shrink: Shrink<Item = Self::Item>;
@@ -55,45 +61,64 @@ impl<T: IntoShrink> IntoShrink for &mut T {
     }
 }
 
+impl<T> All<T> {
+    pub const fn new(inner: T) -> Self {
+        Self { inner, index: 0 }
+    }
+}
+
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: FullShrink,)*> FullShrink for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-            type Shrink = ($($t::Shrink,)*);
+        pub mod $n {
+            use super::*;
 
-            fn shrinker(_item: Self::Item) -> Option<Self::Shrink> {
-                Some(($($t::shrinker(_item.$i)?,)*))
-            }
-        }
+            impl<$($t: FullShrink,)*> FullShrink for ($($t,)*) {
+                type Item = ($($t::Item,)*);
+                type Shrink = All<($($t::Shrink,)*)>;
 
-        impl<$($t: IntoShrink,)*> IntoShrink for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-            type Shrink = ($($t::Shrink,)*);
-
-            fn shrinker(&self, _item: Self::Item) -> Option<Self::Shrink> {
-                Some(($(self.$i.shrinker(_item.$i)?,)*))
-            }
-        }
-
-        impl<$($t: Shrink,)*> Shrink for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-
-            fn item(&self) -> Self::Item {
-                ($(self.$i.item(),)*)
+                fn shrinker(_item: Self::Item) -> Option<Self::Shrink> {
+                    Some(All::new(($($t::shrinker(_item.$i)?,)*)))
+                }
             }
 
-            fn shrink(&mut self) -> Option<Self> {
-                let mut _shrunk = false;
-                let shrinks = ($(
-                    if _shrunk { self.$i.clone() }
-                    else {
-                        match self.$i.shrink() {
-                            Some(shrink) => { _shrunk = true; shrink },
-                            None => self.$i.clone(),
+            impl<$($t: IntoShrink,)*> IntoShrink for ($($t,)*) {
+                type Item = ($($t::Item,)*);
+                type Shrink = All<($($t::Shrink,)*)>;
+
+                fn shrinker(&self, _item: Self::Item) -> Option<Self::Shrink> {
+                    Some(All::new(($(self.$i.shrinker(_item.$i)?,)*)))
+                }
+            }
+
+            impl<$($t: Shrink,)*> Shrink for All<($($t,)*)> {
+                type Item = ($($t::Item,)*);
+
+                fn item(&self) -> Self::Item {
+                    ($(self.inner.$i.item(),)*)
+                }
+
+                fn shrink(&mut self) -> Option<Self> {
+                    let count = $c;
+                    let start = self.index;
+                    self.index += 1;
+                    for i in 0..count {
+                        let index = (start + i) % count;
+                        match index {
+                            $($i => {
+                                if let Some(shrink) = self.inner.$i.shrink() {
+                                    let mut shrinks = self.inner.clone();
+                                    shrinks.$i = shrink;
+                                    return Some(Self {
+                                        inner: shrinks,
+                                        index: self.index
+                                    });
+                                }
+                             })*
+                            _ => {}
                         }
-                    },
-                )*);
-                if _shrunk { Some(shrinks) } else { None }
+                    }
+                    None
+                }
             }
         }
     };

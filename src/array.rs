@@ -1,6 +1,6 @@
 use crate::{
     generate::{Generate, State},
-    shrink::Shrink,
+    shrink::{All, Shrink},
     FullGenerate, FullShrink, IntoGenerate, IntoShrink,
 };
 
@@ -27,16 +27,16 @@ impl<G: IntoGenerate, const N: usize> IntoGenerate for Array<G, N> {
 
 impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     type Item = [G::Item; N];
-    type Shrink = [G::Shrink; N];
+    type Shrink = All<[G::Shrink; N]>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        [(); N].map(|_| self.0.generate(state))
+        All::new([(); N].map(|_| self.0.generate(state)))
     }
 }
 
 impl<S: FullShrink, const N: usize> FullShrink for Array<S, N> {
     type Item = [S::Item; N];
-    type Shrink = [S::Shrink; N];
+    type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
         let mut index = 0;
@@ -45,13 +45,13 @@ impl<S: FullShrink, const N: usize> FullShrink for Array<S, N> {
             shrinks[index] = Some(S::shrinker(item)?);
             index += 1;
         }
-        Some(shrinks.map(Option::unwrap))
+        Some(All::new(shrinks.map(Option::unwrap)))
     }
 }
 
 impl<S: IntoShrink, const N: usize> IntoShrink for Array<S, N> {
     type Item = [S::Item; N];
-    type Shrink = [S::Shrink; N];
+    type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
         let mut index = 0;
@@ -60,7 +60,7 @@ impl<S: IntoShrink, const N: usize> IntoShrink for Array<S, N> {
             shrinks[index] = Some(self.0.shrinker(item)?);
             index += 1;
         }
-        Some(shrinks.map(Option::unwrap))
+        Some(All::new(shrinks.map(Option::unwrap)))
     }
 }
 
@@ -84,21 +84,21 @@ impl<G: IntoGenerate, const N: usize> IntoGenerate for [G; N] {
 
 impl<G: Generate, const N: usize> Generate for [G; N] {
     type Item = [G::Item; N];
-    type Shrink = [G::Shrink; N];
+    type Shrink = All<[G::Shrink; N]>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut index = 0;
-        [(); N].map(|_| {
+        All::new([(); N].map(|_| {
             let shrink = self[index].generate(state);
             index += 1;
             shrink
-        })
+        }))
     }
 }
 
 impl<S: FullShrink, const N: usize> FullShrink for [S; N] {
     type Item = [S::Item; N];
-    type Shrink = [S::Shrink; N];
+    type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
         let mut index = 0;
@@ -107,13 +107,13 @@ impl<S: FullShrink, const N: usize> FullShrink for [S; N] {
             shrinks[index] = Some(S::shrinker(item)?);
             index += 1;
         }
-        Some(shrinks.map(Option::unwrap))
+        Some(All::new(shrinks.map(Option::unwrap)))
     }
 }
 
 impl<S: IntoShrink, const N: usize> IntoShrink for [S; N] {
     type Item = [S::Item; N];
-    type Shrink = [S::Shrink; N];
+    type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
         let mut index = 0;
@@ -122,42 +122,36 @@ impl<S: IntoShrink, const N: usize> IntoShrink for [S; N] {
             shrinks[index] = Some(self[index].shrinker(item)?);
             index += 1;
         }
-        Some(shrinks.map(Option::unwrap))
+        Some(All::new(shrinks.map(Option::unwrap)))
     }
 }
 
-impl<S: Shrink, const N: usize> Shrink for [S; N] {
+impl<S: Shrink, const N: usize> Shrink for All<[S; N]> {
     type Item = [S::Item; N];
 
     fn item(&self) -> Self::Item {
         let mut index = 0;
         [(); N].map(|_| {
-            let shrink = self[index].item();
+            let shrink = self.inner[index].item();
             index += 1;
             shrink
         })
     }
 
     fn shrink(&mut self) -> Option<Self> {
-        let mut index = 0;
-        let mut shrunk = false;
-        let shrinks = [(); N].map(|_| {
-            let shrink = if shrunk { None } else { self[index].shrink() };
-            let shrink = match shrink {
-                Some(shrink) => {
-                    shrunk = true;
-                    shrink
-                }
-                None => self[index].clone(),
-            };
-            index += 1;
-            shrink
-        });
-
-        if shrunk {
-            Some(shrinks)
-        } else {
-            None
+        let start = self.index;
+        self.index += 1;
+        for i in 0..N {
+            let index = (start + i) % N;
+            if let Some(shrink) = self.inner[index].shrink() {
+                let mut shrinks = self.inner.clone();
+                shrinks[index] = shrink;
+                return Some(Self {
+                    inner: shrinks,
+                    index: self.index,
+                });
+            }
         }
+        None
     }
 }
