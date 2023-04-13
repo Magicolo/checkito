@@ -513,9 +513,9 @@ pub mod character {
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             match state.random().u8(..) {
-                0..=15 => Shrinker(Into::<Range<u32>>::into(Self::low_range()).generate(state)),
-                16..=254 => Shrinker(Into::<Range<u32>>::into(Self::high_range()).generate(state)),
-                255 => Self::shrink(Self::special().generate(state)),
+                ..=126 => Shrinker(Into::<Range<u32>>::into(Self::low_range()).generate(state)),
+                127..=253 => Shrinker(Into::<Range<u32>>::into(Self::high_range()).generate(state)),
+                254.. => Self::shrink(Self::special().generate(state)),
             }
         }
     }
@@ -694,6 +694,13 @@ pub mod number {
                     }
                 }
 
+                fn sub_range() -> Range<$t> {
+                    Range {
+                        start: -1 as $t / $t::EPSILON,
+                        end: 1 as $t / $t::EPSILON
+                    }
+                }
+
                 const fn shrink(item: $t) -> Shrinker<$t> {
                     Shrinker::new(Self::range(), item)
                 }
@@ -754,16 +761,12 @@ pub mod number {
                 type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    fn range(size: f64) -> Range<$t> {
-                        Full::<$t>::range().shrinked(size)
-                    }
-
                     match state.random().u8(..) {
-                        0..=126 => range(state.size()).generate(state),
-                        127..=253 => range(state.size())
-                            .map(|value| 1 as $t / value)
-                            .generate(state),
-                        254..=255 => Self::shrink(Self::special().generate(state)),
+                        ..=93 => Self::sub_range().shrinked(state.size()).generate(state),
+                        94..=187 => Self::sub_range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
+                        188..=219 => Self::range().shrinked(state.size()).generate(state),
+                        220..=251 => Self::range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
+                        252.. => Self::shrink(Self::special().generate(state)),
                     }
                 }
             }

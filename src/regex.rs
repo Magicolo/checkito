@@ -78,10 +78,7 @@ impl Generate for Regex {
                     if low > high || high == 0 {
                         Shrinker::Empty
                     } else {
-                        let count = (low..=high)
-                            .size(|size| size.powf(2.0))
-                            .generate(state)
-                            .item();
+                        let count = (low..=high).generate(state).item();
                         let limit = repeats / (32 - high.leading_zeros());
                         let shrinks =
                             Iterator::map(0..count, |_| next(hir.kind(), state, limit)).collect();
