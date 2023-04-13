@@ -188,3 +188,24 @@ impl<G: Generate> Generate for Arc<G> {
         G::generate(self, state)
     }
 }
+
+impl<T> Generate for fn() -> T {
+    type Item = T;
+    type Shrink = Self;
+
+    fn generate(&self, _: &mut State) -> Self::Shrink {
+        *self
+    }
+}
+
+impl<T> Shrink for fn() -> T {
+    type Item = T;
+
+    fn item(&self) -> Self::Item {
+        self()
+    }
+
+    fn shrink(&mut self) -> Option<Self> {
+        None
+    }
+}
