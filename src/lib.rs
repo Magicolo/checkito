@@ -5,6 +5,7 @@ pub mod collect;
 pub mod filter;
 pub mod filter_map;
 pub mod flatten;
+pub mod function;
 pub mod generate;
 pub mod keep;
 pub mod map;
@@ -70,4 +71,8 @@ pub fn digit() -> impl Generate<Item = char> {
 
 pub fn ascii() -> impl Generate<Item = char> {
     0 as char..127 as char
+}
+
+pub fn lazy<G: Generate>(provide: impl Fn() -> G + Clone) -> impl Generate<Item = G::Item> {
+    ().bind(move |_| provide())
 }
