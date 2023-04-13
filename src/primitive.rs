@@ -442,9 +442,19 @@ pub mod character {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     (
+                        '\\',
+                        '\x0B',
+                        '\x1B',
+                        '\x7F',
                         '\u{0000}',
                         '\u{D7FF}',
                         '\u{E000}',
+                        '\u{FEFF}',
+                        '\u{202E}',
+                        '¥',
+                        'Ѩ',
+                        'Ⱥ',
+                        '🕴',
                         char::MAX,
                         char::REPLACEMENT_CHARACTER,
                     )
