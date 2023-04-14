@@ -12,6 +12,8 @@ impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.size;
         let new = self.1(old);
+        debug_assert!(old.is_finite());
+        debug_assert!(new.is_finite());
         state.size = new.max(0.0).min(1.0);
         let shrink = self.0.generate(state);
         state.size = old;

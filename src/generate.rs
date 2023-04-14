@@ -4,6 +4,7 @@ use crate::{
     boxed,
     check::{Checker, Checks, Error},
     collect::Collect,
+    dampen::Dampen,
     filter::Filter,
     filter_map::FilterMap,
     flatten::Flatten,
@@ -22,6 +23,7 @@ use std::iter::FromIterator;
 #[derive(Clone, Debug)]
 pub struct State {
     pub(crate) size: f64,
+    pub(crate) depth: usize,
     seed: u64,
     random: Rng,
 }
@@ -141,7 +143,7 @@ pub trait Generate {
         Self: Sized,
         Collect<Self, Range<usize>, F>: Generate,
     {
-        self.collect_with((0..256 as usize).generator())
+        self.collect_with((0..256usize).generator())
     }
 
     fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
@@ -155,12 +157,28 @@ pub trait Generate {
         Collect::new(self, count)
     }
 
-    fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
+    fn size<F: Fn(f64, usize) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
         Size<Self, F>: Generate,
     {
         Size(self, map)
+    }
+
+    fn dampen(self) -> Dampen<Self>
+    where
+        Self: Sized,
+        Size<Self>: Generate,
+    {
+        self.dampen_with(8.0)
+    }
+
+    fn dampen_with(self, force: f64) -> Dampen<Self>
+    where
+        Self: Sized,
+        Dampen<Self>: Generate,
+    {
+        Dampen { force, inner: self }
     }
 
     fn keep(self) -> Keep<Self>
@@ -215,6 +233,7 @@ impl State {
         let random = seed.map_or_else(Rng::new, Rng::with_seed);
         Self {
             size: size.max(0.0).min(1.0),
+            depth: 0,
             seed: random.get_seed(),
             random,
         }
@@ -222,11 +241,19 @@ impl State {
 
     pub fn from_iteration(index: usize, count: usize, seed: Option<u64>) -> Self {
         // This size calculation ensures that 10% of samples are fully sized.
-        Self::new((index as f64 / count as f64 * 1.1).min(1.), seed)
+        if count == 1 {
+            Self::new(1.0, seed)
+        } else {
+            Self::new((index as f64 / count as f64 * 1.1).min(1.), seed)
+        }
     }
 
     pub const fn size(&self) -> f64 {
         self.size
+    }
+
+    pub const fn depth(&self) -> usize {
+        self.depth
     }
 
     pub const fn seed(&self) -> u64 {

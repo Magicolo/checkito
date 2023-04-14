@@ -21,7 +21,9 @@ impl<G: Generate<Item = impl Generate> + ?Sized> Generate for Flatten<G> {
         let old = state.clone();
         let outer = self.0.generate(state);
         let item = outer.item();
+        state.depth += 1;
         let inner = item.generate(state);
+        state.depth -= 1;
         let shrink = Shrinker {
             state: old,
             inner,

@@ -3,6 +3,7 @@ pub mod array;
 pub mod boxed;
 pub mod check;
 pub mod collect;
+pub mod dampen;
 pub mod filter;
 pub mod filter_map;
 pub mod flatten;
