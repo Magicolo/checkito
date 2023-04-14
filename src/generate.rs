@@ -25,12 +25,18 @@ pub struct State {
     random: Rng,
 }
 
+/// When implemented for a type `T`, this allows to retrieve a generator for `T` that does not require any parameter.
+/// It should be implemented for any type that has a canonical way to be generated.
+/// To provide a generator with parameters, see [`IntoGenerate`].
+///
+/// For example, this trait is implemented for all non-pointer primitive types and for some standard types (such as [`Option<T>`] amd [`Result<T, E>`]).
 pub trait FullGenerate {
     type Item;
     type Generate: Generate<Item = Self::Item>;
     fn generator() -> Self::Generate;
 }
 
+/// When implemented for a type `T`, this allows to retrieve a generate using the values in `T`, similar to the [`Into<T>`] trait.
 pub trait IntoGenerate {
     type Item;
     type Generate: Generate<Item = Self::Item>;
