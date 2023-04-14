@@ -241,14 +241,6 @@ impl FullGenerate for String {
     }
 }
 
-impl IntoGenerate for String {
-    type Item = Self;
-    type Generate = Self;
-    fn generator(self) -> Self::Generate {
-        self
-    }
-}
-
 impl Generate for String {
     type Item = Self;
     type Shrink = Shrinker<char, Self::Item>;

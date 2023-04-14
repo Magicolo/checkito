@@ -1,5 +1,6 @@
 pub mod any;
 pub mod array;
+pub mod boxed;
 pub mod check;
 pub mod collect;
 pub mod filter;

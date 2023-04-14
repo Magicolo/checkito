@@ -1,4 +1,4 @@
-use crate::tuples;
+use crate::{boxed, tuples};
 
 #[derive(Clone, Debug)]
 pub struct All<T: ?Sized> {
@@ -23,6 +23,13 @@ pub trait Shrink: Clone {
 
     fn item(&self) -> Self::Item;
     fn shrink(&mut self) -> Option<Self>;
+
+    fn boxed(self) -> boxed::Shrinker<Self::Item>
+    where
+        Self: 'static,
+    {
+        boxed::Shrinker::new(self)
+    }
 }
 
 impl<T: FullShrink> FullShrink for &T {

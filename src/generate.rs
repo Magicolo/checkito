@@ -1,6 +1,7 @@
 use crate::{
     any::Any,
     array::Array,
+    boxed,
     check::{Checker, Checks, Error},
     collect::Collect,
     filter::Filter,
@@ -48,6 +49,14 @@ pub trait Generate {
     type Shrink: Shrink<Item = Self::Item>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink;
+
+    fn boxed(self) -> boxed::Generator<Self::Item>
+    where
+        Self: Sized + 'static,
+        boxed::Generator<Self::Item>: Generate,
+    {
+        boxed::Generator::new(self)
+    }
 
     fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, T, F>
     where

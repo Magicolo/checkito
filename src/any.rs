@@ -18,6 +18,12 @@ pub trait Fuse<T> {
     fn fuse(self) -> T;
 }
 
+impl<T> Weight<T> {
+    pub const fn new(weight: f64, value: T) -> Self {
+        Self { weight, value }
+    }
+}
+
 fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
     if items.len() == 0 {
         None
