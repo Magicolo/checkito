@@ -23,6 +23,7 @@ use std::iter::FromIterator;
 #[derive(Clone, Debug)]
 pub struct State {
     pub(crate) size: f64,
+    pub(crate) count: usize,
     pub(crate) depth: usize,
     seed: u64,
     random: Rng,
@@ -143,7 +144,7 @@ pub trait Generate {
         Self: Sized,
         Collect<Self, Range<usize>, F>: Generate,
     {
-        self.collect_with((0..256usize).generator())
+        self.collect_with((..256usize).generator())
     }
 
     fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
@@ -170,15 +171,22 @@ pub trait Generate {
         Self: Sized,
         Size<Self>: Generate,
     {
-        self.dampen_with(8.0)
+        self.dampen_with(1.0, 8, 8192)
     }
 
-    fn dampen_with(self, force: f64) -> Dampen<Self>
+    fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
         Dampen<Self>: Generate,
     {
-        Dampen { force, inner: self }
+        debug_assert!(pressure.is_finite());
+        debug_assert!(pressure >= 0.0);
+        Dampen {
+            pressure,
+            deepest,
+            limit,
+            inner: self,
+        }
     }
 
     fn keep(self) -> Keep<Self>
@@ -234,6 +242,7 @@ impl State {
         Self {
             size: size.max(0.0).min(1.0),
             depth: 0,
+            count: 0,
             seed: random.get_seed(),
             random,
         }

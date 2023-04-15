@@ -181,12 +181,12 @@ macro_rules! full {
 }
 
 macro_rules! range {
-    ($t:ty, $r:ty) => {
+    ($t:ident, $r:ty) => {
         impl TryFrom<$r> for Range<$t> {
             type Error = Error;
 
             fn try_from(range: $r) -> Result<Self, Self::Error> {
-                Range::<$t>::new(range)
+                Range::<$t>::$t(range)
             }
         }
 
@@ -224,7 +224,7 @@ macro_rules! ranges {
             type Error = Error;
 
             fn try_from(range: ops::RangeFull) -> Result<Self, Self::Error> {
-                Range::<$t>::new(range)
+                Range::<$t>::$t(range)
             }
         }
 
@@ -380,7 +380,7 @@ pub mod character {
     pub struct Shrinker(super::Shrinker<u32>);
 
     impl Range<char> {
-        pub fn new(range: impl ops::RangeBounds<char>) -> Result<Self, Error> {
+        pub fn char(range: impl ops::RangeBounds<char>) -> Result<Self, Error> {
             let start = match range.start_bound() {
                 Bound::Included(&bound) => bound,
                 Bound::Excluded(&bound) => (bound as u32)
@@ -585,7 +585,7 @@ pub mod number {
             }
 
             impl Range<$t> {
-                pub fn new(range: impl ops::RangeBounds<$t>) -> Result<Self, Error> {
+                pub fn $t(range: impl ops::RangeBounds<$t>) -> Result<Self, Error> {
                     let start = match range.start_bound() {
                         Bound::Included(&bound) => bound,
                         Bound::Excluded(&bound) => bound.checked_add(1 as $t).ok_or(Error::Overflow)?,
@@ -707,7 +707,7 @@ pub mod number {
             }
 
             impl Range<$t> {
-                pub fn new(range: impl ops::RangeBounds<$t>) -> Result<Self, Error> {
+                pub fn $t(range: impl ops::RangeBounds<$t>) -> Result<Self, Error> {
                     let start = match range.start_bound() {
                         Bound::Included(&bound) => (bound, false),
                         Bound::Excluded(&bound) => (bound, true),

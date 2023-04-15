@@ -1,7 +1,9 @@
 use crate::generate::{Generate, State};
 
 pub struct Dampen<T: ?Sized> {
-    pub force: f64,
+    pub pressure: f64,
+    pub deepest: usize,
+    pub limit: usize,
     pub inner: T,
 }
 
@@ -11,7 +13,11 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.size;
-        let new = old / (state.depth as f64 * self.force).max(1.0);
+        let new = if state.depth >= self.deepest || state.count >= self.limit {
+            0.0
+        } else {
+            old / (state.depth as f64 * self.pressure).max(1.0)
+        };
         debug_assert!(old.is_finite());
         debug_assert!(new.is_finite());
         state.size = new.max(0.0).min(1.0);
