@@ -4,9 +4,9 @@ A simple [quickcheck](https://hackage.haskell.org/package/QuickCheck) inspired l
 
 One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space.
 
--   The [`Generate`](src/generate.rs) trait that is implemented for many of rust's standard types allows the generation of any random composite data through combinator (such as tuples, `Any`, `Map`, `Flatten` and more). It is designed for composability and its usage should feel like working with `Iterator`s.
+-   The [`Generate`](src/generate.rs) trait that is implemented for many of rust's standard types allows the generation of any random composite data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
 -   The [`Shrink`](src/shrink.rs) trait tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk out of its range). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, etc..
--   The [`Prove`](src/prove.rs) trait is meant to represent a desirable property of a system under test. It is used mainly in the context of the `Generate::check` or `Checker::check` methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `bool`, `Result` and tuples.
+-   The [`Prove`](src/prove.rs) trait is meant to represent a desirable property of a system under test. It is used mainly in the context of the [`Generate::check`](src/generate.rs) or [`Checker::check`](src/check.rs) methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `bool`, `Result` and tuples.
 
 
 ## Example
