@@ -1,5 +1,5 @@
 pub mod common;
-use checkito::any::{Fuse, Weight};
+use checkito::any::{Unify, Weight};
 use common::*;
 
 #[test]
@@ -9,7 +9,7 @@ fn weighted_any() {
         Weight::new(10.0, 10),
         Weight::new(100.0, 100),
     )
-        .map(Fuse::<i32>::fuse)
+        .map(Unify::<i32>::unify)
         .samples(1000)
         .collect::<Vec<_>>();
     let _1 = samples.iter().filter(|&&value| value == 1).count();

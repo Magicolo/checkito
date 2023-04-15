@@ -124,12 +124,17 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
     }
 
     fn shrink(&mut self) -> Option<Self> {
-        // Try to remove irrelevant generators.
+        // Try to remove irrelevant generators one by one.
         if self.index < self.inner.len() && self.minimum < self.inner.len() {
             let mut shrinks = self.inner.clone();
             shrinks.remove(self.index);
             self.index += 1;
-            return Some(Self::new(shrinks, self.minimum));
+            return Some(Self {
+                inner: shrinks,
+                index: 0,
+                minimum: self.minimum,
+                _marker: PhantomData,
+            });
         }
 
         // Try to shrink each generator and succeed if any generator is shrunk.

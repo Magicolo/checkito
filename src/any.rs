@@ -14,8 +14,8 @@ pub struct Weight<W, T: ?Sized> {
     pub value: T,
 }
 
-pub trait Fuse<T> {
-    fn fuse(self) -> T;
+pub trait Unify<T> {
+    fn unify(self) -> T;
 }
 
 impl<W: Generate<Item = f64>, T> Weight<W, T> {
@@ -153,8 +153,8 @@ macro_rules! tuple {
                 }
             }
 
-            impl<T, $($ts: Into<T>,)*> Fuse<T> for One<$($ts,)*> {
-                fn fuse(self) -> T {
+            impl<T, $($ts: Into<T>,)*> Unify<T> for One<$($ts,)*> {
+                fn unify(self) -> T {
                     match self {
                         $(Self::$ts(item) => item.into(),)*
                     }
