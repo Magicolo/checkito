@@ -37,7 +37,7 @@ fn main() {
             prove!(result == Some(input.value))
         });
 
-    let _error = result.unwrap_err();
+    dbg!(result.unwrap_err());
     /*
         An error will hold the original value that triggered a failed proof and the smallest found shrinked version (and a bunch of additional information).
         A sample error may look like:
