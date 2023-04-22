@@ -10,7 +10,7 @@ keywords = ["test", "generative", "property", "random", "quickcheck"]
 
 [dependencies]
 fastrand = "1.9.0"
-regex-syntax = "0.7.0"
+regex-syntax = "0.7.1"
 
 [dev-dependencies]
-regex = "1.7.3"
+regex = "1.8.1"
