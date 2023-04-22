@@ -181,58 +181,62 @@ macro_rules! full {
 }
 
 macro_rules! range {
-    ($t:ident, $r:ty) => {
-        impl TryFrom<$r> for Range<$t> {
+    ($i:ident, $t:ty, $r:ty) => {
+        impl TryFrom<$r> for $t {
             type Error = Error;
 
             fn try_from(range: $r) -> Result<Self, Self::Error> {
-                Range::<$t>::$t(range)
+                Self::$i(range)
             }
         }
 
         impl IntoGenerate for $r {
-            type Item = $t;
-            type Generate = Range<$t>;
+            type Item = $i;
+            type Generate = $t;
             fn generator(self) -> Self::Generate {
-                Range::<$t>::try_from(self).unwrap()
+                <$t as TryFrom<$r>>::try_from(self).unwrap()
             }
         }
 
         impl Generate for $r {
-            type Item = $t;
-            type Shrink = <Range<$t> as Generate>::Shrink;
+            type Item = $i;
+            type Shrink = <$t as Generate>::Shrink;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                Range::<$t>::try_from(self.clone()).unwrap().generate(state)
+                <$t as TryFrom<$r>>::try_from(self.clone())
+                    .unwrap()
+                    .generate(state)
             }
         }
 
         impl IntoShrink for $r {
-            type Item = $t;
-            type Shrink = <Range<$t> as Generate>::Shrink;
+            type Item = $i;
+            type Shrink = <$t as Generate>::Shrink;
 
             fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-                Range::<$t>::try_from(self.clone()).ok()?.shrinker(item)
+                <$t as TryFrom<$r>>::try_from(self.clone())
+                    .ok()?
+                    .shrinker(item)
             }
         }
     };
 }
 
 macro_rules! ranges {
-    ($t:ident) => {
-        impl TryFrom<ops::RangeFull> for Range<$t> {
+    ($i:ident, $t:ty) => {
+        impl TryFrom<ops::RangeFull> for $t {
             type Error = Error;
 
             fn try_from(range: ops::RangeFull) -> Result<Self, Self::Error> {
-                Range::<$t>::$t(range)
+                Self::$i(range)
             }
         }
 
-        range!($t, ops::Range<$t>);
-        range!($t, ops::RangeInclusive<$t>);
-        range!($t, ops::RangeFrom<$t>);
-        range!($t, ops::RangeTo<$t>);
-        range!($t, ops::RangeToInclusive<$t>);
+        range!($i, $t, ops::Range<$i>);
+        range!($i, $t, ops::RangeInclusive<$i>);
+        range!($i, $t, ops::RangeFrom<$i>);
+        range!($i, $t, ops::RangeTo<$i>);
+        range!($i, $t, ops::RangeToInclusive<$i>);
     };
 }
 
@@ -376,62 +380,41 @@ pub mod boolean {
 pub mod character {
     use super::*;
 
+    #[derive(Copy, Clone, Debug, Default)]
+    pub struct Range(super::Range<u32>);
     #[derive(Clone, Debug)]
     pub struct Shrinker(super::Shrinker<u32>);
 
-    impl Range<char> {
+    impl Range {
         pub fn char(range: impl ops::RangeBounds<char>) -> Result<Self, Error> {
             let start = match range.start_bound() {
-                Bound::Included(&bound) => bound,
-                Bound::Excluded(&bound) => (bound as u32)
-                    .checked_add(1)
-                    .ok_or(Error::Overflow)?
-                    .try_into()
-                    .map_err(|_| Error::Invalid)?,
-                Bound::Unbounded => '\u{0000}',
+                Bound::Included(&bound) => bound as u32,
+                Bound::Excluded(&bound) => (bound as u32).checked_add(1).ok_or(Error::Overflow)?,
+                Bound::Unbounded => 0 as u32,
             };
             let end = match range.end_bound() {
-                Bound::Included(&bound) => bound,
-                Bound::Excluded(&bound) => (bound as u32)
-                    .checked_sub(1)
-                    .ok_or(Error::Overflow)?
-                    .try_into()
-                    .map_err(|_| Error::Invalid)?,
-                Bound::Unbounded if start <= '\u{D7FF}' => '\u{D7FF}',
-                Bound::Unbounded if start >= '\u{E000}' => char::MAX,
-                Bound::Unbounded => return Err(Error::Invalid),
+                Bound::Included(&bound) => bound as u32,
+                Bound::Excluded(&bound) => (bound as u32).checked_sub(1).ok_or(Error::Overflow)?,
+                Bound::Unbounded => char::MAX as u32,
             };
             if end < start {
                 Err(Error::Empty)
             } else {
-                Ok(Self { start, end })
+                Ok(Self(super::Range { start, end }))
             }
         }
     }
 
     impl Full<char> {
-        const fn low_range() -> Range<char> {
-            Range {
-                start: '\u{0000}',
-                end: '\u{D7FF}',
-            }
+        const fn range() -> Range {
+            Range(super::Range {
+                start: 0,
+                end: char::MAX as u32,
+            })
         }
 
-        const fn high_range() -> Range<char> {
-            Range {
-                start: '\u{E000}',
-                end: char::MAX,
-            }
-        }
-
-        fn shrink(item: char) -> Shrinker {
-            let low = Self::low_range();
-            let range = if item <= low.end {
-                low
-            } else {
-                Self::high_range()
-            };
-            Shrinker(super::Shrinker::new(range.into(), item as u32))
+        const fn shrink(item: char) -> Shrinker {
+            Shrinker(super::Shrinker::new(Self::range().0, item as u32))
         }
 
         const fn special<'a>() -> impl Generate<Item = char, Shrink = char> {
@@ -479,31 +462,12 @@ pub mod character {
         }
     }
 
-    impl Shrinker {
-        pub fn new(item: char) -> Option<Self> {
-            let mut low = Full::<char>::low_range();
-            let range = if item >= low.start && item <= low.end {
-                low.end = item;
-                low
-            } else {
-                let mut high = Full::<char>::high_range();
-                if item >= high.start && item <= high.end {
-                    high.start = item;
-                    high
-                } else {
-                    return None;
-                }
-            };
-            Some(Self(super::Shrinker::new(range.into(), item as u32)))
-        }
-    }
-
-    impl Generate for Range<char> {
+    impl Generate for Range {
         type Item = char;
         type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrinker(Into::<Range<u32>>::into(*self).generate(state))
+            Shrinker(self.0.generate(state))
         }
     }
 
@@ -513,21 +477,18 @@ pub mod character {
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             match state.random().u8(..) {
-                ..=126 => Shrinker(Into::<Range<u32>>::into(Self::low_range()).generate(state)),
-                127..=253 => Shrinker(Into::<Range<u32>>::into(Self::high_range()).generate(state)),
+                ..=253 => Self::range().generate(state),
                 254.. => Self::shrink(Self::special().generate(state)),
             }
         }
     }
 
-    impl IntoShrink for Range<char> {
+    impl IntoShrink for Range {
         type Item = char;
         type Shrink = Shrinker;
 
         fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-            Some(Shrinker(
-                Into::<Range<u32>>::into(self.clone()).shrinker(item as _)?,
-            ))
+            Some(Shrinker(self.0.shrinker(item as u32)?))
         }
     }
 
@@ -536,7 +497,7 @@ pub mod character {
         type Shrink = Shrinker;
 
         fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-            Shrinker::new(item)
+            Self::range().shrinker(item)
         }
     }
 
@@ -544,7 +505,10 @@ pub mod character {
         type Item = char;
 
         fn item(&self) -> Self::Item {
-            self.0.item().try_into().unwrap()
+            self.0
+                .item()
+                .try_into()
+                .unwrap_or(char::REPLACEMENT_CHARACTER)
         }
 
         fn shrink(&mut self) -> Option<Self> {
@@ -553,7 +517,7 @@ pub mod character {
     }
 
     full!(char);
-    ranges!(char);
+    ranges!(char, Range);
 }
 
 pub mod number {
@@ -663,7 +627,7 @@ pub mod number {
             }
 
             full!($t);
-            ranges!($t);
+            ranges!($t, Range<$t>);
         };
         ($($ts:ident),*) => { $(integer!($ts);)* };
     }
@@ -810,7 +774,7 @@ pub mod number {
             }
 
             full!($t);
-            ranges!($t);
+            ranges!($t, Range<$t>);
         };
         ($($ts:ident),*) => { $(floating!($ts);)* };
     }
