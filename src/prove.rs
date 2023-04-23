@@ -1,15 +1,13 @@
-use std::{error, fmt};
+use std::{any::Any, error, fmt};
 
-use crate::tuples;
-
-pub trait Prove {
+pub trait Prove: 'static {
     fn prove(&self) -> bool;
-    fn is(&self, prove: &Self) -> bool;
+    fn is(&self, other: &dyn Any) -> bool;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Error<P> {
-    pub prove: P,
+#[derive(Clone, Debug)]
+pub struct Error {
+    pub value: String,
     pub expression: &'static str,
     pub file: &'static str,
     pub module: &'static str,
@@ -17,79 +15,54 @@ pub struct Error<P> {
     pub column: u32,
 }
 
-impl<P: fmt::Debug> fmt::Display for Error<P> {
+impl error::Error for Error {}
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
 }
-
-impl<P: fmt::Debug> error::Error for Error<P> {}
 
 impl Prove for bool {
     fn prove(&self) -> bool {
         *self
     }
 
-    fn is(&self, prove: &Self) -> bool {
-        self == prove
+    fn is(&self, other: &dyn Any) -> bool {
+        other
+            .downcast_ref::<Self>()
+            .map_or(false, |other| self == other)
     }
 }
 
-impl<T: Eq, E: Eq> Prove for Result<T, E> {
+impl<T: 'static, E: 'static> Prove for Result<T, E> {
     fn prove(&self) -> bool {
         self.is_ok()
     }
 
-    fn is(&self, prove: &Self) -> bool {
-        self == prove
+    fn is(&self, other: &dyn Any) -> bool {
+        other
+            .downcast_ref::<Self>()
+            .map_or(false, |other| match (self, other) {
+                (Ok(left), Ok(right)) => left.type_id() == right.type_id(),
+                (Err(left), Err(right)) => {
+                    match (
+                        (left as &dyn Any).downcast_ref::<Error>(),
+                        (right as &dyn Any).downcast_ref::<Error>(),
+                    ) {
+                        (Some(left), Some(right)) => {
+                            left.line == right.line
+                                && left.column == right.column
+                                && left.file == right.file
+                                && left.module == right.module
+                                && left.expression == right.expression
+                        }
+                        _ => left.type_id() == right.type_id(),
+                    }
+                }
+                _ => false,
+            })
     }
 }
-
-impl<P: Prove + Eq> Prove for [P] {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
-    }
-
-    fn is(&self, prove: &Self) -> bool {
-        self == prove
-    }
-}
-
-impl<P: Prove + Eq, const N: usize> Prove for [P; N] {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
-    }
-
-    fn is(&self, prove: &Self) -> bool {
-        self == prove
-    }
-}
-
-impl<P: Prove + Eq> Prove for Vec<P> {
-    fn prove(&self) -> bool {
-        self.iter().all(|proof| proof.prove())
-    }
-
-    fn is(&self, prove: &Self) -> bool {
-        self == prove
-    }
-}
-
-macro_rules! tuple {
-    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: Prove + Eq,)*> Prove for ($($t,)*) {
-            fn prove(&self) -> bool {
-                $(self.$i.prove() &&)* true
-            }
-
-            fn is(&self, _prove: &Self) -> bool {
-                $(self.$i == _prove.$i &&)* true
-            }
-        }
-    };
-}
-
-tuples!(tuple);
 
 #[macro_export]
 macro_rules! prove {
@@ -99,7 +72,7 @@ macro_rules! prove {
             Ok(prove)
         } else {
             Err($crate::prove::Error {
-                prove,
+                value: format!("{prove:?}"),
                 expression: stringify!($prove),
                 file: file!(),
                 line: line!(),
