@@ -160,6 +160,15 @@ pub trait Generate {
 
     /// Flattens the [`Generate::Item`], assuming that it implements [`Generate`]. The resulting item type is
     /// `<Generate::Item as Generate>::Item`.
+    ///
+    /// Additionally, the call to [`Generate::generate`] to the inner [`Generate`] implementation will have its `depth`
+    /// increased by `1`. The `depth` is a value used by other [`Generate`] implementations (such as [`Generate::size`] and
+    /// [`Generate::dampen`]) to alter the `size` of generated items. It tries to represent the recursion depth since it
+    /// is expected that recursive [`Generate`] instances will need to go through it. Implementations such as [`lazy`](crate::lazy)
+    /// and [`Generate::flat_map`] use it.
+    ///
+    /// The `depth` is particularly useful to limit the amount of recursion that happens for
+    /// structures that potentially explode exponentially as the recursion depth increases (think of a tree structure).
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
@@ -169,6 +178,13 @@ pub trait Generate {
         Flatten(self)
     }
 
+    /// For a type `T` where [`Any<T>`] implements [`Generate`], the behavior of the generation changes from *generate all* of
+    /// my components to *generate one* of my components chosen randomly.
+    /// It is implemented for tuples, slices, arrays, [`Vec<T>`] and a few other collections.
+    ///
+    /// The random selection can be controlled by wrapping each element of a supported collection in a
+    /// [`any::Weight`](crate::any::Weight), which will inform the [`Generate`] implementation to perform a weighted random
+    /// between elements of the collection.
     fn any(self) -> Any<Self>
     where
         Self: Sized,
@@ -186,6 +202,7 @@ pub trait Generate {
         Array(self)
     }
 
+    /// Same as [`Generate::collect_with`] but with a predefined `count`.
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Range<usize>, F>
     where
         Self: Sized,
@@ -194,6 +211,8 @@ pub trait Generate {
         self.collect_with((..256usize).generator())
     }
 
+    /// Generates a variable number of items based on the provided `count` [`Generate`] and then builds a value of type
+    /// `F` based on its implementation of [`FromIterator`].
     fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
         self,
         count: C,
@@ -205,6 +224,22 @@ pub trait Generate {
         Collect::new(self, count)
     }
 
+    /// Maps the current `size` of the generation process to a different one. The `size` is a value in the range `[0.0..1.0]`
+    /// that represents *how big* the generated items are based on the generator's constraints. The generation process will
+    /// initially try to produce *small* items and then move on to *bigger* ones.
+    /// Note that the `size` does not guarantee a *small* or *big* generated item since [`Generate`] implementations are free
+    /// to interpret it as they wish, although that is its intention.
+    ///
+    /// For example, a *small* number will be close to `0`, a *small* collection will have its `len()` close to `0`, a *large*
+    /// [`bool`] will be `true`, a *large* [`String`] will have many [`char`], etc.
+    ///
+    /// The provided `map` function is described as such:
+    /// - Its first argument is the current `size` in the range `[0.0..1.0]`.
+    /// - Its second argument is the current `depth` (see [`Generate::flatten`] for more information about `depth`).
+    /// - Its return value will be clamped to the `[0.0..1.0]` range and panic if it is infinite or [`f64::NAN`].
+    ///
+    /// Useful to nullify the sizing of items (`self.size(|_, _| 1.0)` will always produces items of full `size`) or to
+    /// attenuate the `size`.
     fn size<F: Fn(f64, usize) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
@@ -213,6 +248,7 @@ pub trait Generate {
         Size(self, map)
     }
 
+    /// Same as [`Generate::dampen_with`] but with predefined arguments.
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
@@ -221,6 +257,14 @@ pub trait Generate {
         self.dampen_with(1.0, 8, 8192)
     }
 
+    /// Dampens the `size` (see [`Generate::size`] for more information about `size`) as items are generated.
+    /// - The `pressure` can be thought of as how fast will the `size` be reduced as the `depth` increases (see [`Generate::flatten`]
+    /// for more information about `depth`).
+    /// - The `deepest` will set the `size` to `0` when the `depth` is `>=` than it.
+    /// - The `limit` will set the `size` to `0` after the number of times that the `depth` increased is `>=` than it.
+    ///
+    /// This [`Generate`] implementation is particularly useful to limit the amount of recursion that happens for structures
+    /// that are infinite and potentially explode exponentially as the recursion depth increases (think of a tree structure).
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
@@ -236,6 +280,7 @@ pub trait Generate {
         }
     }
 
+    /// Keeps the generated items intact through the shrinking process (i.e. *un-shrinked*).
     fn keep(self) -> Keep<Self>
     where
         Self: Sized,
