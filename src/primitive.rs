@@ -2,7 +2,7 @@ use crate::{
     any::Unify,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::{FullShrink, IntoShrink, Shrink},
-    Nudge,
+    utility::Nudge,
 };
 use std::{
     convert::TryInto,

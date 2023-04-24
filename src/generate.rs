@@ -51,8 +51,31 @@ pub trait Generate {
     type Item;
     type Shrink: Shrink<Item = Self::Item>;
 
+    /// Primary method of this trait. It generates a [`Shrink`] instance that will be able to produce values of type
+    /// [`Generate::Item`] and shrink itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
+    /// Wraps `self` in a boxed [`Generate`]. This is mostly relevant for recursive [`Generate`] implementations where
+    /// the type would otherwise be infinite.
+    ///
+    /// ```
+    /// use checkito::*;
+    ///
+    /// enum Node {
+    ///     Leaf,
+    ///     Branch(Vec<Node>),
+    /// }
+    ///
+    /// fn node() -> impl Generate<Item = Node> {
+    ///     (
+    ///         with(|| Node::Leaf),
+    ///         // Without the [`Generate::boxed`], this type would be infinite.
+    ///         lazy(node).boxed().collect().map(Node::Branch)
+    ///     )
+    ///     .any()
+    ///     .map(Unify::unify)
+    /// }
+    /// ```
     fn boxed(self) -> boxed::Generator<Self::Item>
     where
         Self: Sized + 'static,
@@ -61,6 +84,7 @@ pub trait Generate {
         boxed::Generator::new(self)
     }
 
+    /// Maps generated [`Generate::Item`] to an arbitrary type `T` using the provided function `F`.
     fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, T, F>
     where
         Self: Sized,
@@ -69,6 +93,7 @@ pub trait Generate {
         Map::new(self, map)
     }
 
+    /// Same as [`Generate::filter_with`] but with a predefined number of `retries`.
     fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
@@ -77,14 +102,20 @@ pub trait Generate {
         self.filter_with(256, filter)
     }
 
-    fn filter_with<F: Fn(&Self::Item) -> bool>(self, retry: usize, filter: F) -> Filter<Self, F>
+    /// Generates many [`Generate::Item`] with an increasingly large `size` until the filter function `F` is satisfied, up to
+    /// the maximum number of `retries`.
+    ///
+    /// Since this [`Generate`] implementation is not guaranteed to succeed, the item type is changed to a [`Option<Generate::Item>`]
+    /// where a [`None`] represents the failure to satisfy the filter.
+    fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
         Filter<Self, F>: Generate,
     {
-        Filter::new(self, filter, retry)
+        Filter::new(self, filter, retries)
     }
 
+    /// Same as [`Generate::filter_map_with`] but with a predefined number of `retries`.
     fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, T, F>
     where
         Self: Sized,
@@ -93,18 +124,21 @@ pub trait Generate {
         self.filter_map_with(256, map)
     }
 
+    /// Combines [`Generate::map`] and [`Generate::filter`] in a single [`Generate`] implementation where the map function
+    /// is considered to satisfy the filter when a [`Some(T)`] is produced.
     fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
         self,
-        retry: usize,
+        retries: usize,
         map: F,
     ) -> FilterMap<Self, T, F>
     where
         Self: Sized,
         FilterMap<Self, T, F>: Generate,
     {
-        FilterMap::new(self, map, retry)
+        FilterMap::new(self, map, retries)
     }
 
+    /// Combines [`Generate::map`] and [`Generate::flatten`] in a single [`Generate`] implementation.
     fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, G, F>>
     where
         Self: Sized,
@@ -114,6 +148,8 @@ pub trait Generate {
         self.map(map).flatten()
     }
 
+    /// Flattens the [`Generate::Item`], assuming that it implements [`Generate`]. The resulting item type is
+    /// `<Generate::Item as Generate>::Item`.
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
@@ -131,6 +167,7 @@ pub trait Generate {
         Any(self)
     }
 
+    /// Generates `N` items and fills an array with it.
     fn array<const N: usize>(self) -> Array<Self, N>
     where
         Self: Sized,

@@ -9,7 +9,7 @@ use crate::{
 pub struct FilterMap<I: ?Sized, T: ?Sized, F = fn(<I as Generate>::Item) -> Option<T>> {
     _marker: PhantomData<T>,
     map: F,
-    retry: usize,
+    retries: usize,
     inner: I,
 }
 
@@ -25,7 +25,7 @@ impl<I: Clone, T, F: Clone> Clone for FilterMap<I, T, F> {
         Self {
             inner: self.inner.clone(),
             map: self.map.clone(),
-            retry: self.retry,
+            retries: self.retries,
             _marker: PhantomData,
         }
     }
@@ -42,11 +42,11 @@ impl<I: Clone, T, F: Clone> Clone for Shrinker<I, T, F> {
 }
 
 impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, T, F> {
-    pub const fn new(generate: G, map: F, retry: usize) -> Self {
+    pub const fn new(generate: G, map: F, retries: usize) -> Self {
         Self {
             inner: generate,
             map,
-            retry,
+            retries,
             _marker: PhantomData,
         }
     }
@@ -63,8 +63,8 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             _marker: PhantomData,
         };
         let old = state.size;
-        for i in 0..self.retry {
-            let new = old + (1.0 - old) * (i as f64 / self.retry as f64);
+        for i in 0..self.retries {
+            let new = old + (1.0 - old) * (i as f64 / self.retries as f64);
             state.size = new.min(1.0).max(0.0);
             let inner = self.inner.generate(state);
             let item = inner.item();

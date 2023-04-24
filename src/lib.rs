@@ -18,15 +18,14 @@ pub mod sample;
 pub mod shrink;
 pub mod size;
 pub mod standard;
-mod utility;
+pub mod utility;
 
 pub use crate::{
+    any::Unify,
     generate::{FullGenerate, Generate, IntoGenerate},
     prove::Prove,
     shrink::{FullShrink, IntoShrink, Shrink},
-    utility::Nudge,
 };
-use any::Unify;
 use primitive::Range;
 use std::{
     fmt,
