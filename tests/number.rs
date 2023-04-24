@@ -27,12 +27,12 @@ mod range {
                 #[test]
                 #[should_panic]
                 fn empty_range() {
-                    <$t>::generator().bind(|value| value..value).check(COUNT, |_| true).unwrap();
+                    <$t>::generator().flat_map(|value| value..value).check(COUNT, |_| true).unwrap();
                 }
 
                 #[test]
                 fn is_same() -> Result {
-                    number::<$t>().bind(|value| (value, Same(value))).check(COUNT, |&(left, right)| left == right)?;
+                    number::<$t>().flat_map(|value| (value, Same(value))).check(COUNT, |&(left, right)| left == right)?;
                     Ok(())
                 }
 
@@ -41,7 +41,7 @@ mod range {
                     (number::<$t>(), number::<$t>())
                         .map(|(low, high)| (low.min($t::MAX - $t::MAX / 100 as $t), high.min($t::MAX - $t::MAX / 100 as $t)))
                         .map(|(low, high)| (low.min(high), low.max(high) + $t::MAX / 100 as $t))
-                        .bind(|(low, high)| (low..high, low, high))
+                        .flat_map(|(low, high)| (low..high, low, high))
                         .check(COUNT, |&(value, low, high)| value >= low && value < high)?;
                     Ok(())
                 }
@@ -50,14 +50,14 @@ mod range {
                 fn is_in_range_inclusive() -> Result {
                     (number::<$t>(), number::<$t>())
                         .map(|(low, high)| (low.min(high), low.max(high)))
-                        .bind(|(low, high)| (low..=high, low, high))
+                        .flat_map(|(low, high)| (low..=high, low, high))
                         .check(COUNT, |&(value, low, high)| value >= low && value <= high)?;
                     Ok(())
                 }
 
                 #[test]
                 fn is_in_range_from() -> Result {
-                    number::<$t>().bind(|low| (low, low..)).check(COUNT, |&(low, high)| low <= high)?;
+                    number::<$t>().flat_map(|low| (low, low..)).check(COUNT, |&(low, high)| low <= high)?;
                     Ok(())
                 }
 
@@ -65,14 +65,14 @@ mod range {
                 fn is_in_range_to() -> Result {
                     number::<$t>()
                         .map(|high| high.max($t::MIN + $t::MAX / 100 as $t))
-                        .bind(|high| (..high, high))
+                        .flat_map(|high| (..high, high))
                         .check(COUNT, |&(low, high)| low < high)?;
                     Ok(())
                 }
 
                 #[test]
                 fn is_in_range_to_inclusive() -> Result {
-                    number::<$t>().bind(|high| (..=high, high)).check(COUNT, |&(low, high)| low <= high)?;
+                    number::<$t>().flat_map(|high| (..=high, high)).check(COUNT, |&(low, high)| low <= high)?;
                     Ok(())
                 }
 
@@ -106,14 +106,14 @@ mod range {
                 #[test]
                 fn shrinks_to_low_or_high() -> Result {
                     number::<$t>()
-                        .bind(|value| {
+                        .flat_map(|value| {
                             if value < 0 as $t {
                                 (value..=value, value..=0 as $t)
                             } else {
                                 (0 as $t..=value, value..=value)
                             }
                         })
-                        .bind(|(low, high)| (low, high, low..=high))
+                        .flat_map(|(low, high)| (low, high, low..=high))
                         .check(COUNT, |&(low, high, value)| {
                             let mut outer = (low..=high).shrinker(value).unwrap();
                             while let Some(inner) = outer.shrink() {

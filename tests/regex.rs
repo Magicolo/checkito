@@ -18,7 +18,7 @@ fn generate_constant() -> Result {
     "[a-zA-Z0-9_]+"
         .parse::<Regex>()
         .unwrap()
-        .bind(|pattern| (pattern.parse::<Regex>().unwrap(), pattern))
+        .flat_map(|pattern| (pattern.parse::<Regex>().unwrap(), pattern))
         .check(COUNT, |(item, pattern)| item == pattern)?;
     Ok(())
 }

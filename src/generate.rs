@@ -105,13 +105,13 @@ pub trait Generate {
         FilterMap::new(self, map, retry)
     }
 
-    fn bind<G: Generate, F: Fn(Self::Item) -> G>(self, bind: F) -> Flatten<Map<Self, G, F>>
+    fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, G, F>>
     where
         Self: Sized,
         Map<Self, G, F>: Generate<Item = G>,
         Flatten<Map<Self, G, F>>: Generate,
     {
-        self.map(bind).flatten()
+        self.map(map).flatten()
     }
 
     fn flatten(self) -> Flatten<Self>

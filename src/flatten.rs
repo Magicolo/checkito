@@ -25,12 +25,11 @@ impl<G: Generate<Item = impl Generate> + ?Sized> Generate for Flatten<G> {
         state.depth += 1;
         let inner = item.generate(state);
         state.depth -= 1;
-        let shrink = Shrinker {
+        Shrinker {
             state: old,
             inner,
             outer,
-        };
-        shrink
+        }
     }
 }
 

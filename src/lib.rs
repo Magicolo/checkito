@@ -79,5 +79,5 @@ pub fn with<T>(provide: impl Fn() -> T + Clone) -> impl Generate<Item = T> {
 }
 
 pub fn lazy<G: Generate>(provide: impl Fn() -> G + Clone) -> impl Generate<Item = G::Item> {
-    ().bind(move |_| provide())
+    ().flat_map(move |_| provide())
 }

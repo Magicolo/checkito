@@ -11,7 +11,7 @@ use std::{
 #[should_panic]
 fn empty_range() {
     char::generator()
-        .bind(|value| value..value)
+        .flat_map(|value| value..value)
         .check(COUNT, |_| true)
         .unwrap();
 }
@@ -19,7 +19,7 @@ fn empty_range() {
 #[test]
 fn is_same() -> Result {
     char::generator()
-        .bind(|value| (value, Same(value)))
+        .flat_map(|value| (value, Same(value)))
         .check(COUNT, |&(left, right)| left == right)?;
     Ok(())
 }
@@ -56,7 +56,8 @@ macro_rules! collection {
             #[test]
             fn has_same_count() -> Result {
                 (0..COUNT)
-                    .bind(|count| (count, char::generator().collect_with::<_, $t>(count)))
+                    .generator()
+                    .flat_map(|count| (count, char::generator().collect_with::<_, $t>(count)))
                     .check(COUNT, |(count, value)| value $(.$i())? .count() == *count)?;
                 Ok(())
             }
