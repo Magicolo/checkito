@@ -58,6 +58,7 @@ pub trait Generate {
     /// Wraps `self` in a boxed [`Generate`]. This is mostly relevant for recursive [`Generate`] implementations where
     /// the type would otherwise be infinite.
     ///
+    /// # Examples
     /// ```
     /// use checkito::*;
     ///
@@ -69,11 +70,20 @@ pub trait Generate {
     /// fn node() -> impl Generate<Item = Node> {
     ///     (
     ///         with(|| Node::Leaf),
-    ///         // Without the [`Generate::boxed`], this type would be infinite.
-    ///         lazy(node).boxed().collect().map(Node::Branch)
+    ///         // Without [`Generate::boxed`], this type would be infinite.
+    ///         lazy(node).collect().map(Node::Branch).boxed()
     ///     )
     ///     .any()
     ///     .map(Unify::unify)
+    /// }
+    ///
+    /// fn choose(choose: bool) -> impl Generate<Item = char> {
+    ///     if choose {
+    ///         // Without [`Generate::boxed`], the `if/else` branches would not have the same type.
+    ///         letter().boxed()
+    ///     } else {
+    ///         digit().boxed()
+    ///     }
     /// }
     /// ```
     fn boxed(self) -> boxed::Generator<Self::Item>
