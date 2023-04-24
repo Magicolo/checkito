@@ -41,3 +41,7 @@ for value in composite.samples(1000) {
 ```
 
 _See the [examples](examples/) and [tests](tests/) folder for more detailed examples._
+
+## Alternatives
+- [proptest](https://crates.io/crates/proptest)
+- [quickcheck](https://crates.io/crates/quickcheck)
