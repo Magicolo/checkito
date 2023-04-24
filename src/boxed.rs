@@ -21,7 +21,7 @@ impl<I> Generate for Generator<I> {
     type Shrink = Shrinker<I>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        (self.generate)(&*self.inner, state)
+        (self.generate)(self.inner.as_ref(), state)
     }
 }
 
@@ -38,7 +38,7 @@ impl Generator<()> {
 }
 
 impl<I> Generator<I> {
-    pub fn cast<G: Generate + 'static>(self) -> Result<G, Self> {
+    pub fn downcast<G: Generate + 'static>(self) -> Result<G, Self> {
         match self.inner.downcast::<G>() {
             Ok(inner) => Ok(*inner),
             Err(inner) => Err(Self {
@@ -59,7 +59,7 @@ impl Shrinker<()> {
         }
     }
 
-    pub fn cast<G: Shrink + 'static>(self) -> Result<G, Self> {
+    pub fn downcast<G: Shrink + 'static>(self) -> Result<G, Self> {
         match self.inner.downcast::<G>() {
             Ok(inner) => Ok(*inner),
             Err(inner) => Err(Self {
@@ -75,7 +75,7 @@ impl Shrinker<()> {
 impl<I> Clone for Shrinker<I> {
     fn clone(&self) -> Self {
         Self {
-            inner: (self.clone)(&*self.inner),
+            inner: (self.clone)(self.inner.as_ref()),
             clone: self.clone,
             item: self.item,
             shrink: self.shrink,
@@ -87,12 +87,12 @@ impl<I> Shrink for Shrinker<I> {
     type Item = I;
 
     fn item(&self) -> Self::Item {
-        (self.item)(&*self.inner)
+        (self.item)(self.inner.as_ref())
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Self {
-            inner: (self.shrink)(&mut *self.inner)?,
+            inner: (self.shrink)(self.inner.as_mut())?,
             clone: self.clone,
             item: self.item,
             shrink: self.shrink,
