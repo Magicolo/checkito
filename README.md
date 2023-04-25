@@ -11,32 +11,36 @@ One would use this library to prove that certain properties hold for a program f
 
 ## Example
 
-```rust
+```rust, should_panic
 use checkito::{check::Error, regex::Regex, *};
 
 struct Composite(String, f64);
 
-// Parse this pattern as a `Regex` which implements the `Generate` trait.
-let regex = "[a-zA-Z0-9_]*".parse::<Regex>().unwrap();
-// `f64` ranges implement the `Generate` trait.
-let number = 10.0f64..;
-// Combine the previous `Generate` implementations and map them to a custom `struct`.
-let composite = (regex, number).map(|pair| Composite(pair.0, pair.1));
+fn main() {
+    // Parse this pattern as a [`Regex`] which implements the [`Generate`] trait. The '_' character is included in the regex
+    // to make the checks below fail (for illustration purposes).
+    let regex = "[a-zA-Z0-9_]*".parse::<Regex>().unwrap();
+    // [`f64`] ranges implement the [`Generate`] trait.
+    let number = 10.0f64..;
+    // Combine the previous [`Generate`] implementations and map them to a custom `struct`.
+    let composite = (regex, number).map(|pair| Composite(pair.0, pair.1));
 
-// Generate 1000 `Composite` values which are checked to be alphanumeric.
-// `Generate::check` will fail when a '_' will appear in `value.0` and the shrinking process will begin.
-let result: Result<_, _> = composite.check(1000, |value: &Composite| {
-    value.0.chars().all(|character| character.is_alphanumeric())
-});
-// `result` will be `Err` and will hold the original and shrunk values.
-let error: Error<Composite, _> = result.unwrap_err();
-let _original: &Composite = error.original();
-// The expected shrunk value is `Composite("_", 10.0)`.
-let _shrunk: &Composite = error.shrunk();
+    // Generate 1000 [`Composite`] values which are checked to be alphanumeric.
+    // [`Generate::check`] will fail when a '_' will appear in `value.0` and the shrinking process will begin.
+    let result: Result<_, _> = composite.check(1000, |value: &Composite| {
+        value.0.chars().all(|character| character.is_alphanumeric())
+    });
+    // `result` will be [`Err`] and will hold the original and shrunk values.
+    let error: Error<Composite, _> = result.unwrap_err();
+    let _original: &Composite = &error.original;
+    // The expected shrunk value is [`Composite("_", 10.0)`].
+    let _shrunk: &Option<Composite> = &error.shrunk;
 
-// Alternatively, generated samples can be retrieved directly, bypassing shrinking.
-for value in composite.samples(1000) {
-    assert!(value.0.chars().all(|character| character.is_alphanumeric()));
+    // Alternatively, generated samples can be retrieved directly, bypassing shrinking.
+    for value in composite.samples(1000) {
+        // This assertion is almost guaranteed to fail because of '_'.
+        assert!(value.0.chars().all(|character| character.is_alphanumeric()));
+    }
 }
 ```
 

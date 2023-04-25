@@ -10,10 +10,15 @@ license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
+build = "build.rs"
 
 [dependencies]
 fastrand = "1.9.0"
 regex-syntax = "0.7.1"
 
 [dev-dependencies]
-regex = "1.8.1"
+regex = "*"
+skeptic = "*"
+
+[build-dependencies]
+skeptic = "*"
