@@ -13,12 +13,12 @@ categories = ["development-tools::testing"]
 build = "build.rs"
 
 [dependencies]
-fastrand = "1.9.0"
-regex-syntax = "0.7.1"
+fastrand = "1.9"
+regex-syntax = "0.7"
 
 [dev-dependencies]
-regex = "*"
-skeptic = "*"
+regex = "1.8"
+skeptic = "0.13"
 
 [build-dependencies]
-skeptic = "*"
+skeptic = "0.13"
