@@ -55,7 +55,7 @@ pub trait Generate {
     /// [`Generate::Item`] and shrink itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
-    /// Wraps `self` in a boxed [`Generate`]. This is mostly relevant for recursive [`Generate`] implementations where
+    /// Wraps `self` in a boxed [`Generate`]. This is notably relevant for recursive [`Generate`] implementations where
     /// the type would otherwise be infinite.
     ///
     /// # Examples
