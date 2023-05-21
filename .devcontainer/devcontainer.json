@@ -1,0 +1,28 @@
+{
+    "image": "ubuntu",
+    "features": {
+        "ghcr.io/devcontainers/features/git:latest": {},
+        "ghcr.io/devcontainers/features/git-lfs:latest": {},
+        "ghcr.io/devcontainers/features/common-utils:latest": {},
+        "ghcr.io/devcontainers/features/rust:latest": {
+            "profile": "default"
+        },
+        "ghcr.io/lee-orr/rusty-dev-containers/cargo-expand:latest": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "streetsidesoftware.code-spell-checker",
+                "github.vscode-github-actions",
+                "PKief.material-icon-theme",
+                "mutantdino.resourcemonitor",
+                "yzhang.markdown-all-in-one",
+                "mhutchie.git-graph",
+                "vadimcn.vscode-lldb",
+                "serayuzgur.crates",
+                "rust-lang.rust-analyzer"
+            ]
+        }
+    },
+    "postStartCommand": "rustup update"
+}
