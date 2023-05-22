@@ -24,5 +24,6 @@
             ]
         }
     },
-    "postStartCommand": "rustup update"
+    "postCreateCommand": "rustup install nightly && rustup component add rustfmt clippy && rustup +nightly component add miri",
+    "postAttachCommand": "rustup update && cargo clean && cargo update && cargo build"
 }
