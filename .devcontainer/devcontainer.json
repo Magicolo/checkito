@@ -24,6 +24,9 @@
             ]
         }
     },
-    "postCreateCommand": "rustup install nightly && rustup component add rustfmt clippy && rustup +nightly component add miri",
+    "postCreateCommand": {
+        "git": "git config --global user.email magicololand@gmail.com && git config --global user.name Magicolo",
+        "rust": "rustup install stable && rustup default stable && rustup component add rustfmt clippy"
+    },
     "postAttachCommand": "rustup update && cargo clean && cargo update && cargo build"
 }
