@@ -16,3 +16,17 @@ fn integer_shrink_to_minimum() {
         }
     }
 }
+
+#[test]
+fn vec_removes_irrelevant_then_shrinks() {
+    let error = (..100usize)
+        .collect::<Vec<_>>()
+        .check(COUNT, |items| {
+            items.len() < 10 || items.iter().all(|&item| item < 10)
+        })
+        .err()
+        .unwrap();
+    let shrunk = error.shrunk();
+    assert_eq!(shrunk.len(), 10);
+    assert_eq!(shrunk.iter().filter(|&&item| item == 10).count(), 1);
+}

@@ -36,7 +36,7 @@ impl<G: ?Sized> Clone for Sampler<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
     pub fn sample(&self, size: f64) -> G::Item {
-        let mut state = State::new(size.min(0.0).max(1.0), self.seed);
+        let mut state = State::new(size, self.seed);
         self.generate.generate(&mut state).item()
     }
 
