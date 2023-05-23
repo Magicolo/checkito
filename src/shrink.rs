@@ -1,4 +1,5 @@
 use crate::{boxed, tuples};
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug)]
 pub struct All<T: ?Sized> {
@@ -102,11 +103,11 @@ macro_rules! tuple {
             }
 
             fn shrink(&mut self) -> Option<Self> {
-                let count = $c;
+                let count = NonZeroUsize::new($c)?;
                 let start = self.index;
                 self.index += 1;
-                for i in 0..count {
-                    let index = (start + i) % count;
+                for i in 0..count.get() {
+                    let index = (start + i) % count.get();
                     match index {
                         $($i => {
                             if let Some(shrink) = self.inner.$i.shrink() {
