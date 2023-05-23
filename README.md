@@ -1,4 +1,5 @@
 # checkito
+![test](https://github.com/Magicolo/checkito/actions/workflows/test.yml/badge.svg)
 
 A simple [quickcheck](https://hackage.haskell.org/package/QuickCheck) inspired library to generate growable/shrinkable random data mainly oriented towards generative/property/exploratory testing.
 
