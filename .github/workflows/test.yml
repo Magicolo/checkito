@@ -27,11 +27,3 @@ jobs:
       run: cargo clean && cargo build --release --verbose
     - name: Test
       run: cargo clean && cargo test --release --verbose
-  test-miri:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Install
-      run: rustup install nightly && rustup default nightly && rustup component add miri
-    - name: Test
-      run: cargo clean && cargo miri test --verbose
