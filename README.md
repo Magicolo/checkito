@@ -1,9 +1,16 @@
-# checkito
-![test](https://github.com/Magicolo/checkito/actions/workflows/test.yml/badge.svg)
+<div align="center"> <h1> checkito </h1> </div>
 
-A simple [quickcheck](https://hackage.haskell.org/package/QuickCheck) inspired library to generate growable/shrinkable random data mainly oriented towards generative/property/exploratory testing.
+<p align="center">
+    <em> A simple <a href="https://hackage.haskell.org/package/QuickCheck">QuickCheck</a> inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing. One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space. </em>
+</p>
 
-One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space.
+<div align="right">
+    <a href="https://github.com/Magicolo/checkito/actions/workflows/test.yml"> <img src="https://github.com/Magicolo/checkito/actions/workflows/test.yml/badge.svg"> </a>
+    <a href="https://crates.io/crates/checkito"> <img src="https://img.shields.io/crates/v/checkito.svg"> </a>
+</div>
+<p/>
+
+---
 
 -   The [`Generate`](src/generate.rs) trait that is implemented for many of rust's standard types allows the generation of any random composite data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
 -   The [`Shrink`](src/shrink.rs) trait tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk out of its range). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, etc..
