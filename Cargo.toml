@@ -18,7 +18,7 @@ regex-syntax = "0.7"
 
 [dev-dependencies]
 regex = "1.8"
-criterion = "0.4"
+criterion = "0.5"
 skeptic = "0.13"
 
 [build-dependencies]
