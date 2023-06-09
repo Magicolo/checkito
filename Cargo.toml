@@ -13,7 +13,7 @@ categories = ["development-tools::testing"]
 build = "build.rs"
 
 [dependencies]
-fastrand = "1.9"
+fastrand = "2.0"
 regex-syntax = "0.7"
 
 [dev-dependencies]
