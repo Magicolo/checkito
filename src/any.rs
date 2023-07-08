@@ -25,7 +25,7 @@ impl<W: Generate<Item = f64>, T> Weight<W, T> {
 }
 
 fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
-    if items.len() == 0 {
+    if items.is_empty() {
         None
     } else {
         items.get(state.random().usize(0..items.len()))

@@ -4,7 +4,7 @@ use common::*;
 
 #[test]
 fn generate_matches_regex() -> Result {
-    const PATTERN: &'static str = "((a|b)*[A-Z]*[\\u0000-\\u0FFF^\\u00AF-\\u00FF]*c{4}d{2,10})+";
+    const PATTERN: &str = "((a|b)*[A-Z]*[\\u0000-\\u0FFF^\\u00AF-\\u00FF]*c{4}d{2,10})+";
     let matcher = ::regex::RegexBuilder::new(PATTERN).build().unwrap();
     PATTERN
         .parse::<Regex>()
@@ -35,6 +35,6 @@ fn range_shrinks() {
     assert!(error
         .original
         .chars()
-        .all(|symbol| symbol >= 'a' && symbol <= 'z'));
+        .all(|symbol| symbol.is_ascii_lowercase()));
     assert!(error.shrunk() == "wy" || error.shrunk() == "yw");
 }

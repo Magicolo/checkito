@@ -39,11 +39,9 @@ impl<S: FullShrink, const N: usize> FullShrink for Array<S, N> {
     type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        let mut index = 0;
         let mut shrinks = [(); N].map(|_| None);
-        for item in item {
-            shrinks[index] = Some(S::shrinker(item)?);
-            index += 1;
+        for (i, item) in item.into_iter().enumerate() {
+            shrinks[i] = Some(S::shrinker(item)?);
         }
         Some(All::new(shrinks.map(Option::unwrap)))
     }
@@ -54,11 +52,9 @@ impl<S: IntoShrink, const N: usize> IntoShrink for Array<S, N> {
     type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        let mut index = 0;
         let mut shrinks = [(); N].map(|_| None);
-        for item in item {
-            shrinks[index] = Some(self.0.shrinker(item)?);
-            index += 1;
+        for (i, item) in item.into_iter().enumerate() {
+            shrinks[i] = Some(self.0.shrinker(item)?);
         }
         Some(All::new(shrinks.map(Option::unwrap)))
     }
@@ -101,11 +97,9 @@ impl<S: FullShrink, const N: usize> FullShrink for [S; N] {
     type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        let mut index = 0;
         let mut shrinks = [(); N].map(|_| None);
-        for item in item {
-            shrinks[index] = Some(S::shrinker(item)?);
-            index += 1;
+        for (i, item) in item.into_iter().enumerate() {
+            shrinks[i] = Some(S::shrinker(item)?);
         }
         Some(All::new(shrinks.map(Option::unwrap)))
     }
@@ -116,11 +110,9 @@ impl<S: IntoShrink, const N: usize> IntoShrink for [S; N] {
     type Shrink = All<[S::Shrink; N]>;
 
     fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        let mut index = 0;
         let mut shrinks = [(); N].map(|_| None);
-        for item in item {
-            shrinks[index] = Some(self[index].shrinker(item)?);
-            index += 1;
+        for (i, item) in item.into_iter().enumerate() {
+            shrinks[i] = Some(self[i].shrinker(item)?);
         }
         Some(All::new(shrinks.map(Option::unwrap)))
     }

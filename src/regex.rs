@@ -56,10 +56,10 @@ impl Generate for Regex {
                 HirKind::Literal(literal) => {
                     Shrinker::Text(String::from_utf8(literal.0.to_vec()).unwrap())
                 }
-                HirKind::Class(Class::Unicode(class)) if class.ranges().len() == 0 => {
+                HirKind::Class(Class::Unicode(class)) if class.ranges().is_empty() => {
                     Shrinker::Empty
                 }
-                HirKind::Class(Class::Bytes(class)) if class.ranges().len() == 0 => Shrinker::Empty,
+                HirKind::Class(Class::Bytes(class)) if class.ranges().is_empty() => Shrinker::Empty,
                 HirKind::Class(Class::Unicode(class)) => {
                     Shrinker::Range(class.ranges().any().generate(state).unwrap())
                 }
@@ -67,7 +67,7 @@ impl Generate for Regex {
                     Shrinker::Range(class.ranges().any().generate(state).unwrap())
                 }
                 HirKind::Capture(Capture { sub, .. }) => next(sub.kind(), state, repeats),
-                HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.len() == 0 => {
+                HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.is_empty() => {
                     Shrinker::Empty
                 }
                 HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.len() == 1 => {

@@ -17,6 +17,6 @@ fn first_size_is_0_and_false() {
     let error = result.err().unwrap();
     assert_eq!(error.state.size(), 0.);
     assert_eq!(error.cause, Cause::Disprove(false));
-    assert_eq!(error.original, false);
+    assert!(!error.original);
     assert_eq!(error.shrunk, None);
 }

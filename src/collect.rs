@@ -277,11 +277,7 @@ impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
     type Item = BTreeMap<K, V::Item>;
     type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(
-            self.into_iter()
-                .map(|(key, value)| (Same(key.clone()), value)),
-        )
-        .generate(state)
+        Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
 }
 
@@ -336,11 +332,7 @@ impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for H
     type Item = HashMap<K, V::Item, S>;
     type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(
-            self.into_iter()
-                .map(|(key, value)| (Same(key.clone()), value)),
-        )
-        .generate(state)
+        Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
 }
 

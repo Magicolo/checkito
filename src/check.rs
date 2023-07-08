@@ -65,7 +65,7 @@ pub enum Cause<P> {
 
 impl<T, P> Error<T, P> {
     pub fn shrunk(&self) -> &T {
-        &self.shrunk.as_ref().unwrap_or(&self.original)
+        self.shrunk.as_ref().unwrap_or(&self.original)
     }
 }
 
@@ -228,7 +228,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Check
 }
 
 fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, check: &mut F) -> Option<Cause<P>> {
-    let error = match panic::catch_unwind(AssertUnwindSafe(|| check(&item))) {
+    let error = match panic::catch_unwind(AssertUnwindSafe(|| check(item))) {
         Ok(prove) if prove.prove() => return None,
         Ok(prove) => return Some(Cause::Disprove(prove)),
         Err(error) => error,

@@ -7,7 +7,9 @@
         "ghcr.io/devcontainers/features/rust:latest": {
             "profile": "default"
         },
-        "ghcr.io/lee-orr/rusty-dev-containers/cargo-expand:latest": {}
+        "ghcr.io/lee-orr/rusty-dev-containers/cargo-expand:latest": {},
+        "ghcr.io/lee-orr/rusty-dev-containers/cargo-audit:latest": {},
+        "ghcr.io/lee-orr/rusty-dev-containers/cargo-watch:latest": {}
     },
     "customizations": {
         "vscode": {

@@ -68,7 +68,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             state.size = new.min(1.0).max(0.0);
             let inner = self.inner.generate(state);
             let item = inner.item();
-            if let Some(_) = (self.map)(item) {
+            if (self.map)(item).is_some() {
                 outer.inner = Some(inner);
                 break;
             }

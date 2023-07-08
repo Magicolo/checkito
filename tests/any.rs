@@ -12,9 +12,9 @@ fn weighted_any() {
         .map(Unify::<i32>::unify)
         .samples(1000)
         .collect::<Vec<_>>();
-    let _1 = samples.iter().filter(|&&value| value == 1).count();
-    let _10 = samples.iter().filter(|&&value| value == 10).count();
-    let _100 = samples.iter().filter(|&&value| value == 100).count();
-    assert!(_1 < _10);
-    assert!(_10 < _100);
+    let one = samples.iter().filter(|&&value| value == 1).count();
+    let ten = samples.iter().filter(|&&value| value == 10).count();
+    let hundred = samples.iter().filter(|&&value| value == 100).count();
+    assert!(one < ten);
+    assert!(ten < hundred);
 }

@@ -49,7 +49,7 @@ impl<G: Generate, T, F: Fn(G::Item) -> T> Map<G, T, F> {
     }
 }
 
-impl<'a, S: Shrink, T, F: Fn(S::Item) -> T> Shrinker<S, T, F> {
+impl<S: Shrink, T, F: Fn(S::Item) -> T> Shrinker<S, T, F> {
     pub const fn new(shrink: S, map: F) -> Self {
         Self {
             inner: shrink,

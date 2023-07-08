@@ -390,7 +390,7 @@ pub mod character {
             let start = match range.start_bound() {
                 Bound::Included(&bound) => bound as u32,
                 Bound::Excluded(&bound) => (bound as u32).checked_add(1).ok_or(Error::Overflow)?,
-                Bound::Unbounded => 0 as u32,
+                Bound::Unbounded => 0u32,
             };
             let end = match range.end_bound() {
                 Bound::Included(&bound) => bound as u32,
@@ -417,7 +417,7 @@ pub mod character {
             Shrinker(super::Shrinker::new(Self::range().0, item as u32))
         }
 
-        const fn special<'a>() -> impl Generate<Item = char, Shrink = char> {
+        const fn special() -> impl Generate<Item = char, Shrink = char> {
             struct Special;
             impl Generate for Special {
                 type Item = char;
@@ -534,7 +534,7 @@ pub mod number {
                     Shrinker::new(Self::range(), item)
                 }
 
-                const fn special<'a>() -> impl Generate<Item = $t, Shrink = $t> {
+                const fn special() -> impl Generate<Item = $t, Shrink = $t> {
                     struct Special;
                     impl Generate for Special {
                         type Item = $t;
@@ -635,7 +635,7 @@ pub mod number {
     macro_rules! floating {
         ($t:ident) => {
             impl Full<$t> {
-                const fn special<'a>() -> impl Generate<Item = $t, Shrink = $t> {
+                const fn special() -> impl Generate<Item = $t, Shrink = $t> {
                     struct Special;
                     impl Generate for Special {
                         type Item = $t;
