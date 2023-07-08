@@ -148,9 +148,7 @@ where
             batch(
                 self.generator,
                 &mut results,
-                0,
-                1,
-                count,
+                (0, 1, count),
                 self.shrinks,
                 (&errors, self.errors),
                 &random,
@@ -168,9 +166,7 @@ where
                         batch(
                             self.generator,
                             &mut results,
-                            offset,
-                            parallel,
-                            count,
+                            (offset, parallel, count),
                             self.shrinks,
                             (errors, self.errors),
                             &Rng::with_seed(seed),
@@ -183,9 +179,7 @@ where
                 batch(
                     self.generator,
                     &mut results,
-                    parallel - 1,
-                    parallel,
-                    count,
+                    (parallel - 1, parallel, count),
                     self.shrinks,
                     (&errors, self.errors),
                     &random,
@@ -296,12 +290,11 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
     Err(error)
 }
 
+type Results<G, P> = Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>;
 fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     generator: &G,
-    results: &mut Vec<Result<G::Item, Error<G::Item, P>>>,
-    offset: usize,
-    step: usize,
-    count: usize,
+    results: &mut Results<G, P>,
+    (offset, step, count): (usize, usize, usize),
     shrinks: Shrinks,
     errors: (&AtomicUsize, usize),
     random: &Rng,

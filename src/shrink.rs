@@ -98,6 +98,7 @@ macro_rules! tuple {
         impl<$($t: Shrink,)*> Shrink for All<($($t,)*)> {
             type Item = ($($t::Item,)*);
 
+            #[allow(clippy::unused_unit)]
             fn item(&self) -> Self::Item {
                 ($(self.inner.$i.item(),)*)
             }

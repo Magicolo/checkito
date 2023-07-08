@@ -420,6 +420,7 @@ macro_rules! tuple {
             type Item = ($($t::Item,)*);
             type Generate = ($($t::Generate,)*);
 
+            #[allow(clippy::unused_unit)]
             fn generator() -> Self::Generate {
                 ($($t::generator(),)*)
             }
@@ -429,6 +430,7 @@ macro_rules! tuple {
             type Item = ($($t::Item,)*);
             type Generate = ($($t::Generate,)*);
 
+            #[allow(clippy::unused_unit)]
             fn generator(self) -> Self::Generate {
                 ($(self.$i.generator(),)*)
             }

@@ -46,7 +46,7 @@ impl fmt::Debug for Node {
 }
 
 fn main() {
-    use checkito::{any::Unify, *};
+    use checkito::*;
 
     /// For reusability, the json string [`Generate`] implementation is factored out here.
     fn string() -> impl Generate<Item = Node> {
