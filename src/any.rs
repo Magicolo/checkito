@@ -1,3 +1,5 @@
+use std::mem::transmute;
+
 use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
@@ -90,7 +92,7 @@ where
     type Shrink = <Any<G> as Generate>::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        unsafe { &*(self.0 as *const G as *const Any<G>) }.generate(state)
+        unsafe { transmute::<&G, &Any<G>>(self.0) }.generate(state)
     }
 }
 
