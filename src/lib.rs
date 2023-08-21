@@ -73,10 +73,10 @@ pub fn ascii() -> impl Generate<Item = char> {
     0 as char..127 as char
 }
 
-pub fn with<T>(provide: impl Fn() -> T + Clone) -> impl Generate<Item = T> {
-    ().map(move |_| provide())
+pub fn with<T>(generate: impl Fn() -> T + Clone) -> impl Generate<Item = T> {
+    ().map(move |_| generate())
 }
 
-pub fn lazy<G: Generate>(provide: impl Fn() -> G + Clone) -> impl Generate<Item = G::Item> {
-    ().flat_map(move |_| provide())
+pub fn lazy<G: Generate>(generate: impl Fn() -> G + Clone) -> impl Generate<Item = G::Item> {
+    ().flat_map(move |_| generate())
 }
