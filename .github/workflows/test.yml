@@ -7,26 +7,12 @@ on:
     branches: ["master"]
 
 jobs:
-  debug:
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - name: Install
-      run: rustup install stable && rustup default stable && cargo install cargo-audit
-    - name: Build
-      run: cargo build --verbose
-    - name: Test
-      run: cargo test --verbose
-    - name: Clippy
-      run: cargo clippy --verbose -- -D warnings
-    - name: Audit
-      run: cargo audit
-  release:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Install
-      run: rustup install stable && rustup default stable && cargo install cargo-audit
+      run: rustup install stable && rustup default stable && cargo install cargo-audit && cargo install cargo-msrv
     - name: Build
       run: cargo build --release --verbose
     - name: Test
@@ -35,3 +21,5 @@ jobs:
       run: cargo clippy --release --verbose -- -D warnings
     - name: Audit
       run: cargo audit
+    - name: Minmal version
+      run: cargo msrv verify

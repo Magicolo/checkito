@@ -27,6 +27,7 @@
         }
     },
     "postCreateCommand": {
+        "package": "apt-get update && apt-get upgrade --yes && apt-get install --yes pkg-config libssl-dev",
         "git": "git config --global user.email magicololand@gmail.com && git config --global user.name Magicolo",
         "rust": "rustup install stable && rustup default stable && rustup component add rustfmt clippy"
     },
