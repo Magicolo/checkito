@@ -361,8 +361,8 @@ impl State {
         self.seed
     }
 
-    pub const fn random(&self) -> &Rng {
-        &self.random
+    pub fn random(&mut self) -> &mut Rng {
+        &mut self.random
     }
 }
 

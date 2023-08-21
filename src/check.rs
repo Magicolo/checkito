@@ -142,7 +142,7 @@ where
         };
         let mut results = Vec::with_capacity(count);
         let errors = AtomicUsize::new(0);
-        let random = self.seed.map_or_else(Rng::new, Rng::with_seed);
+        let mut random = self.seed.map_or_else(Rng::new, Rng::with_seed);
         let capacity = divide_ceiling(count, parallel);
         if capacity <= 8 || count < 32 {
             batch(
@@ -151,7 +151,7 @@ where
                 (0, 1, count),
                 self.shrinks,
                 (&errors, self.errors),
-                &random,
+                &mut random,
                 check,
             );
         } else {
@@ -169,7 +169,7 @@ where
                             (offset, parallel, count),
                             self.shrinks,
                             (errors, self.errors),
-                            &Rng::with_seed(seed),
+                            &mut Rng::with_seed(seed),
                             check,
                         );
                         results
@@ -182,7 +182,7 @@ where
                     (parallel - 1, parallel, count),
                     self.shrinks,
                     (&errors, self.errors),
-                    &random,
+                    &mut random,
                     &check,
                 );
 
@@ -297,7 +297,7 @@ fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     (offset, step, count): (usize, usize, usize),
     shrinks: Shrinks,
     errors: (&AtomicUsize, usize),
-    random: &Rng,
+    random: &mut Rng,
     check: F,
 ) {
     for index in (offset..count).step_by(step) {
