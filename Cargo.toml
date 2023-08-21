@@ -11,6 +11,7 @@ repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
 build = "build.rs"
+rust-version = "1.63"
 
 [dependencies]
 fastrand = "2.0"

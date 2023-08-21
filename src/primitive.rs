@@ -33,6 +33,8 @@ enum Direction {
     High,
 }
 
+struct Special<T>(PhantomData<T>);
+
 #[derive(Clone, Debug)]
 pub struct Shrinker<T> {
     range: Range<T>,
@@ -385,6 +387,34 @@ pub mod character {
     #[derive(Clone, Debug)]
     pub struct Shrinker(super::Shrinker<u32>);
 
+    impl Generate for Special<char> {
+        type Item = char;
+        type Shrink = char;
+
+        fn generate(&self, state: &mut State) -> Self::Shrink {
+            (
+                '\\',
+                '\x0B',
+                '\x1B',
+                '\x7F',
+                '\u{0000}',
+                '\u{D7FF}',
+                '\u{E000}',
+                '\u{FEFF}',
+                '\u{202E}',
+                '¥',
+                'Ѩ',
+                'Ⱥ',
+                '🕴',
+                char::MAX,
+                char::REPLACEMENT_CHARACTER,
+            )
+                .any()
+                .generate(state)
+                .unify()
+        }
+    }
+
     impl Range {
         pub fn char(range: impl ops::RangeBounds<char>) -> Result<Self, Error> {
             let start = match range.start_bound() {
@@ -417,36 +447,8 @@ pub mod character {
             Shrinker(super::Shrinker::new(Self::range().0, item as u32))
         }
 
-        const fn special() -> impl Generate<Item = char, Shrink = char> {
-            struct Special;
-            impl Generate for Special {
-                type Item = char;
-                type Shrink = char;
-
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    (
-                        '\\',
-                        '\x0B',
-                        '\x1B',
-                        '\x7F',
-                        '\u{0000}',
-                        '\u{D7FF}',
-                        '\u{E000}',
-                        '\u{FEFF}',
-                        '\u{202E}',
-                        '¥',
-                        'Ѩ',
-                        'Ⱥ',
-                        '🕴',
-                        char::MAX,
-                        char::REPLACEMENT_CHARACTER,
-                    )
-                        .any()
-                        .generate(state)
-                        .unify()
-                }
-            }
-            Special
+        const fn special() -> Special<char> {
+            Special(PhantomData)
         }
     }
 
@@ -477,7 +479,7 @@ pub mod character {
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             match state.random().u8(..) {
-                ..=253 => Self::range().generate(state),
+                0..=253 => Self::range().generate(state),
                 254.. => Self::shrink(Self::special().generate(state)),
             }
         }
@@ -525,6 +527,15 @@ pub mod number {
 
     macro_rules! integer {
         ($t:ident) => {
+            impl Generate for Special<$t> {
+                type Item = $t;
+                type Shrink = $t;
+
+                fn generate(&self, state: &mut State) -> Self::Shrink {
+                    (0 as $t, $t::MIN, $t::MAX).any().generate(state).unify()
+                }
+            }
+
             impl Full<$t> {
                 const fn range() -> Range<$t> {
                     Range { start: $t::MIN, end: $t::MAX }
@@ -534,17 +545,8 @@ pub mod number {
                     Shrinker::new(Self::range(), item)
                 }
 
-                const fn special() -> impl Generate<Item = $t, Shrink = $t> {
-                    struct Special;
-                    impl Generate for Special {
-                        type Item = $t;
-                        type Shrink = $t;
-
-                        fn generate(&self, state: &mut State) -> Self::Shrink {
-                            (0 as $t, $t::MIN, $t::MAX).any().generate(state).unify()
-                        }
-                    }
-                    Special
+                const fn special() -> Special<$t> {
+                    Special(PhantomData)
                 }
             }
 
@@ -634,21 +636,21 @@ pub mod number {
 
     macro_rules! floating {
         ($t:ident) => {
-            impl Full<$t> {
-                const fn special() -> impl Generate<Item = $t, Shrink = $t> {
-                    struct Special;
-                    impl Generate for Special {
-                        type Item = $t;
-                        type Shrink = $t;
+            impl Generate for Special<$t> {
+                type Item = $t;
+                type Shrink = $t;
 
-                        fn generate(&self, state: &mut State) -> Self::Shrink {
-                            (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)
-                                .any()
-                                .generate(state)
-                                .unify()
-                        }
-                    }
-                    Special
+                fn generate(&self, state: &mut State) -> Self::Shrink {
+                    (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)
+                        .any()
+                        .generate(state)
+                        .unify()
+                }
+            }
+
+            impl Full<$t> {
+                const fn special() -> Special<$t> {
+                    Special(PhantomData)
                 }
 
                 const fn range() -> Range<$t> {
@@ -726,7 +728,7 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
-                        ..=93 => Self::sub_range().shrinked(state.size()).generate(state),
+                        0..=93 => Self::sub_range().shrinked(state.size()).generate(state),
                         94..=187 => Self::sub_range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
                         188..=219 => Self::range().shrinked(state.size()).generate(state),
                         220..=251 => Self::range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
