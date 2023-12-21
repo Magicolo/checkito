@@ -14,14 +14,13 @@ build = "build.rs"
 rust-version = "1.63"
 
 [dependencies]
-fastrand = "2.0"
-regex-syntax = "0.7"
+fastrand = "2.0.1"
+regex-syntax = "0.8.2"
 
 [dev-dependencies]
-regex = "1.9"
-criterion = "0.5"
-skeptic = "0.12"
+regex = "1.10.2"
+criterion = "0.5.1"
+skeptic = "0.13.7"
 
 [build-dependencies]
-# Keep skeptic to version 0.12 until the dependency bug with 'cargo-metadata' is fixed...
-skeptic = "0.12"
+skeptic = "0.13.7"

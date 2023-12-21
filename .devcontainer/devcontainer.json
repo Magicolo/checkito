@@ -22,7 +22,8 @@
                 "mhutchie.git-graph",
                 "vadimcn.vscode-lldb",
                 "serayuzgur.crates",
-                "rust-lang.rust-analyzer"
+                "rust-lang.rust-analyzer",
+                "Codeium.codeium"
             ]
         }
     },
