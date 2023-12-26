@@ -9,10 +9,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install
-      run: rustup install stable && rustup default stable && cargo install cargo-audit && cargo install cargo-msrv
+      run: rustup component add clippy && cargo install cargo-audit cargo-msrv
     - name: Build
       run: cargo build --release --verbose
     - name: Test
