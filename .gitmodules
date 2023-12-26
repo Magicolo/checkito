@@ -1,3 +1,6 @@
 [submodule ".devcontainer"]
 	path = .devcontainer
-	url = git@github.com:Magicolo/ci-rust.git
+	url = git@github.com:Magicolo/ci-devcontainer-rust.git
+[submodule ".github"]
+	path = .github
+	url = git@github.com:Magicolo/ci-github-rust.git
