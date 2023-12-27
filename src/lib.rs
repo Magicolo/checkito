@@ -26,7 +26,6 @@ pub use crate::{
     prove::Prove,
     shrink::{FullShrink, IntoShrink, Shrink},
 };
-use map::Map;
 use primitive::Range;
 use std::{
     fmt,
