@@ -26,6 +26,7 @@ pub use crate::{
     prove::Prove,
     shrink::{FullShrink, IntoShrink, Shrink},
 };
+use map::Map;
 use primitive::Range;
 use std::{
     fmt,
@@ -62,21 +63,21 @@ where
 }
 
 pub fn letter() -> impl Generate<Item = char> {
-    ('a'..='z', 'A'..='Z').any().map(Unify::unify)
+    ('a'..='z', 'A'..='Z').generator().any().map(Unify::unify)
 }
 
 pub fn digit() -> impl Generate<Item = char> {
-    '0'..='9'
+    ('0'..='9').generator()
 }
 
 pub fn ascii() -> impl Generate<Item = char> {
-    0 as char..127 as char
+    (0 as char..127 as char).generator()
 }
 
-pub fn with<T>(generate: impl Fn() -> T + Clone) -> impl Generate<Item = T> {
+pub fn with<T, F: Fn() -> T + Clone>(generate: F) -> impl Generate<Item = T> {
     ().map(move |_| generate())
 }
 
-pub fn lazy<G: Generate>(generate: impl Fn() -> G + Clone) -> impl Generate<Item = G::Item> {
+pub fn lazy<G: Generate, F: Fn() -> G + Clone>(generate: F) -> impl Generate<Item = G::Item> {
     ().flat_map(move |_| generate())
 }
