@@ -1,0 +1,27 @@
+name: test
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install
+      run: rustup component add clippy && cargo install cargo-audit cargo-msrv
+    - name: Build
+      run: cargo build --release --verbose
+    - name: Test
+      run: cargo test --release --verbose
+    - name: Clippy
+      run: cargo clippy --release --verbose -- -D warnings
+    - name: Audit
+      run: cargo audit
+    - name: Minmal version
+      run: cargo msrv verify
