@@ -1,4 +1,3 @@
-/target
-/Cargo.lock
-.vscode
-checkito_macro/Cargo.lock
+**/target
+**/Cargo.lock
+/.vscode
