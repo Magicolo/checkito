@@ -25,5 +25,3 @@ skeptic = "0.13.7"
 
 [build-dependencies]
 skeptic = "0.13.7"
-
-workspace = { members = ["checkito_macro"] }
