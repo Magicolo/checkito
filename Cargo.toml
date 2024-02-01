@@ -16,6 +16,7 @@ rust-version = "1.65.0"
 [dependencies]
 fastrand = "2.0.1"
 regex-syntax = "0.8.2"
+checkito_macro = { path = "checkito_macro" }
 
 [dev-dependencies]
 regex = "1.10.2"
@@ -24,3 +25,5 @@ skeptic = "0.13.7"
 
 [build-dependencies]
 skeptic = "0.13.7"
+
+workspace = { members = ["checkito_macro"] }

@@ -1,12 +1,3 @@
-use std::mem::MaybeUninit;
-
-#[macro_export]
-macro_rules! count {
-    () => { 0 };
-    ($v:ident $(,$vs:ident)*) => {1 + $crate::count!($($vs),*) };
-}
-
-#[macro_export]
 macro_rules! tuples {
     ($m:ident) => {
         $m!(tuples0, 0);
@@ -60,6 +51,7 @@ macro_rules! tuples {
         );
     };
 }
+pub(crate) use tuples;
 
 pub trait Nudge {
     fn nudge(self, force: Self) -> Self;
@@ -84,45 +76,3 @@ macro_rules! floating {
 }
 
 floating!(f32, f64);
-
-pub trait Unzip {
-    type Target;
-    fn unzip(self) -> Self::Target;
-}
-
-macro_rules! unzip {
-    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t,)* const N: usize> Unzip for [($($t,)*); N] {
-            type Target = ($([$t; N],)*);
-
-            #[allow(clippy::unused_unit)]
-            fn unzip(self) -> Self::Target {
-                let mut _uninits = ($(MaybeUninit::<[$t; N]>::uninit(),)*);
-                let mut _pointers = ($(_uninits.$i.as_mut_ptr() as *mut $t,)*);
-                for (_i, _items) in self.into_iter().enumerate() {
-                    $(unsafe { _pointers.$i.add(_i).write(_items.$i); })*
-                }
-                ($(unsafe { _uninits.$i.assume_init() },)*)
-            }
-        }
-    };
-}
-
-tuples!(unzip);
-
-#[test]
-fn unzip2() -> Result<(), Box<dyn std::error::Error>> {
-    use crate::generate::*;
-    usize::generator()
-        .map(|value| (value, value))
-        .array::<100>()
-        .map(|tuples| tuples.unzip())
-        .check(1000, |arrays| {
-            arrays
-                .0
-                .into_iter()
-                .zip(arrays.1)
-                .all(|pair| pair.0 == pair.1)
-        })?;
-    Ok(())
-}

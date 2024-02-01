@@ -1,4 +1,3 @@
-use checkito::regex::Regex;
 use std::fmt;
 
 /// Defines json's structures.
@@ -51,10 +50,8 @@ fn main() {
     /// For reusability, the json string [`Generate`] implementation is factored out here.
     fn string() -> impl Generate<Item = Node> {
         // This somewhat convoluted regular expression produces json-compliant strings.
-        r#"([a-zA-Z0-9]|[#-~ !]|(\\[\\"/bfnrt])|(\\u([0-9a-fA-F]){4}))*"#
+        regex!(r#"([a-zA-Z0-9]|[#-~ !]|(\\[\\"/bfnrt])|(\\u([0-9a-fA-F]){4}))*"#)
             // Parse the pattern into a [`Regex`] structure which implements [`Generate`].
-            .parse::<Regex>()
-            .unwrap()
             // Wraps the generated [`String`] in a [`Node`].
             .map(Node::String)
     }

@@ -26,6 +26,7 @@ pub use crate::{
     prove::Prove,
     shrink::{FullShrink, IntoShrink, Shrink},
 };
+pub use checkito_macro::regex;
 use primitive::Range;
 use std::{
     fmt,

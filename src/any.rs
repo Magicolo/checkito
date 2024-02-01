@@ -1,10 +1,9 @@
-use std::mem::transmute;
-
 use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
-    tuples,
+    utility::tuples,
 };
+use std::mem::transmute;
 
 #[repr(transparent)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]

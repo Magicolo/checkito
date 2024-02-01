@@ -15,7 +15,7 @@ use crate::{
     sample::{Sampler, Samples},
     shrink::{All, Shrink},
     size::Size,
-    tuples,
+    utility::tuples,
 };
 use fastrand::Rng;
 use std::iter::FromIterator;

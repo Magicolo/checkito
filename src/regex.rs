@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     collect,
     generate::{Generate, State},
@@ -8,10 +10,10 @@ use regex_syntax::{
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
     Parser,
 };
-use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct Regex {
+    pattern: Cow<'static, str>,
     tree: Hir,
     repeats: u32,
 }
@@ -25,23 +27,27 @@ pub enum Shrinker {
 }
 
 #[derive(Debug)]
-pub struct Error(regex_syntax::Error);
+pub struct Error(Box<regex_syntax::Error>);
 
 impl Regex {
+    pub fn new(pattern: impl Into<Cow<'static, str>>) -> Result<Self, Error> {
+        let pattern = pattern.into();
+        Ok(Regex {
+            tree: Parser::new()
+                .parse(&pattern)
+                .map_err(|error| Error(Box::new(error)))?,
+            pattern,
+            repeats: 64,
+        })
+    }
+
+    pub fn pattern(&self) -> &str {
+        &self.pattern
+    }
+
     pub fn repeats(mut self, repeats: u32) -> Self {
         self.repeats = repeats;
         self
-    }
-}
-
-impl FromStr for Regex {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Regex {
-            tree: Parser::new().parse(s).map_err(Error)?,
-            repeats: 64,
-        })
     }
 }
 

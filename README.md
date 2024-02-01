@@ -20,14 +20,14 @@
 ## Example
 
 ```rust, should_panic
-use checkito::{check::Error, regex::Regex, *};
+use checkito::{check::Error, *};
 
 struct Composite(String, f64);
 
 fn main() {
     // Parse this pattern as a [`Regex`] which implements the [`Generate`] trait. The '_' character is included in the regex
     // to make the checks below fail (for illustration purposes).
-    let regex = "[a-zA-Z0-9_]*".parse::<Regex>().unwrap();
+    let regex = regex!("[a-zA-Z0-9_]*");
     // [`f64`] ranges implement the [`Generate`] trait.
     let number = 10.0f64..;
     // Combine the previous [`Generate`] implementations and map them to a custom `struct`.

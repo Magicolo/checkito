@@ -1,4 +1,4 @@
-use crate::{boxed, tuples};
+use crate::{boxed, utility::tuples};
 use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug)]
