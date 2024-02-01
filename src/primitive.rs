@@ -139,26 +139,8 @@ impl<T> ops::RangeBounds<T> for Range<T> {
     }
 }
 
-macro_rules! full {
+macro_rules! same {
     ($t:ty) => {
-        impl FullGenerate for $t {
-            type Item = $t;
-            type Generate = Full<$t>;
-
-            fn generator() -> Self::Generate {
-                Full::<$t>::new()
-            }
-        }
-
-        impl FullShrink for $t {
-            type Item = $t;
-            type Shrink = <Full<$t> as Generate>::Shrink;
-
-            fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-                Full::<$t>::new().shrinker(item)
-            }
-        }
-
         impl Generate for $t {
             type Item = Self;
             type Shrink = Self;
@@ -179,6 +161,30 @@ macro_rules! full {
                 None
             }
         }
+    };
+}
+
+macro_rules! full {
+    ($t:ty) => {
+        impl FullGenerate for $t {
+            type Item = $t;
+            type Generate = Full<$t>;
+
+            fn generator() -> Self::Generate {
+                Full::<$t>::new()
+            }
+        }
+
+        impl FullShrink for $t {
+            type Item = $t;
+            type Shrink = <Full<$t> as Generate>::Shrink;
+
+            fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
+                Full::<$t>::new().shrinker(item)
+            }
+        }
+
+        same!($t);
     };
 }
 
@@ -520,6 +526,12 @@ pub mod character {
 
     full!(char);
     ranges!(char, Range);
+}
+
+pub mod string {
+    use super::*;
+
+    same!(&str);
 }
 
 pub mod number {

@@ -39,7 +39,7 @@ impl fmt::Debug for Node {
             Self::Array(arg0) => f.debug_list().entries(arg0).finish(),
             Self::Object(arg0) => f
                 .debug_map()
-                .entries(arg0.iter().map(|(key, value)| (key, value)))
+                .entries(arg0.iter().map(|pair| (&pair.0, &pair.1)))
                 .finish(),
         }
     }
