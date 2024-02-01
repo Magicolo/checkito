@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "1.3.10"
+version = "1.4.0"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 readme = "README.md"
@@ -19,7 +19,7 @@ regex-syntax = "0.8.2"
 checkito_macro = { path = "checkito_macro" }
 
 [dev-dependencies]
-regex = "1.10.2"
+regex = "1.10.3"
 criterion = "0.5.1"
 skeptic = "0.13.7"
 
