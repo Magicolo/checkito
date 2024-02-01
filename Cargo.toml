@@ -16,7 +16,7 @@ rust-version = "1.66.1"
 [dependencies]
 fastrand = "2.0.1"
 regex-syntax = "0.8.2"
-checkito_macro = { path = "checkito_macro" }
+checkito_macro = "0.1.1"
 
 [dev-dependencies]
 regex = "1.10.3"
