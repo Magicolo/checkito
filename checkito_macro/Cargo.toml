@@ -3,6 +3,13 @@ name = "checkito_macro"
 version = "0.1.0"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
+documentation = "https://docs.rs/checkito_macro/latest/checkito_macro/"
+description = "A set of macros to accompany the `checkito` crate."
+license = "MIT"
+repository = "https://github.com/Magicolo/checkito/checkito_macro"
+keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
+categories = ["development-tools::testing"]
+rust-version = "1.65.0"
 
 [lib]
 proc-macro = true
