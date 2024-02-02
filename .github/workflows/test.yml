@@ -13,8 +13,10 @@ jobs:
       image: rust:latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install
-      run: rustup component add clippy && cargo install cargo-audit cargo-msrv
+    - name: Rust
+      run: rustup component add clippy
+    - name: Cargo
+      run: cargo install cargo-audit cargo-msrv
     - name: Build
       run: cargo build --release --verbose
     - name: Test
