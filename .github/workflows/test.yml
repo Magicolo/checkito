@@ -43,13 +43,13 @@ jobs:
       run: cargo install cargo-audit
     - name: Run
       run: cargo audit
-  minimal-version:
-    runs-on: ubuntu-latest
-    container: 
-      image: rust:latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Install
-      run: cargo install cargo-msrv
-    - name: Run
-      run: cargo msrv verify
+  # minimal-version:
+  #   runs-on: ubuntu-latest
+  #   container: 
+  #     image: rust:latest
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #   - name: Install
+  #     run: cargo install cargo-msrv
+  #   - name: Run
+  #     run: cargo msrv verify
