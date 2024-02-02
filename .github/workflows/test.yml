@@ -7,23 +7,49 @@ on:
     branches: ["master"]
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run
+      run: cargo build --release --verbose
   test:
     runs-on: ubuntu-latest
     container: 
       image: rust:latest
     steps:
     - uses: actions/checkout@v4
-    - name: Rust
-      run: rustup component add clippy
-    - name: Cargo
-      run: cargo install cargo-audit cargo-msrv
-    - name: Build
-      run: cargo build --release --verbose
-    - name: Test
+    - name: Run
       run: cargo test --release --verbose
-    - name: Clippy
+  clippy:
+    runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install
+      run: rustup component add clippy
+    - name: Run
       run: cargo clippy --release --verbose -- -D warnings
-    - name: Audit
+  audit:
+    runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install
+      run: cargo install cargo-audit
+    - name: Run
       run: cargo audit
-    - name: Minmal version
+  minimal-version:
+    runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install
+      run: cargo install cargo-msrv
+    - name: Run
       run: cargo msrv verify
