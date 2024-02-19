@@ -10,7 +10,8 @@ use crate::{
 
 impl<G: FullGenerate> FullGenerate for Option<G> {
     type Item = Option<G::Item>;
-    type Generate = Map<Any<(G::Generate, ())>, Self::Item>;
+    type Generate =
+        Map<Any<(G::Generate, ())>, fn(<Any<(G::Generate, ())> as Generate>::Item) -> Self::Item>;
 
     fn generator() -> Self::Generate {
         Any((G::generator(), ())).map(|item| match item {
@@ -61,7 +62,10 @@ impl<S: Shrink> Shrink for Option<S> {
 
 impl<G: FullGenerate, E: FullGenerate> FullGenerate for Result<G, E> {
     type Item = Result<G::Item, E::Item>;
-    type Generate = Map<Any<(G::Generate, E::Generate)>, Self::Item>;
+    type Generate = Map<
+        Any<(G::Generate, E::Generate)>,
+        fn(<Any<(G::Generate, E::Generate)> as Generate>::Item) -> Self::Item,
+    >;
 
     fn generator() -> Self::Generate {
         Any((G::generator(), E::generator())).map(|item| match item {

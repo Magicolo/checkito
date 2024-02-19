@@ -23,3 +23,21 @@ fn filtered_array_preserves_inequality() -> Result {
         })?;
     Ok(())
 }
+
+#[test]
+fn shrinked_filter_preserves_inequality() -> Result {
+    let error = (
+        <(String, String)>::generator().filter(|(left, right)| left != right),
+        usize::generator(),
+    )
+        .check(COUNT, |(pair, value)| {
+            let Some((left, right)) = pair else {
+                return Ok(true);
+            };
+            assert_ne!(left, right);
+            prove!(*value < 1000)
+        })
+        .unwrap_err();
+    assert!(matches!(error.cause, Cause::Disprove(_)));
+    Ok(())
+}

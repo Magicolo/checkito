@@ -95,10 +95,10 @@ pub trait Generate {
     }
 
     /// Maps generated [`Generate::Item`] to an arbitrary type `T` using the provided function `F`.
-    fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, T, F>
+    fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
     where
         Self: Sized,
-        Map<Self, T, F>: Generate,
+        Map<Self, F>: Generate,
     {
         Map::new(self, map)
     }
@@ -126,10 +126,10 @@ pub trait Generate {
     }
 
     /// Same as [`Generate::filter_map_with`] but with a predefined number of `retries`.
-    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, T, F>
+    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, T, F>: Generate,
+        FilterMap<Self, F>: Generate,
     {
         self.filter_map_with(256, map)
     }
@@ -140,20 +140,20 @@ pub trait Generate {
         self,
         retries: usize,
         map: F,
-    ) -> FilterMap<Self, T, F>
+    ) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, T, F>: Generate,
+        FilterMap<Self, F>: Generate,
     {
         FilterMap::new(self, map, retries)
     }
 
     /// Combines [`Generate::map`] and [`Generate::flatten`] in a single [`Generate`] implementation.
-    fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, G, F>>
+    fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
-        Map<Self, G, F>: Generate<Item = G>,
-        Flatten<Map<Self, G, F>>: Generate,
+        Map<Self, F>: Generate<Item = G>,
+        Flatten<Map<Self, F>>: Generate,
     {
         self.map(map).flatten()
     }
