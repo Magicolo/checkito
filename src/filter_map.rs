@@ -31,10 +31,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     type Shrink = Shrinker<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let mut outer = Shrinker {
-            inner: None,
-            map: self.map.clone(),
-        };
+        let mut outer = None;
         let old = state.size;
         for i in 0..self.retries {
             let new = old + (1.0 - old) * (i as f64 / self.retries as f64);
@@ -42,12 +39,15 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             let inner = self.inner.generate(state);
             let item = inner.item();
             if (self.map)(item).is_some() {
-                outer.inner = Some(inner);
+                outer = Some(inner);
                 break;
             }
         }
         state.size = old;
-        outer
+        Shrinker {
+            inner: outer,
+            map: self.map.clone(),
+        }
     }
 }
 
@@ -55,7 +55,7 @@ impl<S: Shrink + ?Sized, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shri
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {
-        (self.map)(self.inner.item()?)
+        self.inner.item().and_then(&self.map)
     }
 
     fn shrink(&mut self) -> Option<Self> {
