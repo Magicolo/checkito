@@ -3,7 +3,6 @@ use crate::{
     shrink::Shrink,
     utility::tuples,
 };
-use std::mem::transmute;
 
 #[repr(transparent)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -87,7 +86,7 @@ where
     type Shrink = <Any<G> as Generate>::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        unsafe { transmute::<&G, &Any<G>>(self.0) }.generate(state)
+        unsafe { &*(self.0 as *const G as *const Any<G>) }.generate(state)
     }
 }
 
