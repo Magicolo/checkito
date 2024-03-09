@@ -34,7 +34,6 @@ use std::{
 
 /*
     TODO: Review `primitive::shrinked`.
-    TODO: Use 'orn' instead of reimplementing Or<T, ...>
     FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...
     - See `tests::shrink::integer_shrink_to_minimum`.
 */
