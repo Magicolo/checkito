@@ -25,12 +25,12 @@ impl<I> Generate for Generator<I> {
     }
 }
 
-impl Generator<()> {
-    pub(crate) fn new<G: Generate + 'static>(generate: G) -> Generator<G::Item>
+impl<I> Generator<I> {
+    pub(crate) fn new<G: Generate<Item = I> + 'static>(generate: G) -> Self
     where
         G::Shrink: 'static,
     {
-        Generator {
+        Self {
             inner: Box::new(generate),
             generate: |inner, state| inner.downcast_ref::<G>().unwrap().generate(state).boxed(),
         }

@@ -1,5 +1,4 @@
 use crate::{
-    any::Unify,
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::{FullShrink, IntoShrink, Shrink},
     utility::Nudge,
@@ -417,7 +416,7 @@ pub mod character {
             )
                 .any()
                 .generate(state)
-                .unify()
+                .into()
         }
     }
 
@@ -544,7 +543,7 @@ pub mod number {
                 type Shrink = $t;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    (0 as $t, $t::MIN, $t::MAX).any().generate(state).unify()
+                    (0 as $t, $t::MIN, $t::MAX).any().generate(state).into()
                 }
             }
 
@@ -656,7 +655,7 @@ pub mod number {
                     (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)
                         .any()
                         .generate(state)
-                        .unify()
+                        .into()
                 }
             }
 

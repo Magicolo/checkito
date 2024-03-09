@@ -88,7 +88,7 @@ fn main() {
             // To be fully general, [`Generate::any`] applied to tuples produces a value of type `One<T1, T2...>` which is an enum that
             // represents each possible item of the tuple. Since the concrete type is actually `One<Node, Node...>`, the enum can be
             // unified into a [`Node`], which is what [`Unify::unify`] does.
-            .map(Unify::unify)
+            .map(|or| or.into())
     }
 
     // Will fail as soon as a node tree holds 100 nodes or more. The shrunk node tree should have exactly 100 nodes,

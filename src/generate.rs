@@ -74,7 +74,7 @@ pub trait Generate {
     ///         lazy(node).collect().map(Node::Branch).boxed()
     ///     )
     ///     .any()
-    ///     .map(Unify::unify)
+    ///     .map(|or| or.into())
     /// }
     ///
     /// fn choose(choose: bool) -> impl Generate<Item = char> {

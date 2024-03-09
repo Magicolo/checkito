@@ -15,10 +15,6 @@ pub struct Weight<W, T: ?Sized> {
     pub value: T,
 }
 
-pub trait Unify<T> {
-    fn unify(self) -> T;
-}
-
 impl<W: Generate<Item = f64>, T> Weight<W, T> {
     pub const fn new(weight: W, value: T) -> Self {
         Self { weight, value }
@@ -132,93 +128,62 @@ collection!(Vec<Weight<W, T>>, weighted, [W], []);
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
     ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
-        pub mod $n {
-            use super::*;
+        impl<$($ts: Generate,)*> Generate for orn::$n::Or<$($ts,)*> {
+            type Item = orn::$n::Or<$($ts::Item,)*>;
+            type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
-            #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-            pub enum One<$($ts,)*> {
-                $($ts($ts),)*
-            }
-
-            impl<$($ts,)*> One<$($ts,)*> {
-                pub const fn as_ref(&self) -> One<$(&$ts,)*> {
-                    match self {
-                        $(Self::$ts(item) => One::$ts(item),)*
-                    }
-                }
-
-                pub fn as_mut(&mut self) -> One<$(&mut $ts,)*> {
-                    match self {
-                        $(Self::$ts(item) => One::$ts(item),)*
-                    }
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                match self {
+                    $(Self::$ts(generate) => orn::$n::Or::$ts(generate.generate(state)),)*
                 }
             }
+        }
 
-            impl<T, $($ts: Into<T>,)*> Unify<T> for One<$($ts,)*> {
-                fn unify(self) -> T {
-                    match self {
-                        $(Self::$ts(item) => item.into(),)*
-                    }
+        impl<$($ts: Shrink,)*> Shrink for orn::$n::Or<$($ts,)*> {
+            type Item = orn::$n::Or<$($ts::Item,)*>;
+
+            fn item(&self) -> Self::Item {
+                match self {
+                    $(orn::$n::Or::$ts(shrink) => orn::$n::Or::$ts(shrink.item()),)*
                 }
             }
 
-            impl<$($ts: Generate,)*> Generate for One<$($ts,)*> {
-                type Item = One<$($ts::Item,)*>;
-                type Shrink = One<$($ts::Shrink,)*>;
-
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    match self {
-                        $(Self::$ts(generate) => One::$ts(generate.generate(state)),)*
-                    }
+            fn shrink(&mut self) -> Option<Self> {
+                match self {
+                    $(Self::$ts(shrink) => Some(Self::$ts(shrink.shrink()?)),)*
                 }
             }
+        }
 
-            impl<$($ts: Shrink,)*> Shrink for One<$($ts,)*> {
-                type Item = One<$($ts::Item,)*>;
+        impl<$($ts: Generate,)*> Generate for Any<($($ts,)*)> {
+            type Item = orn::$n::Or<$($ts::Item,)*>;
+            type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
-                fn item(&self) -> Self::Item {
-                    match self {
-                        $(One::$ts(shrink) => One::$ts(shrink.item()),)*
-                    }
-                }
-
-                fn shrink(&mut self) -> Option<Self> {
-                    match self {
-                        $(Self::$ts(shrink) => Some(Self::$ts(shrink.shrink()?)),)*
-                    }
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                match state.random().u8(..$c) {
+                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
+                    _ => unreachable!(),
                 }
             }
+        }
 
-            impl<$($ts: Generate,)*> Generate for Any<($($ts,)*)> {
-                type Item = One<$($ts::Item,)*>;
-                type Shrink = One<$($ts::Shrink,)*>;
+        #[allow(non_camel_case_types)]
+        impl<$($ps: Generate<Item = f64>, $ts: Generate,)*> Generate for ($(Weight<$ps, $ts>,)*) {
+            type Item = orn::$n::Or<$($ts::Item,)*>;
+            type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    match state.random().u8(..$c) {
-                        $($is => One::$ts(self.0.$is.generate(state)),)*
-                        _ => unreachable!(),
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                let weights = ($(self.$is.weight.generate(state).item().max(0.0),)*);
+                let total = $(weights.$is +)* 0.0;
+                let mut _weight = state.random().f64() * total;
+                $(
+                    if _weight < weights.$is {
+                        return orn::$n::Or::$ts(self.$is.value.generate(state));
+                    } else {
+                        _weight -= weights.$is;
                     }
-                }
-            }
-
-            #[allow(non_camel_case_types)]
-            impl<$($ps: Generate<Item = f64>, $ts: Generate,)*> Generate for ($(Weight<$ps, $ts>,)*) {
-                type Item = One<$($ts::Item,)*>;
-                type Shrink = One<$($ts::Shrink,)*>;
-
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    let weights = ($(self.$is.weight.generate(state).item().max(0.0),)*);
-                    let total = $(weights.$is +)* 0.0;
-                    let mut _weight = state.random().f64() * total;
-                    $(
-                        if _weight < weights.$is {
-                            return One::$ts(self.$is.value.generate(state));
-                        } else {
-                            _weight -= weights.$is;
-                        }
-                    )*
-                    unreachable!();
-                }
+                )*
+                unreachable!();
             }
         }
     };

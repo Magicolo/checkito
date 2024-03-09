@@ -1,12 +1,12 @@
-use std::{rc::Rc, sync::Arc};
-
 use crate::{
-    any::{tuples2::One, Any},
+    any::Any,
     generate::{Generate, State},
     map::Map,
     shrink::{FullShrink, IntoShrink, Shrink},
     FullGenerate, IntoGenerate,
 };
+use orn::Or2;
+use std::{rc::Rc, sync::Arc};
 
 impl<G: FullGenerate> FullGenerate for Option<G> {
     type Item = Option<G::Item>;
@@ -15,8 +15,8 @@ impl<G: FullGenerate> FullGenerate for Option<G> {
 
     fn generator() -> Self::Generate {
         Any((G::generator(), ())).map(|item| match item {
-            One::T0(item) => Some(item),
-            One::T1(_) => None,
+            Or2::T0(item) => Some(item),
+            Or2::T1(_) => None,
         })
     }
 }
@@ -69,8 +69,8 @@ impl<G: FullGenerate, E: FullGenerate> FullGenerate for Result<G, E> {
 
     fn generator() -> Self::Generate {
         Any((G::generator(), E::generator())).map(|item| match item {
-            One::T0(item) => Result::Ok(item),
-            One::T1(item) => Result::Err(item),
+            Or2::T0(item) => Result::Ok(item),
+            Or2::T1(item) => Result::Err(item),
         })
     }
 }

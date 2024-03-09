@@ -21,7 +21,6 @@ pub mod standard;
 pub mod utility;
 
 pub use crate::{
-    any::Unify,
     generate::{FullGenerate, Generate, IntoGenerate},
     prove::Prove,
     shrink::{FullShrink, IntoShrink, Shrink},
@@ -64,7 +63,7 @@ where
 }
 
 pub fn letter() -> impl Generate<Item = char> {
-    ('a'..='z', 'A'..='Z').generator().any().map(Unify::unify)
+    ('a'..='z', 'A'..='Z').generator().any().map(|or| or.into())
 }
 
 pub fn digit() -> impl Generate<Item = char> {
