@@ -1,6 +1,6 @@
-fn main() {
-    use checkito::*;
+use checkito::*;
 
+fn main() {
     #[derive(Debug)]
     struct Input {
         value: usize,

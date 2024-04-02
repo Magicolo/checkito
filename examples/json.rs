@@ -1,3 +1,4 @@
+use checkito::*;
 use std::fmt;
 
 /// Defines json's structures.
@@ -45,8 +46,6 @@ impl fmt::Debug for Node {
 }
 
 fn main() {
-    use checkito::*;
-
     /// For reusability, the json string [`Generate`] implementation is factored out here.
     fn string() -> impl Generate<Item = Node> {
         // This somewhat convoluted regular expression produces json-compliant strings.
@@ -85,9 +84,9 @@ fn main() {
                 .boxed(),
         )
             .any()
-            // To be fully general, [`Generate::any`] applied to tuples produces a value of type `One<T1, T2...>` which is an enum that
-            // represents each possible item of the tuple. Since the concrete type is actually `One<Node, Node...>`, the enum can be
-            // unified into a [`Node`], which is what [`Unify::unify`] does.
+            // To be fully general, [`Generate::any`] applied to tuples produces a value of type `Or<T1, T2...>` which is an enum that
+            // represents each possible item of the tuple. Since the concrete type is actually `Or<Node, Node...>`, the enum can be
+            // unified into a [`Node`], which is what [`Or::into`] does.
             .map(|or| or.into())
     }
 
