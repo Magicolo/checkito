@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt};
 
 use crate::{
     collect,
@@ -26,8 +26,13 @@ pub enum Shrinker {
     All(collect::Shrinker<Shrinker, String>),
 }
 
-#[derive(Debug)]
 pub struct Error(Box<regex_syntax::Error>);
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Error").field(&self.0).finish()
+    }
+}
 
 impl Regex {
     pub fn new(pattern: impl Into<Cow<'static, str>>) -> Result<Self, Error> {
