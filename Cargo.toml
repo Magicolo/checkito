@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "1.5.1"
+version = "1.5.2"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 readme = "README.md"
@@ -11,7 +11,7 @@ repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
 build = "build.rs"
-rust-version = "1.65.0"
+# rust-version = "1.65.0"
 
 [dependencies]
 fastrand = "2.1.1"
