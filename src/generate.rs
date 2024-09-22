@@ -259,7 +259,7 @@ pub trait Generate {
 
     /// Dampens the `size` (see [`Generate::size`] for more information about `size`) as items are generated.
     /// - The `pressure` can be thought of as how fast will the `size` be reduced as the `depth` increases (see [`Generate::flatten`]
-    /// for more information about `depth`).
+    ///   for more information about `depth`).
     /// - The `deepest` will set the `size` to `0` when the `depth` is `>=` than it.
     /// - The `limit` will set the `size` to `0` after the number of times that the `depth` increased is `>=` than it.
     ///
@@ -332,7 +332,7 @@ impl State {
     pub fn new(size: f64, seed: Option<u64>) -> Self {
         let random = seed.map_or_else(Rng::new, Rng::with_seed);
         Self {
-            size: size.max(0.0).min(1.0),
+            size: size.clamp(0.0, 1.0),
             depth: 0,
             count: 0,
             seed: random.get_seed(),

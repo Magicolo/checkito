@@ -14,13 +14,13 @@ build = "build.rs"
 rust-version = "1.65.0"
 
 [dependencies]
-fastrand = "2.0.1"
-regex-syntax = "0.8.2"
+fastrand = "2.1.1"
+regex-syntax = "0.8.4"
 checkito_macro = "0.1.1"
 orn = "0.4.2"
 
 [dev-dependencies]
-regex = "1.10.3"
+regex = "1.10.6"
 criterion = "0.5.1"
 skeptic = "0.13.7"
 

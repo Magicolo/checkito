@@ -36,7 +36,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
         let old = state.size;
         for i in 0..self.retries {
             let new = old + (1.0 - old) * (i as f64 / self.retries as f64);
-            state.size = new.min(1.0).max(0.0);
+            state.size = new.clamp(0.0, 1.0);
             let inner = self.inner.generate(state);
             let item = inner.item();
             if (self.filter)(&item) {

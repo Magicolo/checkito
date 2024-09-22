@@ -35,7 +35,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
         let old = state.size;
         for i in 0..self.retries {
             let new = old + (1.0 - old) * (i as f64 / self.retries as f64);
-            state.size = new.min(1.0).max(0.0);
+            state.size = new.clamp(0.0, 1.0);
             let inner = self.inner.generate(state);
             let item = inner.item();
             if (self.map)(item).is_some() {
@@ -51,7 +51,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     }
 }
 
-impl<S: Shrink + ?Sized, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, F> {
+impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, F> {
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {

@@ -20,7 +20,7 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
         };
         debug_assert!(old.is_finite());
         debug_assert!(new.is_finite());
-        state.size = new.max(0.0).min(1.0);
+        state.size = new.clamp(0.0, 1.0);
         let shrink = self.inner.generate(state);
         state.size = old;
         shrink
