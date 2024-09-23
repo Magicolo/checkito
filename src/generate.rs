@@ -339,7 +339,7 @@ impl State {
         }
     }
 
-    pub fn from_iteration(index: usize, count: usize, seed: Option<u64>) -> Self {
+    pub(crate) fn from_iteration(index: usize, count: usize, seed: Option<u64>) -> Self {
         // This size calculation ensures that 10% of samples are fully sized.
         if count == 1 {
             Self::new(1.0, seed)
