@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Bounds the shrinking process.
 #[derive(Clone, Copy, Debug)]
 pub struct Shrinks {
     /// Maximum number of successful attempts at reducing the 'size' of the input before aborting the shrinking process.
@@ -20,6 +21,7 @@ pub struct Shrinks {
     pub duration: Duration,
 }
 
+/// The [`Checker`] structure holds a reference to a [`Generate`] instance and some configuration options for the checking and shrinking processes.
 #[derive(Debug)]
 pub struct Checker<'a, G: ?Sized> {
     /// A generator that will provide the values and shrinkers for the checking and shrinking processes.
@@ -34,6 +36,11 @@ pub struct Checker<'a, G: ?Sized> {
     pub seed: Option<u64>,
 }
 
+/// A structure representing a series of checks to be performed on a generator.
+///
+/// This structure is used to iterate over a sequence of checks, where each check
+/// is performed on a generated item. It keeps track of the number of errors
+/// encountered and the number of checks remaining.
 #[derive(Debug)]
 pub struct Checks<'a, G: ?Sized, F> {
     checker: Checker<'a, G>,
@@ -45,8 +52,10 @@ pub struct Checks<'a, G: ?Sized, F> {
 }
 
 #[derive(Clone, Debug)]
+/// An error produced by a check failure.
+/// A check fails when a proof `P` is `false` for a given generated value.
 pub struct Error<T, P> {
-    /// The generator state that generated the error.
+    /// The generator state that caused the error.
     pub state: State,
     pub cause: Cause<P>,
     pub original: T,
@@ -54,11 +63,16 @@ pub struct Error<T, P> {
     pub shrinks: Shrinks,
 }
 
+/// The cause of a check failure.
+/// A check fails when a proof `P` is `false` for a given generated value.
 #[derive(Clone, Debug)]
 pub enum Cause<P> {
+    /// A `Disprove` cause is a value that, when checked, returns a value of type `P`
+    /// that does not satisfy the property.
     Disprove(P),
-    Panic(Cow<'static, str>),
-    Unknown,
+    /// A `Panic` cause is produced when a check panics during its evaluation.
+    /// The message associated with the panic is included if it can be casted to a string.
+    Panic(Option<Cow<'static, str>>),
 }
 
 impl<T, P> Error<T, P> {
@@ -238,20 +252,20 @@ fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, mut check: F) -> Option<Caus
         Err(error) => error,
     };
     let error = match error.downcast::<&'static str>() {
-        Ok(error) => return Some(Cause::Panic(Cow::Borrowed(*error))),
+        Ok(error) => return Some(Cause::Panic(Some(Cow::Borrowed(*error)))),
         Err(error) => error,
     };
     let error = match error.downcast::<String>() {
-        Ok(error) => return Some(Cause::Panic(Cow::Owned(*error))),
+        Ok(error) => return Some(Cause::Panic(Some(Cow::Owned(*error)))),
         Err(error) => error,
     };
     let error = match error.downcast::<Box<str>>() {
-        Ok(error) => return Some(Cause::Panic(Cow::Owned(error.to_string()))),
+        Ok(error) => return Some(Cause::Panic(Some(Cow::Owned(error.to_string())))),
         Err(error) => error,
     };
     match error.downcast::<Cow<'static, str>>() {
-        Ok(error) => Some(Cause::Panic(*error)),
-        Err(_) => Some(Cause::Unknown),
+        Ok(error) => Some(Cause::Panic(Some(*error))),
+        Err(_) => Some(Cause::Panic(None)),
     }
 }
 
@@ -352,7 +366,6 @@ impl<P: Prove> PartialEq for Cause<P> {
         match (self, other) {
             (Self::Disprove(left), Self::Disprove(right)) => left.is(right),
             (Self::Panic(left), Self::Panic(right)) => left == right,
-            (Self::Unknown, Self::Unknown) => true,
             _ => false,
         }
     }
