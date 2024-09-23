@@ -1,16 +1,6 @@
 use crate::{generate::State, prove::Prove, random::Random, shrink::Shrink, Generate};
-use std::{
-    borrow::Cow,
-    error, fmt,
-    num::NonZeroUsize,
-    panic::{self, AssertUnwindSafe},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Mutex,
-    },
-    thread::{available_parallelism, scope},
-    time::{Duration, Instant},
-};
+use core::{error, fmt, num::NonZeroUsize, panic::AssertUnwindSafe, time::Duration};
+use std::{borrow::Cow, panic::catch_unwind, time::Instant};
 
 /// Bounds the shrinking process.
 #[derive(Clone, Copy, Debug)]
@@ -141,6 +131,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     }
 }
 
+#[cfg(feature = "parallel")]
 impl<'a, G: Generate + ?Sized + Sync> Checker<'a, G>
 where
     G::Item: Send,
@@ -151,6 +142,50 @@ where
         parallel: Option<usize>,
         check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
+        use std::{
+            sync::{
+                atomic::{AtomicUsize, Ordering},
+                Mutex,
+            },
+            thread::{available_parallelism, scope},
+        };
+
+        type Results<G, P> =
+            Mutex<Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>>;
+
+        const fn divide_ceiling(left: usize, right: usize) -> usize {
+            let value = left / right;
+            let remain = left % right;
+            if remain > 0 && right > 0 {
+                value + 1
+            } else {
+                value
+            }
+        }
+
+        fn batch<G: Generate + ?Sized, P: Prove, F: Fn(G::Item) -> P>(
+            generator: &G,
+            results: &Results<G, P>,
+            (offset, step, count): (usize, usize, usize),
+            shrinks: Shrinks,
+            errors: (&AtomicUsize, usize),
+            random: &mut Random,
+            check: F,
+        ) {
+            for index in (offset..count).step_by(step) {
+                let state = State::from_iteration(index, count, Some(random.u64(..)));
+                match next(generator, state, shrinks, &check) {
+                    Ok(shrink) if errors.0.load(Ordering::Relaxed) < errors.1 => {
+                        results.lock().unwrap().push(Ok(shrink.item()))
+                    }
+                    Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
+                        results.lock().unwrap().push(Err(error))
+                    }
+                    _ => break,
+                }
+            }
+        }
+
         let parallel = match parallel {
             Some(parallel) => parallel.max(1),
             None => available_parallelism().map_or(1, NonZeroUsize::get),
@@ -245,7 +280,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator for Checks
 }
 
 fn handle<T, P: Prove, F: FnMut(T) -> P>(item: T, mut check: F) -> Option<Cause<P>> {
-    let error = match panic::catch_unwind(AssertUnwindSafe(|| check(item))) {
+    let error = match catch_unwind(AssertUnwindSafe(|| check(item))) {
         Ok(prove) if prove.prove() => return None,
         Ok(prove) => return Some(Cause::Disprove(prove)),
         Err(error) => error,
@@ -323,41 +358,6 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P>(
     };
     while shrink(shrinks, &mut shrinker, &mut error, &mut check).is_some() {}
     Err(error)
-}
-
-type Results<G, P> = Mutex<Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>>;
-
-fn batch<G: Generate + ?Sized, P: Prove, F: Fn(G::Item) -> P>(
-    generator: &G,
-    results: &Results<G, P>,
-    (offset, step, count): (usize, usize, usize),
-    shrinks: Shrinks,
-    errors: (&AtomicUsize, usize),
-    random: &mut Random,
-    check: F,
-) {
-    for index in (offset..count).step_by(step) {
-        let state = State::from_iteration(index, count, Some(random.u64(..)));
-        match next(generator, state, shrinks, &check) {
-            Ok(shrink) if errors.0.load(Ordering::Relaxed) < errors.1 => {
-                results.lock().unwrap().push(Ok(shrink.item()))
-            }
-            Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
-                results.lock().unwrap().push(Err(error))
-            }
-            _ => break,
-        }
-    }
-}
-
-const fn divide_ceiling(left: usize, right: usize) -> usize {
-    let value = left / right;
-    let remain = left % right;
-    if remain > 0 && right > 0 {
-        value + 1
-    } else {
-        value
-    }
 }
 
 impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {

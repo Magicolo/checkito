@@ -1,4 +1,4 @@
-use std::{error, fmt};
+use core::{error, fmt};
 
 pub trait Prove {
     fn prove(&self) -> bool;

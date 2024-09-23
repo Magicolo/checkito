@@ -1,4 +1,5 @@
-use std::{borrow::Cow, fmt};
+use core::fmt;
+use std::borrow::Cow;
 
 use crate::{
     collect,

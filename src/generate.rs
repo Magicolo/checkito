@@ -18,7 +18,7 @@ use crate::{
     size::Size,
     utility::tuples,
 };
-use std::iter::FromIterator;
+use core::iter::FromIterator;
 
 #[derive(Clone, Debug)]
 pub struct State {

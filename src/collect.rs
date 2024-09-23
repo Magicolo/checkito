@@ -4,10 +4,12 @@ use crate::{
     same::Same,
     shrink::{All, Shrink},
 };
-use std::{
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
+use core::{
     hash::{BuildHasher, Hash},
     marker::PhantomData,
+};
+use std::{
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
     rc::Rc,
     sync::Arc,
 };

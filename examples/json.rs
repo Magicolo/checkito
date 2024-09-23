@@ -1,5 +1,5 @@
 use checkito::*;
-use std::fmt;
+use core::fmt;
 
 /// Defines json's structures.
 enum Node {

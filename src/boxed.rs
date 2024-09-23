@@ -2,7 +2,7 @@ use crate::{
     generate::{Generate, State},
     shrink::Shrink,
 };
-use std::any::Any;
+use core::any::Any;
 
 pub struct Generator<I> {
     inner: Box<dyn Any>,

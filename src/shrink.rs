@@ -1,5 +1,5 @@
 use crate::{boxed, utility::tuples};
-use std::num::NonZeroUsize;
+use core::num::NonZeroUsize;
 
 #[derive(Clone, Debug)]
 pub struct All<T: ?Sized> {

@@ -1,5 +1,5 @@
+use core::ops::RangeBounds;
 use fastrand::Rng;
-use std::ops::RangeBounds;
 
 #[derive(Debug, Clone)]
 pub struct Random(Rng);

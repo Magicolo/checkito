@@ -3,7 +3,7 @@ use crate::{
     shrink::{FullShrink, IntoShrink, Shrink},
     utility::Nudge,
 };
-use std::{
+use core::{
     convert::TryInto,
     marker::PhantomData,
     ops::{self, Bound},

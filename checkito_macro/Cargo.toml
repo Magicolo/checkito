@@ -15,6 +15,6 @@ rust-version = "1.65.0"
 proc-macro = true
 
 [dependencies]
-syn = "2.0.77"
+syn = { version = "2.0.77", features = ["full"] }
 quote = "1.0.37"
 regex-syntax = "0.8.4"
