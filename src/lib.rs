@@ -34,6 +34,28 @@ use std::{
 
 /*
     TODO: Review `primitive::shrinked`.
+    TODO: Support for test macro with 'type expressions'?
+        - Adds a lot of complexity for a limited syntactic convenience...
+        - Support for 'or' generators would be nice; would require a fancy macro.
+
+        #[checkito::test(shrink = 1, count = COUNT, seed = 11376, errors = 1)]
+        i: usize | u8 | i16, // Generates tests for every permutation of type expressions.
+        r: 0..100usize | 256..1000, // The 'or' type expression allows to combine any other type expression.
+        a: (Dog {} | Cat {}) as &dyn Animal, // Cast as a trait.
+        p: "[a-zA-Z]+", // &str will be interpreted as regexes and checked at compile time. -> String
+        s: String,
+        s: char::collect_with::<String>(100), -> String
+        d: digit(), -> char
+        d: digit().collect::<String>(), -> String
+        n: number<f64>(), // Use builtin generator functions. -> f64
+        l: letter(), -> char
+        l: letter().collect::<String>(), -> String
+        a: [0..1238; 17], // If a number of elements is specified, this is an array.
+        p: Person { name: "a-z", node: || Node::Null }, // Construct composite types inline.
+        z: Dopple { name: p.name.clone() }, // Refer to previously defined values?
+        v: [usize], // If no number of elements is specified, this is a vector.
+        t: (usize, 0..10000),
+        u: ()
     FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...
     - See `tests::shrink::integer_shrink_to_minimum`.
 */

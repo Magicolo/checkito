@@ -3,7 +3,6 @@ use fastrand::Rng;
 use std::{
     borrow::Cow,
     error, fmt,
-    marker::PhantomData,
     num::NonZeroUsize,
     panic::{self, AssertUnwindSafe},
     sync::atomic::{AtomicUsize, Ordering},
@@ -36,14 +35,13 @@ pub struct Checker<'a, G: ?Sized> {
 }
 
 #[derive(Debug)]
-pub struct Checks<'a, G: ?Sized, P, F> {
+pub struct Checks<'a, G: ?Sized, F> {
     checker: Checker<'a, G>,
     random: Rng,
     errors: usize,
     index: usize,
     count: usize,
     check: F,
-    _marker: PhantomData<P>,
 }
 
 #[derive(Clone, Debug)]
@@ -95,6 +93,19 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
     }
 }
 
+impl<G: ?Sized, F: Clone> Clone for Checks<'_, G, F> {
+    fn clone(&self) -> Self {
+        Self {
+            checker: self.checker.clone(),
+            random: self.random.clone(),
+            check: self.check.clone(),
+            errors: self.errors,
+            index: self.index,
+            count: self.count,
+        }
+    }
+}
+
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub fn check<P: Prove, F: FnMut(&G::Item) -> P>(
         &self,
@@ -113,7 +124,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
         &self,
         count: usize,
         check: F,
-    ) -> Checks<'a, G, P, F> {
+    ) -> Checks<'a, G, F> {
         Checks {
             checker: self.clone(),
             random: self.seed.map_or_else(Rng::new, Rng::with_seed),
@@ -121,7 +132,6 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
             index: 0,
             count,
             check,
-            _marker: PhantomData,
         }
     }
 }
@@ -195,7 +205,7 @@ where
     }
 }
 
-impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Checks<'_, G, P, F> {
+impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Checks<'_, G, F> {
     type Item = Result<G::Item, Error<G::Item, P>>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -221,7 +231,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Check
     }
 }
 
-fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, check: &mut F) -> Option<Cause<P>> {
+fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, mut check: F) -> Option<Cause<P>> {
     let error = match panic::catch_unwind(AssertUnwindSafe(|| check(item))) {
         Ok(prove) if prove.prove() => return None,
         Ok(prove) => return Some(Cause::Disprove(prove)),
@@ -245,14 +255,47 @@ fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, check: &mut F) -> Option<Cau
     }
 }
 
+fn shrink<S: Shrink, P: Prove, F: FnMut(&S::Item) -> P>(
+    shrinks: Shrinks,
+    shrinker: &mut S,
+    error: &mut Error<S::Item, P>,
+    mut check: F,
+) -> Option<bool> {
+    if error.shrinks.reject < shrinks.reject
+        && error.shrinks.accept < shrinks.accept
+        && error.shrinks.duration < shrinks.duration
+    {
+        let now = Instant::now();
+        let shrunk = shrinker.shrink()?;
+        let item = shrunk.item();
+        match handle(&item, &mut check) {
+            Some(cause) if error.cause == cause => {
+                *shrinker = shrunk;
+                error.shrinks.reject = 0;
+                error.shrinks.accept += 1;
+                error.shrunk = Some(item);
+                error.shrinks.duration += Instant::now() - now;
+                Some(true)
+            }
+            _ => {
+                error.shrinks.reject += 1;
+                error.shrinks.duration += Instant::now() - now;
+                Some(false)
+            }
+        }
+    } else {
+        None
+    }
+}
+
 fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
     generator: &G,
     mut state: State,
     shrinks: Shrinks,
     mut check: F,
 ) -> Result<G::Item, Error<G::Item, P>> {
-    let mut outer = generator.generate(&mut state);
-    let item = outer.item();
+    let mut shrinker = generator.generate(&mut state);
+    let item = shrinker.item();
     let cause = match handle(&item, &mut check) {
         Some(cause) => cause,
         _ => return Ok(item),
@@ -268,28 +311,7 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
         },
         shrunk: None,
     };
-
-    let now = Instant::now();
-    while error.shrinks.reject < shrinks.reject
-        && error.shrinks.accept < shrinks.accept
-        && error.shrinks.duration < shrinks.duration
-    {
-        if let Some(inner) = outer.shrink() {
-            let item = inner.item();
-            match handle(&item, &mut check) {
-                Some(cause) if error.cause == cause => {
-                    error.shrinks.reject = 0;
-                    error.shrinks.accept += 1;
-                    error.shrunk = Some(item);
-                    outer = inner;
-                }
-                _ => error.shrinks.reject += 1,
-            }
-            error.shrinks.duration = Instant::now() - now;
-        } else {
-            break;
-        }
-    }
+    while shrink(shrinks, &mut shrinker, &mut error, &mut check).is_some() {}
     Err(error)
 }
 

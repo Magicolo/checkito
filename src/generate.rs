@@ -312,7 +312,7 @@ pub trait Generate {
         &self,
         count: usize,
         check: F,
-    ) -> Checks<Self, P, F> {
+    ) -> Checks<Self, F> {
         self.checker().checks(count, check)
     }
 
