@@ -4,7 +4,10 @@ use std::{
     error, fmt,
     num::NonZeroUsize,
     panic::{self, AssertUnwindSafe},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    },
     thread::{available_parallelism, scope},
     time::{Duration, Instant},
 };
@@ -56,15 +59,14 @@ pub struct Checks<'a, G: ?Sized, F> {
 pub struct Error<T, P> {
     /// The generator state that caused the error.
     pub state: State,
+    pub item: T,
     pub cause: Cause<P>,
-    pub original: T,
-    pub shrunk: Option<T>,
     pub shrinks: Shrinks,
 }
 
 /// The cause of a check failure.
 /// A check fails when a proof `P` is `false` for a given generated value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause<P> {
     /// A `Disprove` cause is a value that, when checked, returns a value of type `P`
     /// that does not satisfy the property.
@@ -72,12 +74,6 @@ pub enum Cause<P> {
     /// A `Panic` cause is produced when a check panics during its evaluation.
     /// The message associated with the panic is included if it can be casted to a string.
     Panic(Option<Cow<'static, str>>),
-}
-
-impl<T, P> Error<T, P> {
-    pub fn shrunk(&self) -> &T {
-        self.shrunk.as_ref().unwrap_or(&self.original)
-    }
 }
 
 impl<'a, G: ?Sized> Checker<'a, G> {
@@ -163,14 +159,14 @@ where
             Some(parallel) => parallel.max(1),
             None => available_parallelism().map_or(1, NonZeroUsize::get),
         };
-        let mut results = Vec::with_capacity(count);
+        let results = Mutex::new(Vec::with_capacity(count));
         let errors = AtomicUsize::new(0);
         let mut random = Random::new(self.seed);
         let capacity = divide_ceiling(count, parallel);
         if capacity <= 8 || count < 32 {
             batch(
                 self.generator,
-                &mut results,
+                &results,
                 (0, 1, count),
                 self.shrinks,
                 (&errors, self.errors),
@@ -179,42 +175,36 @@ where
             );
         } else {
             scope(|scope| {
-                let mut handles = Vec::with_capacity(parallel - 1);
-                for offset in 0..parallel - 1 {
+                for offset in 1..parallel {
                     let check = &check;
                     let errors = &errors;
+                    let results = &results;
                     let seed = random.u64(..);
-                    handles.push(scope.spawn(move || {
-                        let mut results = Vec::with_capacity(capacity);
+                    scope.spawn(move || {
                         batch(
                             self.generator,
-                            &mut results,
+                            results,
                             (offset, parallel, count),
                             self.shrinks,
                             (errors, self.errors),
                             &mut Random::new(Some(seed)),
                             check,
-                        );
-                        results
-                    }));
+                        )
+                    });
                 }
 
                 batch(
                     self.generator,
-                    &mut results,
-                    (parallel - 1, parallel, count),
+                    &results,
+                    (0, parallel, count),
                     self.shrinks,
                     (&errors, self.errors),
                     &mut random,
                     &check,
-                );
-
-                for handle in handles {
-                    results.extend(handle.join().into_iter().flatten());
-                }
+                )
             });
         }
-        results.into_iter()
+        results.into_inner().unwrap().into_iter()
     }
 }
 
@@ -272,7 +262,7 @@ fn shrink<S: Shrink, P: Prove, F: FnMut(&S::Item) -> P>(
     shrinks: Shrinks,
     shrinker: &mut S,
     error: &mut Error<S::Item, P>,
-    mut check: F,
+    check: F,
 ) -> Option<bool> {
     if error.shrinks.reject < shrinks.reject
         && error.shrinks.accept < shrinks.accept
@@ -281,12 +271,13 @@ fn shrink<S: Shrink, P: Prove, F: FnMut(&S::Item) -> P>(
         let now = Instant::now();
         let shrunk = shrinker.shrink()?;
         let item = shrunk.item();
-        match handle(&item, &mut check) {
-            Some(cause) if error.cause == cause => {
+        match handle(&item, check) {
+            Some(cause) => {
                 *shrinker = shrunk;
+                error.item = item;
+                error.cause = cause;
                 error.shrinks.reject = 0;
                 error.shrinks.accept += 1;
-                error.shrunk = Some(item);
                 error.shrinks.duration += Instant::now() - now;
                 Some(true)
             }
@@ -315,22 +306,22 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
     let mut error = Error {
         state,
         cause,
-        original: item,
+        item,
         shrinks: Shrinks {
             accept: 0,
             reject: 0,
             duration: Duration::ZERO,
         },
-        shrunk: None,
     };
     while shrink(shrinks, &mut shrinker, &mut error, &mut check).is_some() {}
     Err(error)
 }
 
-type Results<G, P> = Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>;
+type Results<G, P> = Mutex<Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>>;
+
 fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     generator: &G,
-    results: &mut Results<G, P>,
+    results: &Results<G, P>,
     (offset, step, count): (usize, usize, usize),
     shrinks: Shrinks,
     errors: (&AtomicUsize, usize),
@@ -340,9 +331,11 @@ fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     for index in (offset..count).step_by(step) {
         let state = State::from_iteration(index, count, Some(random.u64(..)));
         match next(generator, state, shrinks, &check) {
-            Ok(item) if errors.0.load(Ordering::Relaxed) < errors.1 => results.push(Ok(item)),
+            Ok(item) if errors.0.load(Ordering::Relaxed) < errors.1 => {
+                results.lock().unwrap().push(Ok(item))
+            }
             Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
-                results.push(Err(error))
+                results.lock().unwrap().push(Err(error))
             }
             _ => break,
         }
@@ -358,18 +351,6 @@ const fn divide_ceiling(left: usize, right: usize) -> usize {
         value
     }
 }
-
-impl<P: Prove> PartialEq for Cause<P> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Disprove(left), Self::Disprove(right)) => left.is(right),
-            (Self::Panic(left), Self::Panic(right)) => left == right,
-            _ => false,
-        }
-    }
-}
-
-impl<P: Prove> Eq for Cause<P> {}
 
 impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

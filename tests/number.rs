@@ -85,7 +85,7 @@ mod range {
                 #[test]
                 fn keeps_value() -> Result {
                     match number::<$t>().keep().check(COUNT, |&value| value < 100 as $t) {
-                        Err(error) if &error.original == error.shrunk() => Ok(()),
+                        Err(error) if error.shrinks.accept == 0 => Ok(()),
                         result => result,
                     }?;
                     Ok(())
@@ -141,7 +141,7 @@ mod range {
                     .check(COUNT, |&(left, right)| left < right)
                 {
                     Err(error) => {
-                        let &(left, right) = error.shrunk();
+                        let (left, right) = error.item;
                         if right - left <= right / 100 as $t {
                             Ok(())
                         } else {
@@ -158,7 +158,7 @@ mod range {
                 match (positive::<$t>(), positive::<$t>().keep(), positive::<$t>())
                     .check(COUNT, |&(left, right, _)| left < right)
                 {
-                    Err(error) if error.shrunk().2 == 0 as $t => Ok(()),
+                    Err(error) if error.item.2 == 0 as $t => Ok(()),
                     result => result,
                 }?;
                 Ok(())
@@ -173,7 +173,7 @@ mod range {
                         count > 0
                     })
                     .unwrap_err();
-                assert_eq!(0 as $t, *error.shrunk());
+                assert_eq!(0 as $t, error.item);
             }
         };
         ($t:ident, $m:ident) => {
@@ -195,7 +195,7 @@ mod range {
                     .check(COUNT, |&(left, right)| left > right)
                 {
                     Err(error) => {
-                        let &(left, right) = error.shrunk();
+                        let (left, right) = error.item;
                         if left - right <= right.abs() / 100 as $t {
                             Ok(())
                         } else {
