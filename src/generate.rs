@@ -258,7 +258,7 @@ pub trait Generate {
     }
 
     /// Dampens the `size` (see [`Generate::size`] for more information about `size`) as items are generated.
-    /// - The `pressure` can be thought of as how fast will the `size` be reduced as the `depth` increases (see [`Generate::flatten`]
+    /// - The `pressure` can be thought of as *how fast* will the `size` be reduced as the `depth` increases (see [`Generate::flatten`]
     ///   for more information about `depth`).
     /// - The `deepest` will set the `size` to `0` when the `depth` is `>=` than it.
     /// - The `limit` will set the `size` to `0` after the number of times that the `depth` increased is `>=` than it.
@@ -270,8 +270,7 @@ pub trait Generate {
         Self: Sized,
         Dampen<Self>: Generate,
     {
-        debug_assert!(pressure.is_finite());
-        debug_assert!(pressure >= 0.0);
+        assert!(pressure.is_finite() && pressure >= 0.0);
         Dampen {
             pressure,
             deepest,

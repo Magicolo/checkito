@@ -18,8 +18,7 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
         } else {
             old / (state.depth as f64 * self.pressure).max(1.0)
         };
-        debug_assert!(old.is_finite());
-        debug_assert!(new.is_finite());
+        assert!(old.is_finite() && new.is_finite());
         state.size = new.clamp(0.0, 1.0);
         let shrink = self.inner.generate(state);
         state.size = old;
