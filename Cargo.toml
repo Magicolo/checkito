@@ -14,7 +14,7 @@ build = "build.rs"
 rust-version = "1.65.0"
 
 [dependencies]
-fastrand = { version = "2.1.1", default-features = false }
+fastrand = { version = "2.1.1", features = ["std"], default-features = false }
 regex-syntax = { version = "0.8.4", default-features = false }
 checkito_macro = "0.1.2"
 orn = "0.4.3"
