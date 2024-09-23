@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "1.6.1"
+version = "1.6.2"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 readme = "README.md"
@@ -14,8 +14,8 @@ build = "build.rs"
 rust-version = "1.65.0"
 
 [dependencies]
-fastrand = { version = "2.1.1", features = ["std"], default-features = false }
-regex-syntax = { version = "0.8.4", default-features = false }
+fastrand = "2.1.1"
+regex-syntax = "0.8.4"
 checkito_macro = "0.1.2"
 orn = "0.4.3"
 
