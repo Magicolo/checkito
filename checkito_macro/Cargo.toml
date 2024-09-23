@@ -1,6 +1,6 @@
 [package]
 name = "checkito_macro"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 documentation = "https://docs.rs/checkito_macro/latest/checkito_macro/"
