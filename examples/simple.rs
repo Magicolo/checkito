@@ -25,16 +25,14 @@ fn main() {
         .map(|(value, maximum)| Input { value, maximum })
         // The `Generate::check` method will generate 1000 `Input` values that will get gradually larger.
         .check(1000, |input| {
-            let result = filter_less_than(input);
-            // - The `prove` macro is not strictly required but it keeps some call site information if an error is encountered which can
-            // simplify the debugging process. Any type that implements the `Prove` trait (including a simple `bool`) can be returned.
-            // - This proof will fail for inputs where `input.value > 1000 && input.value > input.maximum` and when this happens,
+            let result = filter_less_than(&input);
+            // - This assertion will fail for inputs where `input.value > 1000 && input.value > input.maximum` and when this happens,
             // `checkito` will try to find the minimum sample that reproduces the failure.
-            prove!(result.is_some())?;
+            assert!(result.is_some());
             // Assertions can also be used.
             assert!(input.maximum < 1_000_000);
             // Multiple proofs can be defined.
-            prove!(result == Some(input.value))
+            assert_eq!(result, Some(input.value));
         });
 
     dbg!(result.unwrap_err());

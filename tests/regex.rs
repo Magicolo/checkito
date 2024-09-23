@@ -8,7 +8,7 @@ fn generate_matches_regex() -> Result {
     let matcher = ::regex::RegexBuilder::new(PATTERN).build().unwrap();
     Regex::new(PATTERN)
         .unwrap()
-        .check(COUNT, |item| matcher.is_match(item))?;
+        .check(COUNT, |item| matcher.is_match(&item))?;
     Ok(())
 }
 

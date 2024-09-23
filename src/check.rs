@@ -48,6 +48,7 @@ pub struct Checks<'a, G: ?Sized, F> {
     checker: Checker<'a, G>,
     random: Random,
     errors: usize,
+    items: bool,
     index: usize,
     count: usize,
     check: F,
@@ -108,6 +109,7 @@ impl<G: ?Sized, F: Clone> Clone for Checks<'_, G, F> {
             checker: self.checker.clone(),
             random: self.random.clone(),
             check: self.check.clone(),
+            items: self.items,
             errors: self.errors,
             index: self.index,
             count: self.count,
@@ -116,7 +118,7 @@ impl<G: ?Sized, F: Clone> Clone for Checks<'_, G, F> {
 }
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn check<P: Prove, F: FnMut(&G::Item) -> P>(
+    pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
         &self,
         size: f64,
         check: F,
@@ -127,21 +129,15 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
             self.shrinks,
             check,
         )
+        .map(|shrink| shrink.item())
     }
 
-    pub fn checks<P: Prove, F: FnMut(&G::Item) -> P>(
+    pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(
         &self,
         count: usize,
         check: F,
     ) -> Checks<'a, G, F> {
-        Checks {
-            checker: self.clone(),
-            random: Random::new(self.seed),
-            errors: 0,
-            index: 0,
-            count,
-            check,
-        }
+        Checks::new(self.clone(), count, true, check)
     }
 }
 
@@ -149,7 +145,7 @@ impl<'a, G: Generate + ?Sized + Sync> Checker<'a, G>
 where
     G::Item: Send,
 {
-    pub fn check_parallel<'b, P: Prove + Send + 'b, F: Fn(&G::Item) -> P + Sync + 'b>(
+    pub fn check_parallel<'b, P: Prove + Send + 'b, F: Fn(G::Item) -> P + Sync + 'b>(
         &'b self,
         count: usize,
         parallel: Option<usize>,
@@ -208,13 +204,26 @@ where
     }
 }
 
-impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Checks<'_, G, F> {
+impl<'a, G: ?Sized, F> Checks<'a, G, F> {
+    pub(crate) fn new(checker: Checker<'a, G>, count: usize, items: bool, check: F) -> Self {
+        let seed = checker.seed;
+        Self {
+            checker,
+            items,
+            count,
+            check,
+            random: Random::new(seed),
+            errors: 0,
+            index: 0,
+        }
+    }
+}
+
+impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator for Checks<'_, G, F> {
     type Item = Result<G::Item, Error<G::Item, P>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.count || self.errors >= self.checker.errors {
-            None
-        } else {
+        while self.index < self.count && self.errors < self.checker.errors {
             let result = next(
                 self.checker.generator,
                 State::from_iteration(self.index, self.count, Some(self.random.u64(..))),
@@ -223,18 +232,19 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P> Iterator for Check
             );
             self.index += 1;
             match result {
-                Ok(item) if self.errors < self.checker.errors => Some(Ok(item)),
-                Err(error) if self.errors < self.checker.errors => {
+                Ok(shrink) if self.items => return Some(Ok(shrink.item())),
+                Ok(_) => continue,
+                Err(error) => {
                     self.errors += 1;
-                    Some(Err(error))
+                    return Some(Err(error));
                 }
-                _ => None,
             }
         }
+        None
     }
 }
 
-fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, mut check: F) -> Option<Cause<P>> {
+fn handle<T, P: Prove, F: FnMut(T) -> P>(item: T, mut check: F) -> Option<Cause<P>> {
     let error = match panic::catch_unwind(AssertUnwindSafe(|| check(item))) {
         Ok(prove) if prove.prove() => return None,
         Ok(prove) => return Some(Cause::Disprove(prove)),
@@ -258,7 +268,7 @@ fn handle<T, P: Prove, F: FnMut(&T) -> P>(item: &T, mut check: F) -> Option<Caus
     }
 }
 
-fn shrink<S: Shrink, P: Prove, F: FnMut(&S::Item) -> P>(
+fn shrink<S: Shrink, P: Prove, F: FnMut(S::Item) -> P>(
     shrinks: Shrinks,
     shrinker: &mut S,
     error: &mut Error<S::Item, P>,
@@ -270,11 +280,10 @@ fn shrink<S: Shrink, P: Prove, F: FnMut(&S::Item) -> P>(
     {
         let now = Instant::now();
         let shrunk = shrinker.shrink()?;
-        let item = shrunk.item();
-        match handle(&item, check) {
+        match handle(shrunk.item(), check) {
             Some(cause) => {
                 *shrinker = shrunk;
-                error.item = item;
+                error.item = shrinker.item();
                 error.cause = cause;
                 error.shrinks.reject = 0;
                 error.shrinks.accept += 1;
@@ -292,21 +301,20 @@ fn shrink<S: Shrink, P: Prove, F: FnMut(&S::Item) -> P>(
     }
 }
 
-fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
+fn next<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P>(
     generator: &G,
     mut state: State,
     shrinks: Shrinks,
     mut check: F,
-) -> Result<G::Item, Error<G::Item, P>> {
+) -> Result<G::Shrink, Error<G::Item, P>> {
     let mut shrinker = generator.generate(&mut state);
-    let item = shrinker.item();
-    let Some(cause) = handle(&item, &mut check) else {
-        return Ok(item);
+    let Some(cause) = handle(shrinker.item(), &mut check) else {
+        return Ok(shrinker);
     };
     let mut error = Error {
         state,
         cause,
-        item,
+        item: shrinker.item(),
         shrinks: Shrinks {
             accept: 0,
             reject: 0,
@@ -319,7 +327,7 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
 
 type Results<G, P> = Mutex<Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>>;
 
-fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
+fn batch<G: Generate + ?Sized, P: Prove, F: Fn(G::Item) -> P>(
     generator: &G,
     results: &Results<G, P>,
     (offset, step, count): (usize, usize, usize),
@@ -331,8 +339,8 @@ fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     for index in (offset..count).step_by(step) {
         let state = State::from_iteration(index, count, Some(random.u64(..)));
         match next(generator, state, shrinks, &check) {
-            Ok(item) if errors.0.load(Ordering::Relaxed) < errors.1 => {
-                results.lock().unwrap().push(Ok(item))
+            Ok(shrink) if errors.0.load(Ordering::Relaxed) < errors.1 => {
+                results.lock().unwrap().push(Ok(shrink.item()))
             }
             Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
                 results.lock().unwrap().push(Err(error))

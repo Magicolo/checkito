@@ -32,12 +32,14 @@ fn shrinked_filter_preserves_inequality() -> Result {
     )
         .check(COUNT, |(pair, value)| {
             let Some((left, right)) = pair else {
-                return Ok(true);
+                return true;
             };
             assert_ne!(left, right);
-            prove!(*value < 1000)
+            value < 1000 // Force the check to fail at some point.
         })
         .unwrap_err();
-    assert!(matches!(error.cause, Cause::Disprove(_)));
+    assert_eq!(error.cause, Cause::Disprove(false));
+    let (left, right) = error.item.0.unwrap();
+    assert_ne!(left, right);
     Ok(())
 }

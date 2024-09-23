@@ -22,6 +22,12 @@ impl fmt::Display for Error {
     }
 }
 
+impl Prove for () {
+    fn prove(&self) -> bool {
+        true
+    }
+}
+
 impl Prove for bool {
     fn prove(&self) -> bool {
         *self
@@ -35,6 +41,7 @@ impl<T, E> Prove for Result<T, E> {
 }
 
 #[macro_export]
+#[deprecated(since = "1.7.0", note = "use standard assertion macros instead")]
 macro_rules! prove {
     ($prove:expr) => {{
         let prove = $prove;

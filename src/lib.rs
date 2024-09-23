@@ -34,10 +34,20 @@ use std::{
 };
 
 /*
+    FIXME: skeptic test doesn't seem to be working...
     TODO: Review `primitive::shrinked`.
     TODO: Support for test macro with 'type expressions'?
         - Adds a lot of complexity for a limited syntactic convenience...
         - Support for 'or' generators would be nice; would require a fancy macro.
+
+
+        - The '..' means that the rest of the fields should be filled with 'FullGenerate'.
+        - Parameters that have no explicit generator will be filled with 'FullGenerate'.
+        #[check(digit(), Person { name: letter().collect(), .. })]
+        fn is_digit(value: char, person: Person, count: usize) {
+            assert!(value.is_ascii_digit());
+        }
+
 
         #[checkito::test(shrink = 1, count = COUNT, seed = 11376, errors = 1)]
         i: usize | u8 | i16, // Generates tests for every permutation of type expressions.

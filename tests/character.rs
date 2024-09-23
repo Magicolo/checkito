@@ -20,7 +20,7 @@ fn empty_range() {
 fn is_same() -> Result {
     char::generator()
         .flat_map(|value| (value, Same(value)))
-        .check(COUNT, |&(left, right)| left == right)?;
+        .check(COUNT, |(left, right)| left == right)?;
     Ok(())
 }
 
@@ -58,7 +58,7 @@ macro_rules! collection {
                 (0..COUNT)
                     .generator()
                     .flat_map(|count| (count, char::generator().collect_with::<_, $t>(count)))
-                    .check(COUNT, |(count, value)| value $(.$i())? .count() == *count)?;
+                    .check(COUNT, |(count, value)| value $(.$i())? .count() == count)?;
                 Ok(())
             }
 
@@ -84,9 +84,9 @@ macro_rules! collection {
 }
 
 collection!(string, String, chars);
-collection!(vec_char, Vec<char>, into_iter);
-collection!(vecdeque_char, VecDeque<char>, into_iter);
-collection!(linked_list, LinkedList<char>, into_iter);
-collection!(box_char, Box<[char]>, into_iter);
-collection!(rc_char, Rc<[char]>, into_iter);
-collection!(arc_char, Arc<[char]>, into_iter);
+collection!(vec_char, Vec<char>, iter);
+collection!(vecdeque_char, VecDeque<char>, iter);
+collection!(linked_list, LinkedList<char>, iter);
+collection!(box_char, Box<[char]>, iter);
+collection!(rc_char, Rc<[char]>, iter);
+collection!(arc_char, Arc<[char]>, iter);

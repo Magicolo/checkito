@@ -307,7 +307,7 @@ pub trait Generate {
         Checker::new(self)
     }
 
-    fn checks<P: Prove, F: FnMut(&Self::Item) -> P>(
+    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
         &self,
         count: usize,
         check: F,
@@ -315,12 +315,12 @@ pub trait Generate {
         self.checker().checks(count, check)
     }
 
-    fn check<P: Prove, F: FnMut(&Self::Item) -> P>(
+    fn check<P: Prove, F: FnMut(Self::Item) -> P>(
         &self,
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>> {
-        for result in self.checks(count, check) {
+        for result in Checks::new(self.checker(), count, false, check) {
             result?;
         }
         Ok(())
