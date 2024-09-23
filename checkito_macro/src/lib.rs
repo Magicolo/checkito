@@ -8,7 +8,8 @@ pub fn regex(input: TokenStream) -> TokenStream {
     if let Lit::Str(string) = parse_macro_input!(input) {
         match Parser::new().parse(&string.value()) {
             Ok(_) => {
-                quote_spanned!(string.span() => ::checkito::regex::Regex::new(#string).unwrap()).into()
+                quote_spanned!(string.span() => ::checkito::regex::Regex::new(#string).unwrap())
+                    .into()
             }
             Err(error) => {
                 let error = format!("{error}");
