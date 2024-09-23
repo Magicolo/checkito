@@ -14,10 +14,10 @@ build = "build.rs"
 rust-version = "1.65.0"
 
 [dependencies]
-fastrand = "2.1.1"
-regex-syntax = "0.8.4"
+fastrand = { version = "2.1.1", default-features = false }
+regex-syntax = { version = "0.8.4", default-features = false }
 checkito_macro = "0.1.2"
-orn = "0.4.2"
+orn = "0.4.3"
 
 [dev-dependencies]
 regex = "1.10.6"
