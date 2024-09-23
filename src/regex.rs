@@ -26,6 +26,7 @@ pub enum Shrinker {
     All(collect::Shrinker<Shrinker, String>),
 }
 
+#[derive(Clone)]
 pub struct Error(Box<regex_syntax::Error>);
 
 impl fmt::Debug for Error {

@@ -12,6 +12,7 @@ pub mod keep;
 pub mod map;
 pub mod primitive;
 pub mod prove;
+pub mod random;
 pub mod regex;
 pub mod same;
 pub mod sample;

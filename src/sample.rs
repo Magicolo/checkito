@@ -1,8 +1,8 @@
 use crate::{
     generate::{Generate, State},
+    random::Random,
     shrink::Shrink,
 };
-use fastrand::Rng;
 
 #[derive(Debug)]
 pub struct Sampler<'a, G: ?Sized> {
@@ -16,7 +16,7 @@ pub struct Samples<'a, G: ?Sized> {
     sampler: Sampler<'a, G>,
     index: usize,
     count: usize,
-    random: Rng,
+    random: Random,
 }
 
 impl<'a, G: ?Sized> Sampler<'a, G> {
@@ -45,7 +45,7 @@ impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
             sampler: self.clone(),
             index: 0,
             count,
-            random: self.seed.map_or_else(Rng::new, Rng::with_seed),
+            random: Random::new(self.seed),
         }
     }
 }

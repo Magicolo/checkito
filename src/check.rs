@@ -1,5 +1,4 @@
-use crate::{generate::State, prove::Prove, shrink::Shrink, Generate};
-use fastrand::Rng;
+use crate::{generate::State, prove::Prove, random::Random, shrink::Shrink, Generate};
 use std::{
     borrow::Cow,
     error, fmt,
@@ -44,7 +43,7 @@ pub struct Checker<'a, G: ?Sized> {
 #[derive(Debug)]
 pub struct Checks<'a, G: ?Sized, F> {
     checker: Checker<'a, G>,
-    random: Rng,
+    random: Random,
     errors: usize,
     index: usize,
     count: usize,
@@ -141,7 +140,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     ) -> Checks<'a, G, F> {
         Checks {
             checker: self.clone(),
-            random: self.seed.map_or_else(Rng::new, Rng::with_seed),
+            random: Random::new(self.seed),
             errors: 0,
             index: 0,
             count,
@@ -166,7 +165,7 @@ where
         };
         let mut results = Vec::with_capacity(count);
         let errors = AtomicUsize::new(0);
-        let mut random = self.seed.map_or_else(Rng::new, Rng::with_seed);
+        let mut random = Random::new(self.seed);
         let capacity = divide_ceiling(count, parallel);
         if capacity <= 8 || count < 32 {
             batch(
@@ -193,7 +192,7 @@ where
                             (offset, parallel, count),
                             self.shrinks,
                             (errors, self.errors),
-                            &mut Rng::with_seed(seed),
+                            &mut Random::new(Some(seed)),
                             check,
                         );
                         results
@@ -336,7 +335,7 @@ fn batch<G: Generate + ?Sized, P: Prove, F: Fn(&G::Item) -> P>(
     (offset, step, count): (usize, usize, usize),
     shrinks: Shrinks,
     errors: (&AtomicUsize, usize),
-    random: &mut Rng,
+    random: &mut Random,
     check: F,
 ) {
     for index in (offset..count).step_by(step) {

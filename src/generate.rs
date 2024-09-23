@@ -12,12 +12,12 @@ use crate::{
     map::Map,
     primitive::Range,
     prove::Prove,
+    random::Random,
     sample::{Sampler, Samples},
     shrink::{All, Shrink},
     size::Size,
     utility::tuples,
 };
-use fastrand::Rng;
 use std::iter::FromIterator;
 
 #[derive(Clone, Debug)]
@@ -26,7 +26,7 @@ pub struct State {
     pub(crate) count: usize,
     pub(crate) depth: usize,
     seed: u64,
-    random: Rng,
+    random: Random,
 }
 
 /// When implemented for a type `T`, this allows to retrieve a generator for `T` that does not require any parameter.
@@ -330,12 +330,12 @@ pub trait Generate {
 
 impl State {
     pub fn new(size: f64, seed: Option<u64>) -> Self {
-        let random = seed.map_or_else(Rng::new, Rng::with_seed);
+        let random = Random::new(seed);
         Self {
             size: size.clamp(0.0, 1.0),
             depth: 0,
             count: 0,
-            seed: random.get_seed(),
+            seed: random.seed(),
             random,
         }
     }
@@ -361,7 +361,7 @@ impl State {
         self.seed
     }
 
-    pub fn random(&mut self) -> &mut Rng {
+    pub fn random(&mut self) -> &mut Random {
         &mut self.random
     }
 }
