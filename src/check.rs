@@ -309,9 +309,8 @@ fn next<G: Generate + ?Sized, P: Prove, F: FnMut(&G::Item) -> P>(
 ) -> Result<G::Item, Error<G::Item, P>> {
     let mut shrinker = generator.generate(&mut state);
     let item = shrinker.item();
-    let cause = match handle(&item, &mut check) {
-        Some(cause) => cause,
-        _ => return Ok(item),
+    let Some(cause) = handle(&item, &mut check) else {
+        return Ok(item);
     };
     let mut error = Error {
         state,
