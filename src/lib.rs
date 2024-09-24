@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod any;
 pub mod array;
 pub mod boxed;
@@ -42,6 +44,7 @@ use primitive::Range;
         - Should they be allowed to go outside the range?
         - If `size` is set to a fixed value (ex: #[check(size = 1.0)]), then `Dampen` cannot prevent exponential
         growth of recursive structures.
+    TODO: If #[check] holds only constant generators (including if it is empty), set the count to 1.
     TODO: Provide named implementations for builtin generators.
     TODO: Review `primitive::shrinked`.
     TODO: Support for test macro with 'type expressions'?

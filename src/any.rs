@@ -78,30 +78,6 @@ where
     }
 }
 
-impl<G: ?Sized> Generate for Any<&G>
-where
-    Any<G>: Generate,
-{
-    type Item = <Any<G> as Generate>::Item;
-    type Shrink = <Any<G> as Generate>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        unsafe { &*(self.0 as *const G as *const Any<G>) }.generate(state)
-    }
-}
-
-impl<G: ?Sized> Generate for Any<&mut G>
-where
-    Any<G>: Generate,
-{
-    type Item = <Any<G> as Generate>::Item;
-    type Shrink = <Any<G> as Generate>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Any(&*self.0).generate(state)
-    }
-}
-
 macro_rules! collection {
     ($t:ty, $i:ident, [$($w:ident)?], [$($n:ident)?]) => {
         impl<T: Generate $(,$w: Generate<Item = f64>)? $(,const $n: usize)?> Generate for $t {
@@ -116,6 +92,8 @@ macro_rules! collection {
 }
 
 collection!(Any<[T]>, indexed, [], []);
+collection!(Any<&[T]>, indexed, [], []);
+collection!(Any<&mut [T]>, indexed, [], []);
 collection!([Weight<W, T>], weighted, [W], []);
 collection!(Any<[T; N]>, indexed, [], [N]);
 collection!([Weight<W, T>; N], weighted, [W], [N]);
