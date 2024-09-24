@@ -22,8 +22,10 @@ pub mod standard;
 pub mod utility;
 
 pub use crate::{
+    check::Check,
     generate::{FullGenerate, Generate, IntoGenerate},
     prove::Prove,
+    sample::Sample,
     shrink::{FullShrink, IntoShrink, Shrink},
 };
 pub use checkito_macro::{check, regex};
@@ -35,6 +37,7 @@ use primitive::Range;
 
 /*
     FIXME: skeptic test don't seem to be working...
+    FIXME: #[check] macro produces duplicate compile errors (see 'Excess expression').
     TODO: Provide named implementations for builtin generators.
     TODO: Review `primitive::shrinked`.
     TODO: Support for test macro with 'type expressions'?

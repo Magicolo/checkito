@@ -1,4 +1,4 @@
-use crate::{generate::State, prove::Prove, shrink::Shrink, Generate};
+use crate::{generate::State, prove::Prove, random, shrink::Shrink, Generate};
 use core::{error, fmt, ops::Range, panic::AssertUnwindSafe, time::Duration};
 use std::{borrow::Cow, env, num::NonZeroUsize, panic::catch_unwind, time::Instant};
 
@@ -56,6 +56,36 @@ pub struct Checks<'a, G: ?Sized, F> {
     check: F,
 }
 
+pub trait Check: Generate {
+    fn checker(&self) -> Checker<Self> {
+        Checker::new(self, random::seed())
+    }
+
+    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Checks<Self, F> {
+        let mut checker = self.checker();
+        checker.count = count;
+        checker.checks(check)
+    }
+
+    fn check<P: Prove, F: FnMut(Self::Item) -> P>(
+        &self,
+        count: usize,
+        check: F,
+    ) -> Result<(), Error<Self::Item, P>> {
+        let mut checker = self.checker();
+        checker.count = count;
+        checker.items = false;
+        for result in checker.checks(check) {
+            result?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 /// An error produced by a check failure.
 /// A check fails when a proof `P` is `false` for a given generated value.
@@ -80,6 +110,8 @@ pub enum Cause<P> {
 }
 
 const COUNT: usize = 1000;
+
+impl<G: Generate + ?Sized> Check for G {}
 
 impl<'a, G: ?Sized> Checker<'a, G> {
     pub(crate) const fn new(generator: &'a G, seed: u64) -> Self {

@@ -2,6 +2,7 @@ use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     primitive::Range,
     same::Same,
+    sample::Sample,
     shrink::{All, Shrink},
 };
 use core::{

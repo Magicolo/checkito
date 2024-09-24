@@ -90,3 +90,34 @@ collection!(linked_list, LinkedList<char>, iter);
 collection!(box_char, Box<[char]>, iter);
 collection!(rc_char, Rc<[char]>, iter);
 collection!(arc_char, Arc<[char]>, iter);
+
+mod check {
+    use super::*;
+
+    #[check(char::generator().flat_map(|value| value..value))]
+    #[should_panic]
+    fn empty_range(_: char) {}
+
+    #[check(char::generator().flat_map(|value| (value, Same(value))))]
+    fn is_same(pair: (char, char)) {
+        assert_eq!(pair.0, pair.1);
+    }
+
+    #[check(ascii())]
+    fn is_ascii(value: char) {
+        assert!(value.is_ascii());
+    }
+
+    #[check(digit())]
+    fn is_digit(value: char) {
+        assert!(value.is_ascii_digit());
+    }
+
+    #[check(letter())]
+    fn is_alphabetic(value: char) {
+        assert!(value.is_ascii_alphabetic());
+    }
+
+    #[check(_)]
+    fn full_does_not_panic(_: char) {}
+}

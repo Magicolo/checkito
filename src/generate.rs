@@ -2,7 +2,6 @@ use crate::{
     any::Any,
     array::Array,
     boxed,
-    check::{Checker, Checks, Error},
     collect::Collect,
     dampen::Dampen,
     filter::Filter,
@@ -11,9 +10,7 @@ use crate::{
     keep::Keep,
     map::Map,
     primitive::Range,
-    prove::Prove,
-    random::{self, Random},
-    sample::{Sampler, Samples},
+    random::Random,
     shrink::{All, Shrink},
     size::Size,
     utility::tuples,
@@ -74,7 +71,9 @@ pub trait Generate {
     ///     (
     ///         with(|| Node::Leaf),
     ///         // Without [`Generate::boxed`], this type would be infinite.
-    ///         lazy(node).collect().map(Node::Branch).boxed()
+    ///         // Without [`Generate::lazy`], the stack would overflow.
+    ///         // Without [`Generate::dampen`], the tree would grow exponentially.
+    ///         lazy(node).collect().map(Node::Branch).dampen().boxed()
     ///     )
     ///     .any()
     ///     .map(|or| or.into())
@@ -289,51 +288,6 @@ pub trait Generate {
         Keep<Self>: Generate,
     {
         Keep(self)
-    }
-
-    /// Provides a [`Sampler`] that allows to configure sampling settings and generate samples.
-    fn sampler(&self) -> Sampler<Self> {
-        Sampler::new(self, random::seed())
-    }
-
-    /// Generates `count` random values the are progressively larger in size. For additional sampling settings, see [`Generate::sampler`].
-    fn samples(&self, count: usize) -> Samples<Self> {
-        let mut sampler = self.sampler();
-        sampler.count = count;
-        sampler.samples()
-    }
-
-    /// Generates a random value of `size` (0.0..=1.0). For additional sampling settings, see [`Generate::sampler`].
-    fn sample(&self, size: f64) -> Self::Item {
-        self.sampler().sample(size)
-    }
-
-    fn checker(&self) -> Checker<Self> {
-        Checker::new(self, random::seed())
-    }
-
-    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Checks<Self, F> {
-        let mut checker = self.checker();
-        checker.count = count;
-        checker.checks(check)
-    }
-
-    fn check<P: Prove, F: FnMut(Self::Item) -> P>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Result<(), Error<Self::Item, P>> {
-        let mut checker = self.checker();
-        checker.count = count;
-        checker.items = false;
-        for result in checker.checks(check) {
-            result?;
-        }
-        Ok(())
     }
 }
 

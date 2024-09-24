@@ -156,7 +156,7 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
             fn check((#(#patterns,)*): (#(#types,)*)) -> #output #block
 
             let generator = (#(#generators,)*);
-            let mut checker = ::checkito::Generate::checker(&generator);
+            let mut checker = ::checkito::Check::checker(&generator);
             ::checkito::check::environment(&mut checker);
             let mut count = #count;
             #[allow(clippy::useless_conversion, clippy::unnecessary_cast, clippy::unnecessary_fallible_conversions)]

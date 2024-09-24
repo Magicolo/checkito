@@ -1,5 +1,6 @@
 use crate::{
     generate::{Generate, State},
+    random,
     shrink::Shrink,
 };
 use core::ops::Range;
@@ -26,7 +27,28 @@ pub struct Samples<'a, G: ?Sized> {
     count: usize,
 }
 
+pub trait Sample: Generate {
+    /// Provides a [`Sampler`] that allows to configure sampling settings and generate samples.
+    fn sampler(&self) -> Sampler<Self> {
+        Sampler::new(self, random::seed())
+    }
+
+    /// Generates `count` random values the are progressively larger in size. For additional sampling settings, see [`Generate::sampler`].
+    fn samples(&self, count: usize) -> Samples<Self> {
+        let mut sampler = self.sampler();
+        sampler.count = count;
+        sampler.samples()
+    }
+
+    /// Generates a random value of `size` (0.0..=1.0). For additional sampling settings, see [`Generate::sampler`].
+    fn sample(&self, size: f64) -> Self::Item {
+        self.sampler().sample(size)
+    }
+}
+
 const COUNT: usize = 100;
+
+impl<G: Generate + ?Sized> Sample for G {}
 
 impl<'a, G: ?Sized> Sampler<'a, G> {
     pub(crate) const fn new(generate: &'a G, seed: u64) -> Self {
