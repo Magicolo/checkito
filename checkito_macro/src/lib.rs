@@ -120,14 +120,30 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
             }
             expression => Some(Ok(expression)),
         });
+    let mut constant = true;
     let (generators, errors) = pairs
         .iter()
         .map(|pattern @ PatType { ty, .. }| match expressions.next() {
             Some(Err(error)) => Err(error),
-            Some(Ok(expression @ Expr::Lit(ExprLit { lit: Lit::Str(literal), .. }))) => Ok(quote_spanned!(expression.span() => ::checkito::regex!(#literal))),
-            Some(Ok(expression @ Expr::Infer(_))) => Ok(quote_spanned!(expression.span() => <#ty as ::checkito::FullGenerate>::generator())),
-            Some(Ok(expression)) => Ok(quote_spanned!(expression.span() => #expression)),
-            None if rest.get() => Ok(quote_spanned!(pattern.span() => <#ty as ::checkito::FullGenerate>::generator())),
+            Some(Ok(expression @ Expr::Lit(ExprLit { lit: Lit::Str(literal), .. }))) => {
+                constant = false;
+                Ok(quote_spanned!(expression.span() => ::checkito::regex!(#literal)))
+            },
+            Some(Ok(expression @ Expr::Lit(ExprLit { lit: literal @ (Lit::Byte(_) | Lit::Char(_) | Lit::Int(_) | Lit::Float(_) | Lit::Bool(_)), .. }))) => 
+                Ok(quote_spanned!(expression.span() => ::checkito::same::Same(#literal as #ty))),
+            // TODO: Handle ranges with 'IntoGenerate'.
+            Some(Ok(expression @ Expr::Infer(_))) => {
+                constant = false;
+                Ok(quote_spanned!(expression.span() => <#ty as ::checkito::FullGenerate>::generator()))
+            },
+            Some(Ok(expression)) => {
+                constant = false;
+                Ok(quote_spanned!(expression.span() => #expression))
+            },
+            None if rest.get() => {
+                constant = false;
+                Ok(quote_spanned!(pattern.span() => <#ty as ::checkito::FullGenerate>::generator()))
+            },
             None => Err(utility::error(pattern, |pattern| format!("Missing generator for parameter '{pattern}'. Either add a generator in the '#[check]' macro, use '_' to fill in a single parameter or use '..' operator to fill in all remaining parameters."))),
         })
         .partition::<Vec<_>, _>(|result| result.is_ok());
@@ -143,7 +159,7 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
         ReturnType::Default => quote!(()),
         ReturnType::Type(_, output) => quote!(#output),
     };
-    let count = if inputs.is_empty() {
+    let count = if constant {
         quote!(1)
     } else {
         quote!(::checkito::check::count())
@@ -154,20 +170,20 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
         #vis fn #ident() {
             #(#errors;)*
             fn check((#(#patterns,)*): (#(#types,)*)) -> #output #block
-
-            let generator = (#(#generators,)*);
-            let mut checker = ::checkito::Check::checker(&generator);
-            ::checkito::check::environment(&mut checker);
-            let mut count = #count;
+            
             #[allow(clippy::useless_conversion, clippy::unnecessary_cast, clippy::unnecessary_fallible_conversions)]
-            { 
+            {
+                let generator = (#(#generators,)*);
+                let mut checker = ::checkito::Check::checker(&generator);
+                ::checkito::check::environment(&mut checker);
+                let mut count = #count;
                 #(#assigns;)* 
                 checker.items = false;
                 checker.count = count;
-            }
-            for result in checker.checks(check) {
-                if let ::core::result::Result::Err(error) = result {
-                    ::core::panic!("{}", error);
+                for result in checker.checks(check) {
+                    if let ::core::result::Result::Err(error) = result {
+                        ::core::panic!("{}", error);
+                    }
                 }
             }
         }
