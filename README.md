@@ -1,7 +1,7 @@
 <div align="center"> <h1> checkito </h1> </div>
 
 <p align="center">
-    <em> A simple <a href="https://hackage.haskell.org/package/QuickCheck">QuickCheck</a> inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing. One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space. </em>
+    <em> A safe, efficient and simple <a href="https://hackage.haskell.org/package/QuickCheck">QuickCheck</a> inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing. One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space. </em>
 </p>
 
 <div align="right">
