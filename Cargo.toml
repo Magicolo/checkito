@@ -19,7 +19,7 @@ parallel = []
 [dependencies]
 fastrand = "2.1.1"
 regex-syntax = "0.8.4"
-checkito_macro = "0.2.0"
+checkito_macro = "0.2.1"
 orn = "0.4.3"
 
 [dev-dependencies]

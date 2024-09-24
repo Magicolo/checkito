@@ -38,6 +38,10 @@ use primitive::Range;
 /*
     FIXME: skeptic test don't seem to be working...
     FIXME: #[check] macro produces duplicate compile errors (see 'Excess expression').
+    TODO: Review clamping of `size` in `Size` and `Dampen`.
+        - Should they be allowed to go outside the range?
+        - If `size` is set to a fixed value (ex: #[check(size = 1.0)]), then `Dampen` cannot prevent exponential
+        growth of recursive structures.
     TODO: Provide named implementations for builtin generators.
     TODO: Review `primitive::shrinked`.
     TODO: Support for test macro with 'type expressions'?
