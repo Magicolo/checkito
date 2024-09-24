@@ -1,4 +1,5 @@
 pub mod common;
+
 use common::*;
 
 #[check('a'..='z')]
@@ -60,4 +61,11 @@ fn fails_on_specific_input(left: String, right: String) {
     if left.len() + right.len() > 10 {
         assert_eq!(left.contains('z'), right.contains('Z'));
     }
+}
+
+#[check(1, 'a')]
+fn compiles_with_constants_and_runs_once(_: u8, _: char) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), 0);
 }
