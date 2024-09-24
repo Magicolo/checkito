@@ -57,3 +57,5 @@ _See the [examples](examples/) and [tests](tests/) folder for more detailed exam
 ## Alternatives
 - [proptest](https://crates.io/crates/proptest)
 - [quickcheck](https://crates.io/crates/quickcheck)
+- [arbitrary](https://crates.io/crates/arbitrary)
+- [monkey_test](https://crates.io/crates/monkey_test)

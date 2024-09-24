@@ -26,15 +26,16 @@ pub use crate::{
     prove::Prove,
     shrink::{FullShrink, IntoShrink, Shrink},
 };
-pub use checkito_macro::regex;
-use primitive::Range;
-use std::{
+pub use checkito_macro::{check, regex};
+use core::{
     fmt,
-    ops::{self, Neg},
+    ops::{Neg, RangeFrom, RangeFull, RangeToInclusive},
 };
+use primitive::Range;
 
 /*
-    FIXME: skeptic test doesn't seem to be working...
+    FIXME: skeptic test don't seem to be working...
+    TODO: Provide named implementations for builtin generators.
     TODO: Review `primitive::shrinked`.
     TODO: Support for test macro with 'type expressions'?
         - Adds a lot of complexity for a limited syntactic convenience...
@@ -74,22 +75,22 @@ use std::{
 pub fn number<T>() -> impl Generate<Item = T>
 where
     Range<T>: Generate<Item = T>,
-    ops::RangeFull: TryInto<Range<T>>,
-    <ops::RangeFull as TryInto<Range<T>>>::Error: fmt::Debug,
+    RangeFull: TryInto<Range<T>>,
+    <RangeFull as TryInto<Range<T>>>::Error: fmt::Debug,
 {
     (..).try_into().unwrap()
 }
 
 pub fn positive<T: Default>() -> impl Generate<Item = T>
 where
-    ops::RangeFrom<T>: IntoGenerate<Item = T>,
+    RangeFrom<T>: IntoGenerate<Item = T>,
 {
     (T::default()..).generator()
 }
 
 pub fn negative<T: Neg + Default>() -> impl Generate<Item = T>
 where
-    ops::RangeToInclusive<T>: IntoGenerate<Item = T>,
+    RangeToInclusive<T>: IntoGenerate<Item = T>,
 {
     (..=T::default()).generator()
 }

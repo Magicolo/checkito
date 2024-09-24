@@ -18,13 +18,14 @@ use crate::{
     size::Size,
     utility::tuples,
 };
-use core::iter::FromIterator;
+use core::{iter::FromIterator, ops};
 
 #[derive(Clone, Debug)]
 pub struct State {
     pub(crate) size: f64,
     pub(crate) count: usize,
     pub(crate) depth: usize,
+    index: usize,
     seed: u64,
     random: Random,
 }
@@ -290,12 +291,14 @@ pub trait Generate {
 
     /// Provides a [`Sampler`] that allows to configure sampling settings and generate samples.
     fn sampler(&self) -> Sampler<Self> {
-        Sampler::new(self, None)
+        Sampler::new(self)
     }
 
     /// Generates `count` random values the are progressively larger in size. For additional sampling settings, see [`Generate::sampler`].
     fn samples(&self, count: usize) -> Samples<Self> {
-        self.sampler().samples(count)
+        let mut sampler = self.sampler();
+        sampler.count = count;
+        sampler.samples()
     }
 
     /// Generates a random value of `size` (0.0..=1.0). For additional sampling settings, see [`Generate::sampler`].
@@ -312,7 +315,9 @@ pub trait Generate {
         count: usize,
         check: F,
     ) -> Checks<Self, F> {
-        self.checker().checks(count, check)
+        let mut checker = self.checker();
+        checker.count = count;
+        checker.checks(check)
     }
 
     fn check<P: Prove, F: FnMut(Self::Item) -> P>(
@@ -320,7 +325,10 @@ pub trait Generate {
         count: usize,
         check: F,
     ) -> Result<(), Error<Self::Item, P>> {
-        for result in Checks::new(self.checker(), count, false, check) {
+        let mut checker = self.checker();
+        checker.count = count;
+        checker.items = false;
+        for result in checker.checks(check) {
             result?;
         }
         Ok(())
@@ -328,24 +336,42 @@ pub trait Generate {
 }
 
 impl State {
-    pub fn new(size: f64, seed: Option<u64>) -> Self {
+    pub(crate) fn new(size: f64, seed: Option<u64>) -> Self {
         let random = Random::new(seed);
         Self {
             size: size.clamp(0.0, 1.0),
             depth: 0,
+            index: 0,
             count: 0,
             seed: random.seed(),
             random,
         }
     }
 
-    pub(crate) fn from_iteration(index: usize, count: usize, seed: Option<u64>) -> Self {
-        // This size calculation ensures that 10% of samples are fully sized.
-        if count <= 1 {
-            Self::new(count as _, seed)
+    pub(crate) fn from_iteration(
+        index: usize,
+        count: usize,
+        mut size: ops::Range<f64>,
+        seed: Option<u64>,
+    ) -> Self {
+        size.start = size.start.clamp(0.0, 1.0);
+        size.end = size.end.clamp(0.0, 1.0);
+        let range = size.end - size.start;
+        assert!(range >= 0.0);
+
+        let mut state = if count <= 1 {
+            Self::new(size.end, seed)
         } else {
-            Self::new(index as f64 / count as f64 * 1.1, seed)
-        }
+            // This size calculation ensures that 25% of samples are fully sized.
+            let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
+            Self::new(ratio * range, seed)
+        };
+        state.index = index;
+        state
+    }
+
+    pub const fn index(&self) -> usize {
+        self.index
     }
 
     pub const fn size(&self) -> f64 {

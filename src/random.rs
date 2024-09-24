@@ -1,17 +1,21 @@
 use core::ops::RangeBounds;
-use fastrand::Rng;
+use fastrand::{u64, Rng};
 
 #[derive(Debug, Clone)]
 pub struct Random(Rng);
 
 impl Random {
     pub fn new(seed: Option<u64>) -> Self {
-        Self(seed.map_or_else(Rng::new, Rng::with_seed))
+        Self(Rng::with_seed(seed.unwrap_or_else(self::seed)))
     }
 
     pub fn seed(&self) -> u64 {
         self.0.get_seed()
     }
+}
+
+pub(crate) fn seed() -> u64 {
+    u64(..)
 }
 
 macro_rules! bridge {
