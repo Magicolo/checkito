@@ -1,11 +1,11 @@
 mod utility;
 
+use std::cell::Cell;
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use regex_syntax::Parser;
 use syn::{
-    parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Expr, ExprAssign,
-    ExprLit, FnArg, ItemFn, Lit, PatType, ReturnType, Signature,
+    parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::Comma, Expr, ExprRange, ExprAssign, ExprLit, FnArg, ItemFn, Lit, PatType, RangeLimits, ReturnType, Signature
 };
 
 #[proc_macro]
@@ -41,29 +41,16 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
         ..
     } = parse_macro_input!(item);
     let inputs = inputs.iter().collect::<Vec<_>>();
-    let patterns = inputs
+    let pairs = inputs
         .iter()
         .flat_map(|argument| match argument {
-            FnArg::Typed(PatType { pat, .. }) => Some(pat),
+            FnArg::Typed(pattern) => Some(pattern),
             FnArg::Receiver(_) => None,
         })
         .collect::<Vec<_>>();
-    let types = inputs
-        .iter()
-        .flat_map(|argument| match argument {
-            FnArg::Typed(PatType { ty, .. }) => Some(ty),
-            FnArg::Receiver(_) => None,
-        })
-        .collect::<Vec<_>>();
-    let keys = quote!([
-        count,
-        errors,
-        seed,
-        size,
-        shrinks.accept,
-        shrinks.reject,
-        shrinks.duration
-    ]);
+    let patterns = pairs.iter().map(|PatType { pat, .. }| pat).collect::<Vec<_>>();
+    let types = pairs.iter().map(|PatType { ty, .. }| ty).collect::<Vec<_>>();
+    let keys = quote!([count, errors, seed, size, shrinks.accept, shrinks.reject, shrinks.duration]);
     let assigns = content.iter()
         .filter_map(|expression| match expression {
             Expr::Assign(ExprAssign { left, right, .. }) => {
@@ -121,25 +108,36 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
             _ => None,
         })
         .collect::<Vec<_>>();
+    let rest = Cell::new(false);
     let mut expressions = content
         .iter()
-        .filter(|expression| !matches!(expression, Expr::Assign(_)));
-    let generators = types
+        .filter_map(|expression| match expression {
+            Expr::Assign(_) => None,
+            expression if rest.get() => Some(Err(utility::error(expression, |expression| format!("Excess expression '{expression}' after '..' operator. Only assignment expression are allowed in this position to configure the generation.")))),
+            Expr::Range(ExprRange { start: None, end: None, limits: RangeLimits::HalfOpen(_), .. }) => {
+                rest.set(true);
+                None
+            }
+            expression => Some(Ok(expression)),
+        });
+    let (generators, errors) = pairs
         .iter()
-        .map(|input| match expressions.next() {
-            Some(Expr::Lit(ExprLit {
-                lit: Lit::Str(literal),
-                ..
-            })) => quote_spanned!(literal.span() => ::checkito::regex!(#literal)),
-            Some(expression) => quote_spanned!(expression.span() => #expression),
-            _ => quote_spanned!(input.span() => <#input as ::checkito::FullGenerate>::generator()),
+        .map(|pattern @ PatType { ty, .. }| match expressions.next() {
+            Some(Err(error)) => Err(error),
+            Some(Ok(expression @ Expr::Lit(ExprLit { lit: Lit::Str(literal), .. }))) => Ok(quote_spanned!(expression.span() => ::checkito::regex!(#literal))),
+            Some(Ok(expression @ Expr::Infer(_))) => Ok(quote_spanned!(expression.span() => <#ty as ::checkito::FullGenerate>::generator())),
+            Some(Ok(expression)) => Ok(quote_spanned!(expression.span() => #expression)),
+            None if rest.get() => Ok(quote_spanned!(pattern.span() => <#ty as ::checkito::FullGenerate>::generator())),
+            None => Err(utility::error(pattern, |pattern| format!("Missing generator for parameter '{pattern}'. Either add a generator in the '#[check]' macro, use '_' to fill in a single parameter or use '..' operator to fill in all remaining parameters."))),
         })
-        .collect::<Vec<_>>();
-    let excess = expressions
-        .map(|expression| utility::error(
-    expression,
-    |expression| format!("There is no corresponding parameter for the expression '{expression}'. Either add a parameter for it or remove this expression."))
-        )
+        .partition::<Vec<_>, _>(|result| result.is_ok());
+    let generators = generators.into_iter().filter_map(Result::ok).collect::<Vec<_>>();
+    let errors = expressions
+        .filter_map(|expression| match expression {
+            Ok(expression) => Some(utility::error(expression, |expression| format!("Excess expression '{expression}' with no corresponding parameter. Either add a parameter or remove this expression."))),
+            Err(error) => Some(error),
+        })
+        .chain(errors.into_iter().filter_map(Result::err))
         .collect::<Vec<_>>();
     let output = match output {
         ReturnType::Default => quote!(()),
@@ -153,11 +151,11 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #(#attrs)*
         #[test]
-            #vis fn #ident() {
+        #vis fn #ident() {
+            #(#errors;)*
             fn check((#(#patterns,)*): (#(#types,)*)) -> #output #block
 
             let generator = (#(#generators,)*);
-            #(#excess;)*
             let mut checker = ::checkito::Generate::checker(&generator);
             ::checkito::check::environment(&mut checker);
             let mut count = #count;

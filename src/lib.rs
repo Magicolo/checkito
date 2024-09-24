@@ -34,7 +34,6 @@ use core::{
 use primitive::Range;
 
 /*
-    FIXME: specifying the seed in `[check(seed = 1)]` does not reproduce deterministic results.
     FIXME: skeptic test don't seem to be working...
     TODO: Provide named implementations for builtin generators.
     TODO: Review `primitive::shrinked`.

@@ -30,8 +30,17 @@ fn compiles_with_input_output(value: char) -> bool {
 #[check]
 fn compiles_with_no_argument() {}
 
-#[check]
-fn compiles_with_multiple_arguments(
+#[check(_, _, _, _)]
+fn compiles_with_multiple_discarded_arguments(
+    _first: u8,
+    _second: String,
+    _third: Vec<()>,
+    _fourth: [isize; 12],
+) {
+}
+
+#[check(..)]
+fn compiles_with_multiple_rest_arguments(
     _first: u8,
     _second: String,
     _third: Vec<()>,

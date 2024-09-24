@@ -36,7 +36,7 @@ pub struct State {
 /// It should be implemented for any type that has a canonical way to be generated.
 /// To provide a generator with parameters, see [`IntoGenerate`].
 ///
-/// For example, this trait is implemented for all non-pointer primitive types and for some standard types (such as [`Option<T>`] amd [`Result<T, E>`]).
+/// For example, this trait is implemented for all non-pointer primitive types and for some standard types (such as [`Option<T>`] and [`Result<T, E>`]).
 pub trait FullGenerate {
     type Item;
     type Generate: Generate<Item = Self::Item>;
