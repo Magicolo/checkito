@@ -190,17 +190,17 @@ where
             results: &Results<G, P>,
             (offset, step, count): (usize, usize, usize),
             shrinks: Shrinks,
-            errors: (&AtomicUsize, usize),
-            random: &mut Random,
+            errors: (&AtomicUsize, NonZeroUsize),
+            (size, seed): (Range<f64>, u64),
             check: F,
         ) {
             for index in (offset..count).step_by(step) {
-                let state = State::from_iteration(index, count, Some(random.u64(..)));
+                let state = State::new(index, count, size.clone(), seed);
                 match next(generator, state, shrinks, &check) {
-                    Ok(shrink) if errors.0.load(Ordering::Relaxed) < errors.1 => {
+                    Ok(shrink) if errors.0.load(Ordering::Relaxed) < errors.1.get() => {
                         results.lock().unwrap().push(Ok(shrink.item()))
                     }
-                    Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1 => {
+                    Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1.get() => {
                         results.lock().unwrap().push(Err(error))
                     }
                     _ => break,
@@ -214,7 +214,6 @@ where
         };
         let results = Mutex::new(Vec::with_capacity(count));
         let errors = AtomicUsize::new(0);
-        let mut random = Random::new(self.seed);
         let capacity = divide_ceiling(count, parallel);
         if capacity <= 8 || count < 32 {
             batch(
@@ -223,7 +222,7 @@ where
                 (0, 1, count),
                 self.shrinks,
                 (&errors, self.errors),
-                &mut random,
+                (self.size.clone(), self.seed),
                 check,
             );
         } else {
@@ -232,7 +231,8 @@ where
                     let check = &check;
                     let errors = &errors;
                     let results = &results;
-                    let seed = random.u64(..);
+                    let seed = self.seed;
+                    let size = self.size.clone();
                     scope.spawn(move || {
                         batch(
                             self.generator,
@@ -240,7 +240,7 @@ where
                             (offset, parallel, count),
                             self.shrinks,
                             (errors, self.errors),
-                            &mut Random::new(Some(seed)),
+                            (size, seed),
                             check,
                         )
                     });
@@ -252,7 +252,7 @@ where
                     (0, parallel, count),
                     self.shrinks,
                     (&errors, self.errors),
-                    &mut random,
+                    (self.size.clone(), self.seed),
                     &check,
                 )
             });
