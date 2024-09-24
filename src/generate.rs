@@ -12,7 +12,7 @@ use crate::{
     map::Map,
     primitive::Range,
     prove::Prove,
-    random::Random,
+    random::{self, Random},
     sample::{Sampler, Samples},
     shrink::{All, Shrink},
     size::Size,
@@ -20,9 +20,11 @@ use crate::{
 };
 use core::{iter::FromIterator, ops};
 
+const COUNT: usize = u8::MAX as usize;
+
 #[derive(Clone, Debug)]
 pub struct State {
-    pub(crate) size: f64,
+    pub(crate) size: (f64, ops::Range<f64>),
     pub(crate) count: usize,
     pub(crate) depth: usize,
     index: usize,
@@ -110,7 +112,7 @@ pub trait Generate {
         Self: Sized,
         Filter<Self, F>: Generate,
     {
-        self.filter_with(256, filter)
+        self.filter_with(COUNT, filter)
     }
 
     /// Generates many [`Generate::Item`] with an increasingly large `size` until the filter function `F` is satisfied, up to
@@ -132,7 +134,7 @@ pub trait Generate {
         Self: Sized,
         FilterMap<Self, F>: Generate,
     {
-        self.filter_map_with(256, map)
+        self.filter_map_with(COUNT, map)
     }
 
     /// Combines [`Generate::map`] and [`Generate::filter`] in a single [`Generate`] implementation where the map function
@@ -209,7 +211,7 @@ pub trait Generate {
         Self: Sized,
         Collect<Self, Range<usize>, F>: Generate,
     {
-        self.collect_with((..256usize).generator())
+        self.collect_with((..COUNT).generator())
     }
 
     /// Generates a variable number of items based on the provided `count` [`Generate`] and then builds a value of type
@@ -236,12 +238,11 @@ pub trait Generate {
     ///
     /// The provided `map` function is described as such:
     /// - Its first argument is the current `size` in the range `[0.0..1.0]`.
-    /// - Its second argument is the current `depth` (see [`Generate::flatten`] for more information about `depth`).
     /// - Its return value will be clamped to the `[0.0..1.0]` range and panic if it is infinite or [`f64::NAN`].
     ///
     /// Useful to nullify the sizing of items (`self.size(|_, _| 1.0)` will always produces items of full `size`) or to
     /// attenuate the `size`.
-    fn size<F: Fn(f64, usize) -> f64>(self, map: F) -> Size<Self, F>
+    fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
         Size<Self, F>: Generate,
@@ -271,7 +272,8 @@ pub trait Generate {
         Self: Sized,
         Dampen<Self>: Generate,
     {
-        assert!(pressure.is_finite() && pressure >= 0.0);
+        assert!(pressure.is_finite());
+        assert!(pressure >= 0.0);
         Dampen {
             pressure,
             deepest,
@@ -291,7 +293,7 @@ pub trait Generate {
 
     /// Provides a [`Sampler`] that allows to configure sampling settings and generate samples.
     fn sampler(&self) -> Sampler<Self> {
-        Sampler::new(self)
+        Sampler::new(self, random::seed())
     }
 
     /// Generates `count` random values the are progressively larger in size. For additional sampling settings, see [`Generate::sampler`].
@@ -307,7 +309,7 @@ pub trait Generate {
     }
 
     fn checker(&self) -> Checker<Self> {
-        Checker::new(self)
+        Checker::new(self, random::seed())
     }
 
     fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
@@ -336,38 +338,15 @@ pub trait Generate {
 }
 
 impl State {
-    pub(crate) fn new(size: f64, seed: Option<u64>) -> Self {
-        let random = Random::new(seed);
+    pub(crate) fn new(index: usize, count: usize, size: ops::Range<f64>, seed: u64) -> Self {
         Self {
-            size: size.clamp(0.0, 1.0),
+            size: self::size(index, count, size),
             depth: 0,
-            index: 0,
+            index,
             count: 0,
-            seed: random.seed(),
-            random,
+            seed,
+            random: Random::new(seed.wrapping_add(index as _)),
         }
-    }
-
-    pub(crate) fn from_iteration(
-        index: usize,
-        count: usize,
-        mut size: ops::Range<f64>,
-        seed: Option<u64>,
-    ) -> Self {
-        size.start = size.start.clamp(0.0, 1.0);
-        size.end = size.end.clamp(0.0, 1.0);
-        let range = size.end - size.start;
-        assert!(range >= 0.0);
-
-        let mut state = if count <= 1 {
-            Self::new(size.end, seed)
-        } else {
-            // This size calculation ensures that 25% of samples are fully sized.
-            let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
-            Self::new(ratio * range, seed)
-        };
-        state.index = index;
-        state
     }
 
     pub const fn index(&self) -> usize {
@@ -375,7 +354,7 @@ impl State {
     }
 
     pub const fn size(&self) -> f64 {
-        self.size
+        self.size.0
     }
 
     pub const fn depth(&self) -> usize {
@@ -388,6 +367,26 @@ impl State {
 
     pub fn random(&mut self) -> &mut Random {
         &mut self.random
+    }
+}
+
+pub(crate) fn size(
+    index: usize,
+    count: usize,
+    mut size: ops::Range<f64>,
+) -> (f64, ops::Range<f64>) {
+    size.start = size.start.clamp(0.0, 1.0);
+    size.end = size.end.clamp(0.0, 1.0);
+
+    if count <= 1 {
+        (size.end, size)
+    } else {
+        let range = size.end - size.start;
+        assert!(range >= 0.0);
+        assert!(index < count);
+        // This size calculation ensures that 25% of samples are fully sized.
+        let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
+        (size.start + ratio * range, size)
     }
 }
 

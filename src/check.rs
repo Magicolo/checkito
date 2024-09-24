@@ -1,6 +1,6 @@
-use crate::{generate::State, prove::Prove, random::Random, shrink::Shrink, Generate};
+use crate::{generate::State, prove::Prove, shrink::Shrink, Generate};
 use core::{error, fmt, ops::Range, panic::AssertUnwindSafe, time::Duration};
-use std::{borrow::Cow, env, fmt::Write, num::NonZeroUsize, panic::catch_unwind, time::Instant};
+use std::{borrow::Cow, env, num::NonZeroUsize, panic::catch_unwind, time::Instant};
 
 /// Bounds the shrinking process.
 #[derive(Clone, Copy, Debug)]
@@ -32,7 +32,7 @@ pub struct Checker<'a, G: ?Sized> {
     pub shrinks: Shrinks,
     /// Seed for the random number generator used to generate random primitives.
     /// Defaults to a random value.
-    pub seed: Option<u64>,
+    pub seed: u64,
     /// Range of sizes that will be gradually traversed while generating values.
     /// Defaults to `0.0..1.0`.
     pub size: Range<f64>,
@@ -49,7 +49,6 @@ pub struct Checker<'a, G: ?Sized> {
 #[derive(Debug)]
 pub struct Checks<'a, G: ?Sized, F> {
     checker: Checker<'a, G>,
-    random: Random,
     errors: usize,
     items: bool,
     index: usize,
@@ -83,7 +82,7 @@ pub enum Cause<P> {
 const COUNT: usize = 1000;
 
 impl<'a, G: ?Sized> Checker<'a, G> {
-    pub const fn new(generator: &'a G) -> Self {
+    pub(crate) const fn new(generator: &'a G, seed: u64) -> Self {
         Self {
             generator,
             errors: NonZeroUsize::MIN,
@@ -93,7 +92,7 @@ impl<'a, G: ?Sized> Checker<'a, G> {
                 reject: usize::MAX,
                 duration: Duration::from_secs(30),
             },
-            seed: None,
+            seed,
             size: 0.0..1.0,
             count: COUNT,
         }
@@ -118,7 +117,6 @@ impl<G: ?Sized, F: Clone> Clone for Checks<'_, G, F> {
     fn clone(&self) -> Self {
         Self {
             checker: self.checker.clone(),
-            random: self.random.clone(),
             check: self.check.clone(),
             items: self.items,
             errors: self.errors,
@@ -136,7 +134,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     ) -> Result<G::Item, Error<G::Item, P>> {
         next(
             self.generator,
-            State::new(size, self.seed),
+            State::new(0, 1, size..size, self.seed),
             self.shrinks,
             check,
         )
@@ -149,7 +147,6 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
             items: self.items,
             count: self.count,
             check,
-            random: Random::new(self.seed),
             errors: 0,
             index: 0,
         }
@@ -271,11 +268,11 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator for Checks
         while self.index < self.count && self.errors < self.checker.errors.get() {
             let result = next(
                 self.checker.generator,
-                State::from_iteration(
+                State::new(
                     self.index,
                     self.count,
                     self.checker.size.clone(),
-                    Some(self.random.u64(..)),
+                    self.checker.seed,
                 ),
                 self.checker.shrinks,
                 &mut self.check,
@@ -389,7 +386,7 @@ pub fn environment<G>(checker: &mut Checker<'_, G>) {
     }
     if let Ok(value) = env::var("CHECKITO_SEED") {
         if let Ok(value) = value.parse::<u64>() {
-            checker.seed = Some(value);
+            checker.seed = value;
         }
     }
     if let Ok(value) = env::var("CHECKITO_SHRINKS_ACCEPT") {
@@ -426,14 +423,11 @@ impl<T: fmt::Debug, P: fmt::Debug> fmt::Debug for Error<T, P> {
             &self.item,
             self.state.index() + 1,
         ))?;
-        f.write_char(' ')?;
-        let mut map = f.debug_map();
-        let map = map
-            .entry(&"seed", &self.state.seed())
-            .entry(&"size", &self.state.size());
+        let mut map = f.debug_struct("");
+        let map = map.field("seed", &self.state.seed());
         match &self.cause {
-            Cause::Panic(Some(message)) => map.entry(&"panic", message),
-            Cause::Disprove(proof) => map.entry(&"proof", proof),
+            Cause::Panic(Some(message)) => map.field("panic", message),
+            Cause::Disprove(proof) => map.field("proof", proof),
             _ => map,
         };
         map.finish()

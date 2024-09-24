@@ -1,5 +1,5 @@
 use crate::{
-    generate::{Generate, State},
+    generate::{self, Generate, State},
     shrink::Shrink,
 };
 
@@ -32,10 +32,10 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
-        let old = state.size;
+        let old = state.size.clone();
         for i in 0..self.retries {
-            let new = old + (1.0 - old) * (i as f64 / self.retries as f64);
-            state.size = new.clamp(0.0, 1.0);
+            let new = generate::size(i, self.retries, state.size.1.clone());
+            state.size = new;
             let inner = self.inner.generate(state);
             let item = inner.item();
             if (self.map)(item).is_some() {

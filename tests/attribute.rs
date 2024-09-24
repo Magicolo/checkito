@@ -45,7 +45,9 @@ fn compiles_with_regex_input(value: String) {
     assert!(value.chars().all(|value| value.is_numeric()));
 }
 
-#[check('a'..='z', 'A'..='Z', seed = 7782824472370086121, size = 1)]
-fn fails_on_specific_input(left: char, right: char) {
-    assert_eq!(left == 'z', right == 'Z');
+#[check(Generate::collect('a'..='z'), Generate::collect('A'..='Z'))]
+fn fails_on_specific_input(left: String, right: String) {
+    if left.len() + right.len() > 10 {
+        assert_eq!(left.contains('z'), right.contains('Z'));
+    }
 }

@@ -108,8 +108,7 @@ macro_rules! tuple {
                 let start = self.index;
                 self.index += 1;
                 for i in 0..count.get() {
-                    let index = (start + i) % count.get();
-                    match index {
+                    match (start + i) % count.get() {
                         $($i => {
                             if let Some(shrink) = self.inner.$i.shrink() {
                                 let mut shrinks = self.inner.clone();

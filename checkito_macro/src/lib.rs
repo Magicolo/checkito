@@ -84,8 +84,8 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
                     quote_spanned!(left.span() => checker.errors = #right)
                 } else if path.iter().eq(["seed"]) {
                     let right = match right.as_ref() {
-                        Expr::Lit(ExprLit { lit: Lit::Int(literal), .. }) => quote_spanned!(literal.span() => ::core::option::Option::Some({ #literal } as u64)),
-                        right => quote_spanned!(right.span() => ::core::option::Option::Some({ #right }.try_into().unwrap())),
+                        Expr::Lit(ExprLit { lit: Lit::Int(literal), .. }) => quote_spanned!(literal.span() => { #literal } as u64),
+                        right => quote_spanned!(right.span() => { #right }.try_into().unwrap()),
                     };
                     quote_spanned!(left.span() => checker.seed = #right)
                 } else if path.iter().eq(["size"]) {

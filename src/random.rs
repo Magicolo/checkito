@@ -5,8 +5,8 @@ use fastrand::{u64, Rng};
 pub struct Random(Rng);
 
 impl Random {
-    pub fn new(seed: Option<u64>) -> Self {
-        Self(Rng::with_seed(seed.unwrap_or_else(self::seed)))
+    pub fn new(seed: u64) -> Self {
+        Self(Rng::with_seed(seed))
     }
 
     pub fn seed(&self) -> u64 {

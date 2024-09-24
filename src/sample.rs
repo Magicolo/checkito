@@ -1,6 +1,5 @@
 use crate::{
     generate::{Generate, State},
-    random::Random,
     shrink::Shrink,
 };
 use core::ops::Range;
@@ -11,7 +10,7 @@ pub struct Sampler<'a, G: ?Sized> {
     pub generate: &'a G,
     /// Seed for the random number generator used to generate random primitives.
     /// Defaults to a random value.
-    pub seed: Option<u64>,
+    pub seed: u64,
     /// Range of sizes that will be gradually traversed while generating values.
     /// Defaults to `0.0..1.0`.
     pub size: Range<f64>,
@@ -25,16 +24,15 @@ pub struct Samples<'a, G: ?Sized> {
     sampler: Sampler<'a, G>,
     index: usize,
     count: usize,
-    random: Random,
 }
 
 const COUNT: usize = 100;
 
 impl<'a, G: ?Sized> Sampler<'a, G> {
-    pub fn new(generate: &'a G) -> Self {
+    pub(crate) const fn new(generate: &'a G, seed: u64) -> Self {
         Self {
             generate,
-            seed: None,
+            seed,
             size: 0.0..1.0,
             count: COUNT,
         }
@@ -54,7 +52,7 @@ impl<G: ?Sized> Clone for Sampler<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
     pub fn sample(&self, size: f64) -> G::Item {
-        let mut state = State::new(size, self.seed);
+        let mut state = State::new(0, 1, size..size, self.seed);
         self.generate.generate(&mut state).item()
     }
 
@@ -63,7 +61,6 @@ impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
             sampler: self.clone(),
             index: 0,
             count: self.count,
-            random: Random::new(self.seed),
         }
     }
 }
@@ -73,11 +70,11 @@ impl<G: Generate + ?Sized> Iterator for Samples<'_, G> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
-            let mut state = State::from_iteration(
+            let mut state = State::new(
                 self.index,
                 self.count,
                 self.sampler.size.clone(),
-                Some(self.random.u64(..)),
+                self.sampler.seed,
             );
             self.index += 1;
             Some(self.sampler.generate.generate(&mut state).item())

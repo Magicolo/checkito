@@ -12,14 +12,15 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
     type Shrink = G::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let old = state.size;
+        let old = state.size.clone();
         let new = if state.depth >= self.deepest || state.count >= self.limit {
             0.0
         } else {
-            old / (state.depth as f64 * self.pressure).max(1.0)
-        };
-        assert!(old.is_finite() && new.is_finite());
-        state.size = new.clamp(0.0, 1.0);
+            old.0 / (state.depth as f64 * self.pressure).max(1.0)
+        }
+        .clamp(old.1.start, old.1.end);
+        assert!(new.is_finite());
+        state.size = (new, old.1.clone());
         let shrink = self.inner.generate(state);
         state.size = old;
         shrink
