@@ -1,56 +1,39 @@
 use quote::{quote_spanned, ToTokens};
-use syn::{spanned::Spanned, Expr, ExprField, ExprPath, Ident, LitStr, Member, Path};
+use std::mem::replace;
+use syn::{spanned::Spanned, Error, Ident, Path};
 
-pub fn string<T: ToTokens>(tokens: T) -> String {
+pub fn string<T: ToTokens>(tokens: &T) -> String {
     quote_spanned!(tokens.span() => #tokens).to_string()
 }
 
-pub fn error<T: ToTokens>(
-    tokens: T,
-    format: impl FnOnce(String) -> String,
-) -> syn::__private::TokenStream2 {
-    let span = tokens.span();
-    let error = LitStr::new(&format(string(tokens)), span);
-    quote_spanned!(span => compile_error!(#error))
+pub fn error<T: ToTokens>(tokens: T, format: impl FnOnce(String) -> String) -> Error {
+    let message = format(string(&tokens));
+    Error::new_spanned(tokens, message)
 }
 
-pub fn path(expression: &Expr) -> Vec<Ident> {
-    fn descend(expression: &Expr, path: &mut Vec<Ident>) {
-        match expression {
-            Expr::Path(ExprPath {
-                path:
-                    Path {
-                        segments,
-                        leading_colon: None,
-                        ..
-                    },
-                ..
-            }) if segments.len() == 1 => {
-                for segment in segments {
-                    path.push(segment.ident.clone());
-                }
-            }
-            Expr::Field(ExprField {
-                base,
-                member: Member::Named(name),
-                ..
-            }) => {
-                descend(base, path);
-                path.push(name.clone());
-            }
-            Expr::Field(ExprField {
-                base,
-                member: Member::Unnamed(index),
-                ..
-            }) => {
-                descend(base, path);
-                path.push(Ident::new(&string(index), index.span()));
-            }
-            _ => {}
+pub fn join<'a, S: AsRef<str>, I: AsRef<str>>(
+    separator: S,
+    items: impl IntoIterator<Item = I>,
+) -> String {
+    let mut buffer = String::new();
+    let mut join = false;
+    let separator = separator.as_ref();
+    for item in items {
+        if replace(&mut join, true) {
+            buffer.push_str(separator);
         }
+        buffer.push_str(item.as_ref());
     }
+    buffer
+}
 
-    let mut path = Vec::new();
-    descend(expression, &mut path);
-    path
+pub fn idents(path: &Path) -> impl Iterator<Item = &Ident> {
+    path.segments.iter().map(|segment| &segment.ident)
+}
+
+pub fn is<'a, T: AsRef<str> + ?Sized + 'a>(
+    left: &Path,
+    right: impl IntoIterator<Item = &'a T>,
+) -> bool {
+    idents(left).eq(right)
 }
