@@ -190,6 +190,7 @@ where
         check: F,
     ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
         use std::{
+            num::NonZeroUsize,
             sync::{
                 atomic::{AtomicUsize, Ordering},
                 Mutex,
@@ -215,17 +216,17 @@ where
             results: &Results<G, P>,
             (offset, step, count): (usize, usize, usize),
             shrinks: Shrinks,
-            errors: (&AtomicUsize, NonZeroUsize),
+            errors: &AtomicUsize,
             (size, seed): (Range<f64>, u64),
             check: F,
         ) {
             for index in (offset..count).step_by(step) {
                 let state = State::new(index, count, size.clone(), seed);
                 match next(generator, state, shrinks, &check) {
-                    Ok(shrink) if errors.0.load(Ordering::Relaxed) < errors.1.get() => {
+                    Ok(shrink) if errors.load(Ordering::Relaxed) == 0 => {
                         results.lock().unwrap().push(Ok(shrink.item()))
                     }
-                    Err(error) if errors.0.fetch_add(1, Ordering::Relaxed) < errors.1.get() => {
+                    Err(error) if errors.fetch_add(1, Ordering::Relaxed) == 0 => {
                         results.lock().unwrap().push(Err(error))
                     }
                     _ => break,
@@ -246,7 +247,7 @@ where
                 &results,
                 (0, 1, count),
                 self.shrinks,
-                (&errors, self.errors),
+                &errors,
                 (self.size.clone(), self.seed),
                 check,
             );
@@ -264,7 +265,7 @@ where
                             results,
                             (offset, parallel, count),
                             self.shrinks,
-                            (errors, self.errors),
+                            errors,
                             (size, seed),
                             check,
                         )
@@ -276,7 +277,7 @@ where
                     &results,
                     (0, parallel, count),
                     self.shrinks,
-                    (&errors, self.errors),
+                    &errors,
                     (self.size.clone(), self.seed),
                     &check,
                 )
