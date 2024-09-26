@@ -147,6 +147,10 @@ macro_rules! same {
             fn generate(&self, _: &mut State) -> Self::Shrink {
                 *self
             }
+
+            fn constant(&self) -> bool {
+                true
+            }
         }
 
         impl Shrink for $t {
@@ -213,6 +217,12 @@ macro_rules! range {
                 <$t as TryFrom<$r>>::try_from(self.clone())
                     .unwrap()
                     .generate(state)
+            }
+
+            fn constant(&self) -> bool {
+                <$t as TryFrom<$r>>::try_from(self.clone())
+                    .unwrap()
+                    .constant()
             }
         }
 
@@ -353,6 +363,10 @@ pub mod boolean {
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker(state.random().f64() * state.size() >= 0.5)
         }
+
+        fn constant(&self) -> bool {
+            false
+        }
     }
 
     impl IntoShrink for Full<bool> {
@@ -418,6 +432,10 @@ pub mod character {
                 .generate(state)
                 .into()
         }
+
+        fn constant(&self) -> bool {
+            false
+        }
     }
 
     impl Range {
@@ -476,6 +494,10 @@ pub mod character {
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker(self.0.generate(state))
         }
+
+        fn constant(&self) -> bool {
+            self.0.constant()
+        }
     }
 
     impl Generate for Full<char> {
@@ -487,6 +509,10 @@ pub mod character {
                 0..=253 => Self::range().generate(state),
                 254.. => Self::shrink(Self::special().generate(state)),
             }
+        }
+
+        fn constant(&self) -> bool {
+            false
         }
     }
 
@@ -545,6 +571,10 @@ pub mod number {
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     (0 as $t, $t::MIN, $t::MAX).any().generate(state).into()
                 }
+
+                fn constant(&self) -> bool {
+                    false
+                }
             }
 
             impl Full<$t> {
@@ -591,6 +621,10 @@ pub mod number {
                     let item = state.random().$t(range.start..=range.end);
                     Shrinker::new(range, item)
                 }
+
+                fn constant(&self) -> bool {
+                    self.start == self.end
+                }
             }
 
             impl Generate for Full<$t> {
@@ -602,6 +636,10 @@ pub mod number {
                         0..=254 => Self::range().shrinked(state.size()).generate(state),
                         255 => Self::shrink(Self::special().generate(state)),
                     }
+                }
+
+                fn constant(&self) -> bool {
+                    false
                 }
             }
 
@@ -656,6 +694,10 @@ pub mod number {
                         .any()
                         .generate(state)
                         .into()
+                }
+
+                fn constant(&self) -> bool {
+                    false
                 }
             }
 
@@ -731,6 +773,10 @@ pub mod number {
                     let item = (difference + range.start).max(range.start).min(range.end);
                     Shrinker::new(range, item)
                 }
+
+                fn constant(&self) -> bool {
+                    self.start == self.end
+                }
             }
 
             impl Generate for Full<$t> {
@@ -745,6 +791,10 @@ pub mod number {
                         220..=251 => Self::range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
                         252.. => Self::shrink(Self::special().generate(state)),
                     }
+                }
+
+                fn constant(&self) -> bool {
+                    false
                 }
             }
 

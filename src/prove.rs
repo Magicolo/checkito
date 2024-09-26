@@ -6,7 +6,7 @@ pub trait Prove {
 
 #[derive(Clone, Debug)]
 pub struct Error {
-    pub value: String,
+    pub values: Vec<String>,
     pub expression: &'static str,
     pub file: &'static str,
     pub module: &'static str,
@@ -40,16 +40,30 @@ impl<T, E> Prove for Result<T, E> {
     }
 }
 
+impl<P: Prove> Prove for Option<P> {
+    fn prove(&self) -> bool {
+        match self {
+            Some(prove) => prove.prove(),
+            None => true,
+        }
+    }
+}
+
+impl Prove for Error {
+    fn prove(&self) -> bool {
+        false
+    }
+}
+
 #[macro_export]
-#[deprecated(since = "1.7.0", note = "use standard assertion macros instead")]
 macro_rules! prove {
-    ($prove:expr) => {{
+    ([$($values: expr),*] $prove:expr) => {{
         let prove = $prove;
         if $crate::prove::Prove::prove(&prove) {
             Ok(prove)
         } else {
             Err($crate::prove::Error {
-                value: format!("{prove:?}"),
+                values: vec![$(format!("{:?}", $value)),*],
                 expression: stringify!($prove),
                 file: file!(),
                 line: line!(),
@@ -58,5 +72,9 @@ macro_rules! prove {
             })
         }
     }};
+    ($prove:expr) => {
+        let prove = $prove;
+        $crate::prove!([prove] prove);
+    };
     ($($prove:expr),*) => { Ok(($($crate::prove!($prove)),*)) }
 }

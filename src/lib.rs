@@ -36,10 +36,20 @@ use core::{
     ops::{Neg, RangeFrom, RangeFull, RangeToInclusive},
 };
 use primitive::Range;
+use same::Same;
 
 /*
+    FIXME: README.md example is no longer valid.
+        - Use a README.tpl with cargo readme to copy the content of an example file?
     FIXME: skeptic test don't seem to be working...
     FIXME: #[check] macro produces duplicate compile errors (see 'Excess expression').
+    FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...
+        - See `tests::shrink::integer_shrink_to_minimum`.
+    FIXME: When the check uses interdependent generated values, it sometimes doesn't shrink completely.
+        - Ex: (regex!("[a-z]+"), regex!("[A-Z]+")).check(|(left, right)| assert!(left.len() + right.len() > 10));
+        - Here, the shrinked values will have the proper length sum, but the characters may not be shrinked down to 'a' or 'A'.
+        - The fully shrinked values should be string of only 'a' or 'A' with a length sum of 10.
+
     TODO: Review clamping of `size` in `Size` and `Dampen`.
         - Should they be allowed to go outside the range?
         - If `size` is set to a fixed value (ex: #[check(size = 1.0)]), then `Dampen` cannot prevent exponential
@@ -78,8 +88,6 @@ use primitive::Range;
         v: [usize], // If no number of elements is specified, this is a vector.
         t: (usize, 0..10000),
         u: ()
-    FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...
-    - See `tests::shrink::integer_shrink_to_minimum`.
 */
 
 pub fn number<T>() -> impl Generate<Item = T>
@@ -115,6 +123,10 @@ pub fn digit() -> impl Generate<Item = char> {
 
 pub fn ascii() -> impl Generate<Item = char> {
     (0 as char..127 as char).generator()
+}
+
+pub fn same<T: Clone>(value: T) -> Same<T> {
+    Same(value)
 }
 
 pub fn with<T, F: Fn() -> T + Clone>(generate: F) -> impl Generate<Item = T> {

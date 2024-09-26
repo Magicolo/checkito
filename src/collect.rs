@@ -106,6 +106,10 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> 
         let shrinks = Iterator::map(0..count, |_| self.inner.generate(state));
         Shrinker::new(shrinks.collect(), self.minimum)
     }
+
+    fn constant(&self) -> bool {
+        self.count.constant() && self.inner.constant()
+    }
 }
 
 impl<G: Generate, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generate
@@ -116,6 +120,10 @@ impl<G: Generate, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generate
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let shrinks = self.inner.iter().map(|generate| generate.generate(state));
         Shrinker::new(shrinks.collect(), 0)
+    }
+
+    fn constant(&self) -> bool {
+        self.inner.iter().all(G::constant)
     }
 }
 
@@ -201,6 +209,10 @@ macro_rules! slice {
                 let minimum = shrinks.len();
                 Shrinker::new(shrinks, minimum)
             }
+
+            fn constant(&self) -> bool {
+                self.iter().all(G::constant)
+            }
         }
     };
 }
@@ -220,6 +232,10 @@ macro_rules! collection {
                     .map(|generate| generate.generate(state))
                     .collect();
                 Shrinker::new(shrinks, 0)
+            }
+
+            fn constant(&self) -> bool {
+                self.iter().all(G::constant)
             }
         }
     };
@@ -255,6 +271,9 @@ impl Generate for String {
     fn generate(&self, _: &mut State) -> Self::Shrink {
         Shrinker::new(self.chars().collect(), 0)
     }
+    fn constant(&self) -> bool {
+        true
+    }
 }
 
 impl<K: FullGenerate<Item = impl Ord>, V: FullGenerate> FullGenerate for BTreeMap<K, V> {
@@ -282,6 +301,9 @@ impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
+    fn constant(&self) -> bool {
+        self.iter().all(|(_, value)| value.constant())
+    }
 }
 
 impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BTreeSet<G> {
@@ -305,6 +327,9 @@ impl<G: Generate<Item = impl Ord>> Generate for BTreeSet<G> {
     type Shrink = Shrinker<G::Shrink, Self::Item>;
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self).generate(state)
+    }
+    fn constant(&self) -> bool {
+        self.iter().all(G::constant)
     }
 }
 
@@ -337,6 +362,9 @@ impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for H
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
+    fn constant(&self) -> bool {
+        self.iter().all(|(_, value)| value.constant())
+    }
 }
 
 impl<G: FullGenerate<Item = impl Eq + Hash>, S: BuildHasher + Default> FullGenerate
@@ -363,6 +391,9 @@ impl<G: Generate<Item = impl Eq + Hash>> Generate for HashSet<G> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self).generate(state)
     }
+    fn constant(&self) -> bool {
+        self.iter().all(G::constant)
+    }
 }
 
 impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BinaryHeap<G> {
@@ -386,5 +417,8 @@ impl<G: Generate<Item = impl Ord>> Generate for BinaryHeap<G> {
     type Shrink = Shrinker<G::Shrink, Self::Item>;
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self).generate(state)
+    }
+    fn constant(&self) -> bool {
+        self.iter().all(G::constant)
     }
 }

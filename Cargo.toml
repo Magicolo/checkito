@@ -5,7 +5,7 @@ authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 readme = "README.md"
 documentation = "https://docs.rs/checkito/latest/checkito/"
-description = "A simple quickcheck inspired library to generate growable/shrinkable random data mainly oriented towards generative/property/exploratory testing."
+description = "A safe, efficient and simple QuickCheck inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing."
 license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
@@ -17,9 +17,9 @@ rust-version = "1.65.0"
 parallel = []
 
 [dependencies]
+checkito_macro = { path = "checkito_macro" }
 fastrand = "2.1.1"
 regex-syntax = "0.8.4"
-checkito_macro = "0.2.1"
 orn = "0.4.3"
 
 [dev-dependencies]

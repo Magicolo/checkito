@@ -31,6 +31,10 @@ impl<G: Generate<Item = impl Generate> + ?Sized> Generate for Flatten<G> {
             outer,
         }
     }
+
+    fn constant(&self) -> bool {
+        false
+    }
 }
 
 impl<I: Shrink, O: Shrink<Item = impl Generate<Shrink = I>>> Shrink for Shrinker<I, O> {

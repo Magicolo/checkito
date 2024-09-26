@@ -39,7 +39,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
             state.size = new;
             let inner = self.inner.generate(state);
             let item = inner.item();
-            if (self.filter)(&item) {
+            if self.constant() || (self.filter)(&item) {
                 outer = Some(inner);
                 break;
             }
@@ -49,6 +49,10 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
             inner: outer,
             filter: self.filter.clone(),
         }
+    }
+
+    fn constant(&self) -> bool {
+        self.inner.constant()
     }
 }
 

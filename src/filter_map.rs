@@ -38,7 +38,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             state.size = new;
             let inner = self.inner.generate(state);
             let item = inner.item();
-            if (self.map)(item).is_some() {
+            if self.constant() || (self.map)(item).is_some() {
                 outer = Some(inner);
                 break;
             }
@@ -48,6 +48,10 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             inner: outer,
             map: self.map.clone(),
         }
+    }
+
+    fn constant(&self) -> bool {
+        self.inner.constant()
     }
 }
 

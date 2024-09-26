@@ -37,6 +37,10 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generate for Map<G, F
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Shrinker::new(self.inner.generate(state), self.map.clone())
     }
+
+    fn constant(&self) -> bool {
+        self.inner.constant()
+    }
 }
 
 impl<S: Shrink, T, F: Fn(S::Item) -> T + Clone> Shrink for Shrinker<S, F> {

@@ -1,7 +1,12 @@
 <div align="center"> <h1> checkito </h1> </div>
 
 <p align="center">
-    <em> A safe, efficient and simple <a href="https://hackage.haskell.org/package/QuickCheck">QuickCheck</a> inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing. One would use this library to prove that certain properties hold for a program for a tentatively representative sample of their input space. </em>
+    <em> 
+
+A safe, efficient and simple <a href="https://hackage.haskell.org/package/QuickCheck">QuickCheck</a> inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing. 
+
+One would use this library to prove more general properties about a program than unit tests can by strategically searching the input space for comprehensible failing cases.
+    </em>
 </p>
 
 <div align="right">
@@ -12,9 +17,12 @@
 
 ---
 
--   The [`Generate`](src/generate.rs) trait that is implemented for many of rust's standard types allows the generation of any random composite data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
--   The [`Shrink`](src/shrink.rs) trait tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk out of its range). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, etc..
--   The [`Prove`](src/prove.rs) trait is meant to represent a desirable property of a system under test. It is used mainly in the context of the [`Generate::check`](src/generate.rs) or [`Checker::check`](src/check.rs) methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `bool` and `Result`.
+### Main Traits:
+-   [`Generate`](src/generate.rs): is implemented for many of rust's standard types and allows the generation of any random composite/structured data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
+-   [`Shrink`](src/shrink.rs): tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk below `10`). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, and so on.
+-   [`Prove`](src/prove.rs): represents a desirable property of a program under test. It is used mainly in the context of the [`Generate::check`](src/generate.rs) or [`Checker::check`](src/check.rs) methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `()`, `bool` and `Result`. A `panic!()` is also considered as a failing property, thus standard `assert!()` macros (or any other panicking assertions) can be used to check the property.
+   
+*To ensure safety, this library is `#![forbid(unsafe_code)]`.*
 
 
 ## Example

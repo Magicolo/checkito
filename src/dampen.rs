@@ -25,4 +25,8 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
         state.size = old;
         shrink
     }
+
+    fn constant(&self) -> bool {
+        self.inner.constant()
+    }
 }

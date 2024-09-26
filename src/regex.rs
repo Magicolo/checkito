@@ -1,16 +1,15 @@
-use core::fmt;
-use std::borrow::Cow;
-
 use crate::{
     collect,
     generate::{Generate, State},
     primitive::character,
     shrink::Shrink,
 };
+use core::fmt;
 use regex_syntax::{
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
     Parser,
 };
+use std::borrow::Cow;
 
 #[derive(Debug, Clone)]
 pub struct Regex {
@@ -98,8 +97,7 @@ impl Generate for Regex {
                     repeats,
                 ),
                 HirKind::Repetition(Repetition { min, max, sub, .. }) => {
-                    let low = *min;
-                    let high = (*max).unwrap_or(repeats.max(low));
+                    let (low, high) = range(*min, *max, repeats);
                     let count = (low..=high).generate(state).item();
                     let limit = repeats / (u32::BITS - high.leading_zeros());
                     Shrinker::All(collect::Shrinker::new(
@@ -111,6 +109,38 @@ impl Generate for Regex {
         }
         next(self.tree.kind(), state, self.repeats)
     }
+
+    fn constant(&self) -> bool {
+        fn next(kind: &HirKind, repeats: u32) -> bool {
+            match kind {
+                HirKind::Empty | HirKind::Literal(_) | HirKind::Look(_) => true,
+                HirKind::Class(Class::Unicode(class)) => {
+                    class.ranges().iter().all(Generate::constant)
+                }
+                HirKind::Class(Class::Bytes(class)) => {
+                    class.ranges().iter().all(Generate::constant)
+                }
+                HirKind::Capture(Capture { sub, .. }) => next(sub.kind(), repeats),
+                HirKind::Concat(hirs) => hirs.iter().all(|hir| next(hir.kind(), repeats)),
+                HirKind::Alternation(hirs) => hirs.iter().all(|hir| next(hir.kind(), repeats)),
+                HirKind::Repetition(Repetition { min, max, sub, .. }) => {
+                    let (low, high) = range(*min, *max, repeats);
+                    if low == 0 && high == 0 {
+                        true
+                    } else {
+                        (low..=high).constant() && next(sub.kind(), repeats)
+                    }
+                }
+            }
+        }
+        next(self.tree.kind(), self.repeats)
+    }
+}
+
+fn range(min: u32, max: Option<u32>, repeats: u32) -> (u32, u32) {
+    let low = min;
+    let high = max.unwrap_or(repeats.max(low));
+    (low, high)
 }
 
 impl Generate for ClassUnicodeRange {
@@ -122,6 +152,12 @@ impl Generate for ClassUnicodeRange {
             .unwrap()
             .generate(state)
     }
+
+    fn constant(&self) -> bool {
+        character::Range::char(self.start()..=self.end())
+            .unwrap()
+            .constant()
+    }
 }
 
 impl Generate for ClassBytesRange {
@@ -132,6 +168,12 @@ impl Generate for ClassBytesRange {
         character::Range::char(self.start() as char..=self.end() as char)
             .unwrap()
             .generate(state)
+    }
+
+    fn constant(&self) -> bool {
+        character::Range::char(self.start() as char..=self.end() as char)
+            .unwrap()
+            .constant()
     }
 }
 

@@ -39,7 +39,7 @@ fn shrinked_filter_preserves_inequality() -> Result {
         })
         .unwrap_err();
     assert_eq!(error.cause, Cause::Disprove(false));
-    let (left, right) = error.item.0.unwrap();
+    let (left, right) = error.item().0.clone().unwrap();
     assert_ne!(left, right);
     Ok(())
 }

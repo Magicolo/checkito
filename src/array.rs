@@ -32,6 +32,10 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         All::new([(); N].map(|_| self.0.generate(state)))
     }
+
+    fn constant(&self) -> bool {
+        N == 0 || self.0.constant()
+    }
 }
 
 impl<S: FullShrink, const N: usize> FullShrink for Array<S, N> {
@@ -89,6 +93,10 @@ impl<G: Generate, const N: usize> Generate for [G; N] {
             index += 1;
             shrink
         }))
+    }
+
+    fn constant(&self) -> bool {
+        self.iter().all(Generate::constant)
     }
 }
 

@@ -5,14 +5,14 @@ use common::*;
 fn finds_minimum() {
     let result = <(usize, usize)>::generator().check(COUNT, |(left, right)| left >= right);
     let error = result.err().unwrap();
-    assert_eq!(error.item, (0, 1));
+    assert_eq!(*error.item(), (0, 1));
 }
 
 #[test]
 fn integer_shrink_to_minimum() {
     for high in (1usize..).samples(COUNT) {
         if let Err(error) = usize::generator().check(COUNT, |item| item < high) {
-            assert!(error.item - high <= 1);
+            assert!(error.item() - high <= 1);
         }
     }
 }
@@ -26,7 +26,7 @@ fn vec_removes_irrelevant_then_shrinks() {
         })
         .err()
         .unwrap();
-    let shrunk = error.item;
+    let shrunk = error.item();
     assert_eq!(shrunk.len(), 10);
     assert_eq!(shrunk.iter().filter(|&&item| item == 10).count(), 1);
 }

@@ -14,6 +14,10 @@ impl<G: Generate + ?Sized> Generate for Keep<G> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Keep(self.0.generate(state))
     }
+
+    fn constant(&self) -> bool {
+        self.0.constant()
+    }
 }
 
 impl<S: IntoShrink> IntoShrink for Keep<S> {

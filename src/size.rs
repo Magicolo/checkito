@@ -18,6 +18,10 @@ impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
         state.size = old;
         shrink
     }
+
+    fn constant(&self) -> bool {
+        self.0.constant()
+    }
 }
 
 impl<S: IntoShrink, F> IntoShrink for Size<S, F> {

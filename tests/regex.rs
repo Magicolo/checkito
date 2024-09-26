@@ -26,6 +26,9 @@ fn range_shrinks() {
         .check(COUNT, |item| !item.contains('w') || !item.contains('y'))
         .err()
         .unwrap();
-    assert!(error.item.chars().all(|symbol| symbol.is_ascii_lowercase()));
-    assert!(error.item == "wy" || error.item == "yw");
+    assert!(error
+        .item()
+        .chars()
+        .all(|symbol| symbol.is_ascii_lowercase()));
+    assert!(error.item() == "wy" || error.item() == "yw");
 }

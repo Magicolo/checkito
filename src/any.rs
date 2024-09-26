@@ -20,6 +20,12 @@ impl<W: Generate<Item = f64>, T> Weight<W, T> {
     }
 }
 
+impl<W: Generate, T: Generate + ?Sized> Weight<W, T> {
+    pub(crate) fn constant(&self) -> bool {
+        self.value.constant()
+    }
+}
+
 fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
     if items.is_empty() {
         None
@@ -78,6 +84,10 @@ where
     }
 }
 
+const fn as_slice<T>(slice: &[T]) -> &[T] {
+    slice
+}
+
 macro_rules! collection {
     ($t:ty, $i:ident, [$($w:ident)?], [$($n:ident)?]) => {
         impl<T: Generate $(,$w: Generate<Item = f64>)? $(,const $n: usize)?> Generate for $t {
@@ -86,6 +96,10 @@ macro_rules! collection {
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Some($i(self.as_ref(), state)?.generate(state))
+            }
+
+            fn constant(&self) -> bool {
+                as_slice(self.as_ref()).iter().all(|item| item.constant())
             }
         }
     };
@@ -112,6 +126,12 @@ macro_rules! tuple {
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 match self {
                     $(Self::$ts(generate) => orn::$n::Or::$ts(generate.generate(state)),)*
+                }
+            }
+
+            fn constant(&self) -> bool {
+                match self {
+                    $(Self::$ts(generate) => generate.constant(),)*
                 }
             }
         }
@@ -142,6 +162,10 @@ macro_rules! tuple {
                     _ => unreachable!(),
                 }
             }
+
+            fn constant(&self) -> bool {
+                $(self.0.$is.constant() &&)* true
+            }
         }
 
         #[allow(non_camel_case_types)]
@@ -161,6 +185,10 @@ macro_rules! tuple {
                     }
                 )*
                 unreachable!();
+            }
+
+            fn constant(&self) -> bool {
+                $(self.$is.value.constant() &&)* true
             }
         }
     };

@@ -28,6 +28,10 @@ impl<G: Generate> Generate for Option<G> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Some(self.as_ref()?.generate(state))
     }
+
+    fn constant(&self) -> bool {
+        self.as_ref().map_or(true, G::constant)
+    }
 }
 
 impl<S: FullShrink> FullShrink for Option<S> {
@@ -83,6 +87,13 @@ impl<G: Generate, E: Generate> Generate for Result<G, E> {
         match self {
             Ok(generate) => Ok(generate.generate(state)),
             Err(generate) => Err(generate.generate(state)),
+        }
+    }
+
+    fn constant(&self) -> bool {
+        match self {
+            Ok(generate) => generate.constant(),
+            Err(generate) => generate.constant(),
         }
     }
 }
@@ -155,6 +166,10 @@ impl<G: Generate> Generate for Box<G> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
+
+    fn constant(&self) -> bool {
+        G::constant(self)
+    }
 }
 
 impl<G: FullGenerate> FullGenerate for Rc<G> {
@@ -172,6 +187,10 @@ impl<G: Generate> Generate for Rc<G> {
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
+    }
+
+    fn constant(&self) -> bool {
+        G::constant(self)
     }
 }
 
@@ -191,25 +210,8 @@ impl<G: Generate> Generate for Arc<G> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
-}
 
-impl<T> Generate for fn() -> T {
-    type Item = T;
-    type Shrink = Self;
-
-    fn generate(&self, _: &mut State) -> Self::Shrink {
-        *self
-    }
-}
-
-impl<T> Shrink for fn() -> T {
-    type Item = T;
-
-    fn item(&self) -> Self::Item {
-        self()
-    }
-
-    fn shrink(&mut self) -> Option<Self> {
-        None
+    fn constant(&self) -> bool {
+        G::constant(self)
     }
 }

@@ -55,6 +55,10 @@ pub trait Generate {
     /// [`Generate::Item`] and shrink itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
+    fn constant(&self) -> bool {
+        false
+    }
+
     /// Wraps `self` in a boxed [`Generate`]. This is notably relevant for recursive [`Generate`] implementations where
     /// the type would otherwise be infinite.
     ///
@@ -382,6 +386,9 @@ impl<G: Generate + ?Sized> Generate for &G {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
+    fn constant(&self) -> bool {
+        G::constant(self)
+    }
 }
 
 impl<G: Generate + ?Sized> Generate for &mut G {
@@ -389,6 +396,9 @@ impl<G: Generate + ?Sized> Generate for &mut G {
     type Shrink = G::Shrink;
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
+    }
+    fn constant(&self) -> bool {
+        G::constant(self)
     }
 }
 
@@ -420,6 +430,10 @@ macro_rules! tuple {
 
             fn generate(&self, _state: &mut State) -> Self::Shrink {
                 All::new(($(self.$i.generate(_state),)*))
+            }
+
+            fn constant(&self) -> bool {
+                $(self.$i.constant() &&)* true
             }
         }
     };

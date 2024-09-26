@@ -23,6 +23,10 @@ impl<T: Clone> Generate for Same<T> {
     fn generate(&self, _: &mut State) -> Self::Shrink {
         self.clone()
     }
+
+    fn constant(&self) -> bool {
+        true
+    }
 }
 
 impl<T: Clone> FullShrink for Same<T> {

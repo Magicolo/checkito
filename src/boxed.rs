@@ -7,6 +7,7 @@ use core::any::Any;
 pub struct Generator<I> {
     inner: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
+    constant: fn(&dyn Any) -> bool,
 }
 
 pub struct Shrinker<I> {
@@ -23,6 +24,10 @@ impl<I> Generate for Generator<I> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         (self.generate)(self.inner.as_ref(), state)
     }
+
+    fn constant(&self) -> bool {
+        (self.constant)(self.inner.as_ref())
+    }
 }
 
 impl<I> Generator<I> {
@@ -33,6 +38,7 @@ impl<I> Generator<I> {
         Self {
             inner: Box::new(generate),
             generate: |inner, state| inner.downcast_ref::<G>().unwrap().generate(state).boxed(),
+            constant: |inner| inner.downcast_ref::<G>().unwrap().constant(),
         }
     }
 }
@@ -44,6 +50,7 @@ impl<I> Generator<I> {
             Err(inner) => Err(Self {
                 inner,
                 generate: self.generate,
+                constant: self.constant,
             }),
         }
     }
