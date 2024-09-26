@@ -1,6 +1,6 @@
 use crate::utility;
 use core::fmt;
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use std::{collections::HashSet, ops::Deref};
 use syn::{
     __private::TokenStream2,
@@ -251,8 +251,7 @@ impl Check {
                 }
             };
             generators.push(generator);
-            let argument = Ident::new(&format!("_{}", arguments.len()), parameter.span());
-            arguments.push(argument);
+            arguments.push(format_ident!("_{}", arguments.len()));
         }
 
         let mut updates = Vec::new();
@@ -295,163 +294,3 @@ impl Check {
         })
     }
 }
-
-// pub fn parse(attribute: TokenStream, item: TokenStream) -> TokenStream {
-//     let content = parse_macro_input!(attribute with Punctuated::<Expr, Comma>::parse_terminated);
-//     let function: ItemFn = parse_macro_input!(item);
-//     let ItemFn {
-//         attrs,
-//         vis,
-//         sig: Signature { ident, inputs, .. },
-//         ..
-//     } = &function;
-//     let inputs = inputs.iter().collect::<Vec<_>>();
-//     let pairs = inputs
-//         .iter()
-//         .flat_map(|argument| match argument {
-//             FnArg::Typed(pattern) => Some(pattern),
-//             FnArg::Receiver(_) => None,
-//         })
-//         .collect::<Vec<_>>();
-//     let mut keys = [
-//         Key::Accept,
-//         Key::Count,
-//         Key::Debug,
-//         Key::Duration,
-//         Key::Reject,
-//         Key::Seed,
-//         Key::Size,
-//     ]
-//     .map(|key| (Ident::new(&key, Span::call_site().into()), Some(key)))
-//     .into_iter()
-//     .collect();
-
-//     let mut debug = None;
-//     let assigns = content.iter()
-//         .filter_map(|expression| match expression {
-//             Expr::Assign(ExprAssign { left, right, .. }) => {
-//                 Some(match utility::take(left, &mut keys) {
-//                     Ok(Key::Debug) => {
-//                         match right.as_ref() {
-//                             Expr::Lit(ExprLit { lit: Lit::Bool(LitBool { value, .. }), .. }) => { debug = Some(*value); quote!() },
-//                             right => utility::error(right, |right| format!("Invalid right expression '{right}'. Must be a boolean literal.")),
-//                         }
-//                     }
-//                     Ok(Key::Count) => quote_spanned!(left.span() => checker.count = { #right } as usize),
-//                     Ok(Key::Seed) => quote_spanned!(left.span() => checker.seed = { #right } as u64),
-//                     Ok(Key::Size) => {
-//                         let right = match right.as_ref() {
-//                             Expr::Lit(_) => quote_spanned!(right.span() => { #right } as f64..{ #right } as f64),
-//                             right => quote_spanned!(right.span() => { #right }.try_into().unwrap()),
-//                         };
-//                         quote_spanned!(left.span() => checker.size = #right)
-//                     }
-//                     Ok(Key::Accept) => quote_spanned!(left.span() => checker.shrinks.accept = { #right } as usize),
-//                     Ok(Key::Reject) => quote_spanned!(left.span() => checker.shrinks.reject = { #right } as usize),
-//                     Ok(Key::Duration) => quote_spanned!(left.span() => checker.shrinks.duration = ::core::time::Duration::from_secs_f64({ #right } as f64)),
-//                     Err(error) => error,
-//                 })
-//             },
-//             _ => None,
-//         })
-//         .collect::<Vec<_>>();
-//     let rest = Cell::new(false);
-//     let mut expressions = content
-//         .iter()
-//         .filter_map(|expression| match expression {
-//             Expr::Assign(_) => None,
-//             expression if rest.get() => Some(Err(utility::error(expression, |expression| format!("Excess expression '{expression}' after '..' operator. Only assignment expression are allowed in this position to configure the generation.")))),
-//             Expr::Range(ExprRange { start: None, end: None, limits: RangeLimits::HalfOpen(_), .. }) => {
-//                 rest.set(true);
-//                 None
-//             }
-//             expression => Some(Ok(expression)),
-//         });
-//     let (generators, errors) = pairs
-//         .iter()
-//         .map(|pattern @ PatType { ty, .. }| match expressions.next() {
-//             Some(Err(error)) => Err(error),
-//             Some(Ok(expression @ Expr::Lit(ExprLit { lit: Lit::Str(literal), .. }))) => {
-//                 Ok(quote_spanned!(expression.span() => ::checkito::regex!(#literal)))
-//             },
-//             Some(Ok(expression @ Expr::Lit(ExprLit { lit: literal @ (Lit::Byte(_) | Lit::Char(_) | Lit::Int(_) | Lit::Float(_) | Lit::Bool(_)), .. }))) =>
-//                 Ok(quote_spanned!(expression.span() => ::checkito::same::Same(#literal))),
-//             // TODO: Handle ranges with 'IntoGenerate'.
-//             Some(Ok(expression @ Expr::Infer(_))) => Ok(quote_spanned!(expression.span() => <#ty as ::checkito::FullGenerate>::generator())),
-//             Some(Ok(expression)) => Ok(quote_spanned!(expression.span() => #expression)),
-//             None if rest.get() => Ok(quote_spanned!(pattern.span() => <#ty as ::checkito::FullGenerate>::generator())),
-//             None => Err(utility::error(pattern, |pattern| format!("Missing generator for parameter '{pattern}'. Either add a generator in the '#[check]' macro, use '_' to fill in a single parameter or use '..' operator to fill in all remaining parameters."))),
-//         })
-//         .partition::<Vec<_>, _>(|result| result.is_ok());
-//     let generators = generators
-//         .into_iter()
-//         .filter_map(Result::ok)
-//         .collect::<Vec<_>>();
-//     let names = (0..generators.len())
-//         .map(|i| Ident::new(&format!("_{i}"), Span::call_site().into()))
-//         .collect::<Vec<_>>();
-//     let errors = expressions
-//         .filter_map(|expression| match expression {
-//             Ok(expression) => Some(utility::error(expression, |expression| format!("Excess expression '{expression}' with no corresponding parameter. Either add a parameter or remove this expression."))),
-//             Err(error) => Some(error),
-//         })
-//         .chain(errors.into_iter().filter_map(Result::err))
-//         .collect::<Vec<_>>();
-//     let check = match debug {
-//         Some(true) => quote! {
-//             match result {
-//                 ::core::result::Result::Ok(item) => ::std::println!("\x1b[32mCHECK({})\x1b[0m: {:?}", _i + 1, item),
-//                 ::core::result::Result::Err(error) => {
-//                     ::std::eprintln!("\x1b[31mCHECK({})\x1b[0m: {error:?}", _i + 1);
-//                     ::core::panic!();
-//                 }
-//             }
-//         },
-//         Some(false) => quote! {
-//             if let ::core::result::Result::Err(error) = result {
-//                 ::std::eprintln!();
-//                 ::std::eprintln!("\x1b[31mCHECK({})\x1b[0m: {{ type: {:?}, seed: {} }}", error.index() + 1, ::core::any::type_name_of_val(error.item()), error.seed());
-//                 ::core::panic!();
-//             }
-//         },
-//         None => quote! {
-//             if let ::core::result::Result::Err(error) = result {
-//                 ::std::eprintln!();
-//                 ::std::eprintln!("\x1b[31mCHECK({})\x1b[0m: {{ item: {:?}, seed: {}, message: \"{}\" }}", error.index() + 1, error.item(), error.seed(), error.message());
-//                 ::core::panic!();
-//             }
-//         },
-//     };
-//     let debug = debug.unwrap_or_default();
-//     let panic = if debug {
-//         quote!(::std::panic::set_hook(::std::boxed::Box::new(|_| {}));)
-//     } else {
-//         quote!()
-//     };
-//     quote! {
-//         #(#attrs)*
-//         #[test]
-//         #vis fn #ident() {
-//             #(#errors;)*
-//             #function
-
-//             #[allow(
-//                 clippy::useless_conversion,
-//                 clippy::unnecessary_cast,
-//                 clippy::unnecessary_fallible_conversions,
-//                 clippy::unused_enumerate_index)]
-//             {
-//                 let generator = (#(#generators,)*);
-//                 let mut checker = ::checkito::Check::checker(&generator);
-//                 ::checkito::check::environment::update(&mut checker);
-//                 #(#assigns;)*
-//                 checker.items = #debug;
-//                 #panic
-//                 for (_i, result) in checker.checks(|(#(#names,)*)| #ident(#(#names,)*)).enumerate() {
-//                     #check
-//                 }
-//             }
-//         }
-//     }
-//     .into()
-// }

@@ -117,9 +117,3 @@ fn compiles_with_multiple_constants(value: usize) {
     static COUNT: AtomicUsize = AtomicUsize::new(0);
     assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), value);
 }
-
-// #[check(Composite("[a-zA-Z0-9_]*", 10.0..))]
-// fn test(string, number) {
-//     let composite = Composite(string, number);
-//     assert!(composite.0.chars().all(|character| character.is_alphanumeric()));
-// }
