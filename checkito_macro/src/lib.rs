@@ -4,8 +4,10 @@ mod check;
 mod regex;
 mod utility;
 
+use std::mem::replace;
+
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{parse_macro_input, ItemFn};
 
 #[proc_macro]
@@ -19,6 +21,7 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
     let check: check::Check = parse_macro_input!(attribute);
     let mut checks = vec![check];
     let mut function: ItemFn = parse_macro_input!(item);
+    let name = replace(&mut function.sig.ident, format_ident!("check"));
     function.attrs.retain(|attr| {
         if let Ok(check) = check::Check::try_from(attr) {
             checks.push(check);
@@ -37,7 +40,6 @@ pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
 
     let visibility = &function.vis;
     let attributes = &function.attrs;
-    let name = &function.sig.ident;
     quote! {
         #(#attributes)*
         #[test]

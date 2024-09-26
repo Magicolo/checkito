@@ -1,9 +1,9 @@
 use crate::utility;
 use core::fmt;
-use quote::{format_ident, quote, quote_spanned};
+use quote::{format_ident, quote_spanned};
 use std::{collections::HashSet, ops::Deref};
 use syn::{
-    __private::TokenStream2,
+    __private::{Span, TokenStream2},
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -12,8 +12,8 @@ use syn::{
     Meta, PatType, RangeLimits,
 };
 
-#[derive(Default)]
 pub struct Check {
+    pub span: Span,
     pub settings: Vec<(Key, Expr, TokenStream2)>,
     pub generators: Vec<Expr>,
     pub rest: bool,
@@ -112,105 +112,17 @@ impl fmt::Display for Key {
     }
 }
 
-impl Parse for Check {
-    fn parse(input: ParseStream) -> Result<Self, Error> {
-        let mut keys = Key::KEYS.into_iter().collect::<HashSet<_>>();
-        let mut rest = false;
-        let mut debug = None;
-        let mut settings = Vec::new();
-        let mut generators = Vec::new();
-        for expression in Punctuated::<Expr, Comma>::parse_terminated(input)? {
-            match expression {
-                Expr::Assign(ExprAssign { left, right, .. }) => {
-                    let key = Key::try_from(left.as_ref())?;
-                    if keys.remove(&key) {
-                        let right = match key {
-                            Key::Debug => match right.as_ref() {
-                                Expr::Lit(ExprLit {
-                                    lit: Lit::Bool(LitBool { value, .. }),
-                                    ..
-                                }) => {
-                                    debug = Some(*value);
-                                    continue;
-                                }
-                                right => {
-                                    return Err(utility::error(right, |right| {
-                                        format!("invalid expression '{right}' for '{}'\nmust be a boolean literal", key)
-                                    }))
-                                }
-                            },
-                            Key::Count => quote_spanned!(right.span() => { #right } as usize),
-                            Key::Seed => quote_spanned!(right.span() => { #right } as u64),
-                            Key::Size => match right.as_ref() {
-                                Expr::Lit(_) => {
-                                    quote_spanned!(right.span() => { #right } as f64..{ #right } as f64)
-                                }
-                                right => {
-                                    quote_spanned!(right.span() => { #right }.try_into().unwrap())
-                                }
-                            },
-                            Key::Accept => quote_spanned!(right.span() => { #right } as usize),
-                            Key::Reject => quote_spanned!(right.span() => { #right } as usize),
-                            Key::Duration => {
-                                quote_spanned!(right.span() => ::core::time::Duration::from_secs_f64({ #right } as f64))
-                            }
-                        };
-                        settings.push((key, *left, right));
-                    } else {
-                        return Err(utility::error(left, |left| {
-                            format!("duplicate key '{left}'")
-                        }));
-                    }
-                }
-                expression if rest => {
-                    return Err(utility::error(expression, |expression| {
-                        format!("excess expression '{expression}' after '..' operator\nonly configuration assignment expressions are allowed in this position")
-                    }))
-                }
-                Expr::Range(ExprRange {
-                    start: None,
-                    end: None,
-                    limits: RangeLimits::HalfOpen(_),
-                    ..
-                }) => rest = true,
-                expression => generators.push(expression),
-            }
-        }
-        Ok(Check {
-            settings,
-            generators,
-            rest,
-            debug,
-        })
-    }
-}
-
-impl TryFrom<&syn::Attribute> for Check {
-    type Error = Error;
-
-    fn try_from(value: &syn::Attribute) -> Result<Self, Self::Error> {
-        const PATHS: [&[&str]; 2] = [&["checkito", "check"], &["check"]];
-
-        let path = value.path();
-        if PATHS.into_iter().any(|legal| utility::is(path, legal)) {
-            if matches!(value.meta, Meta::Path(_)) {
-                Ok(Check::default())
-            } else {
-                value.meta.require_list()?.parse_args()
-            }
-        } else {
-            Err(utility::error(path, |path| {
-                let paths = PATHS.into_iter().map(|path| utility::join("::", path));
-                format!(
-                    "invalid attribute path '{path}'\nmust be one of [{}]",
-                    utility::join(", ", paths)
-                )
-            }))
-        }
-    }
-}
-
 impl Check {
+    pub fn new(span: Span) -> Self {
+        Self {
+            span,
+            settings: Vec::new(),
+            generators: Vec::new(),
+            rest: false,
+            debug: None,
+        }
+    }
+
     pub fn run(&self, function: &ItemFn) -> Result<TokenStream2, Error> {
         let mut expressions = self.generators.iter();
         let mut generators = Vec::new();
@@ -223,20 +135,6 @@ impl Check {
             };
 
             let generator = match expressions.next() {
-                Some(Expr::Lit(ExprLit {
-                    lit: Lit::Str(literal),
-                    ..
-                })) => quote_spanned!(literal.span() => ::checkito::regex!(#literal)),
-                Some(Expr::Lit(ExprLit {
-                    lit:
-                        literal @ (Lit::Byte(_)
-                        | Lit::Char(_)
-                        | Lit::Int(_)
-                        | Lit::Float(_)
-                        | Lit::Bool(_)),
-                    ..
-                })) => quote_spanned!(literal.span() => ::checkito::same::Same(#literal)),
-                // TODO: Handle ranges with 'IntoGenerate'.
                 Some(Expr::Infer(infer)) => {
                     quote_spanned!(infer.span() => <#ty as ::checkito::FullGenerate>::generator())
                 }
@@ -271,26 +169,116 @@ impl Check {
         let name = &function.sig.ident;
         Ok(match self.debug {
             Some(true) => {
-                quote!(::checkito::check::run::debug(
+                quote_spanned!(self.span => ::checkito::check::run::debug(
                     (#(#generators,)*),
                     |_checker| { #(#updates)* },
                     |(#(#arguments,)*)| #name(#(#arguments,)*)
                 ))
             }
             Some(false) => {
-                quote!(::checkito::check::run::minimal(
+                quote_spanned!(self.span => ::checkito::check::run::minimal(
                     (#(#generators,)*),
                     |_checker| { #(#updates)* },
                     |(#(#arguments,)*)| #name(#(#arguments,)*)
                 ))
             }
             None => {
-                quote!(::checkito::check::run::default(
+                quote_spanned!(self.span => ::checkito::check::run::default(
                     (#(#generators,)*),
                     |_checker| { #(#updates)* },
                     |(#(#arguments,)*)| #name(#(#arguments,)*)
                 ))
             }
         })
+    }
+}
+
+impl Parse for Check {
+    fn parse(input: ParseStream) -> Result<Self, Error> {
+        let mut check = Check::new(input.span());
+        let mut keys = Key::KEYS.into_iter().collect::<HashSet<_>>();
+        for expression in Punctuated::<Expr, Comma>::parse_terminated(input)? {
+            match expression {
+                Expr::Assign(ExprAssign { left, right, .. }) => {
+                    let key = Key::try_from(left.as_ref())?;
+                    if keys.remove(&key) {
+                        let right = match key {
+                            Key::Debug => match right.as_ref() {
+                                Expr::Lit(ExprLit {
+                                    lit: Lit::Bool(LitBool { value, .. }),
+                                    ..
+                                }) => {
+                                    check.debug = Some(*value);
+                                    continue;
+                                }
+                                right => {
+                                    return Err(utility::error(right, |right| {
+                                        format!("invalid expression '{right}' for '{}'\nmust be a boolean literal", key)
+                                    }))
+                                }
+                            },
+                            Key::Count => quote_spanned!(right.span() => { #right } as usize),
+                            Key::Seed => quote_spanned!(right.span() => { #right } as u64),
+                            Key::Size => match right.as_ref() {
+                                Expr::Lit(_) => {
+                                    quote_spanned!(right.span() => { #right } as f64..{ #right } as f64)
+                                }
+                                right => {
+                                    quote_spanned!(right.span() => { #right }.try_into().unwrap())
+                                }
+                            },
+                            Key::Accept => quote_spanned!(right.span() => { #right } as usize),
+                            Key::Reject => quote_spanned!(right.span() => { #right } as usize),
+                            Key::Duration => {
+                                quote_spanned!(right.span() => ::core::time::Duration::from_secs_f64({ #right } as f64))
+                            }
+                        };
+                        check.settings.push((key, *left, right));
+                    } else {
+                        return Err(utility::error(left, |left| {
+                            format!("duplicate key '{left}'")
+                        }));
+                    }
+                }
+                expression if check.rest => {
+                    return Err(utility::error(expression, |expression| {
+                        format!("excess expression '{expression}' after '..' operator\nonly configuration assignment expressions are allowed in this position")
+                    }))
+                }
+                Expr::Range(ExprRange {
+                    start: None,
+                    end: None,
+                    limits: RangeLimits::HalfOpen(_),
+                    ..
+                }) => check.rest = true,
+                expression => check.generators.push(expression),
+            }
+        }
+        Ok(check)
+    }
+}
+
+impl TryFrom<&syn::Attribute> for Check {
+    type Error = Error;
+
+    fn try_from(value: &syn::Attribute) -> Result<Self, Self::Error> {
+        const PATHS: [&[&str]; 2] = [&["checkito", "check"], &["check"]];
+
+        let path = value.path();
+        if PATHS.into_iter().any(|legal| utility::is(path, legal)) {
+            if matches!(value.meta, Meta::Path(_)) {
+                Ok(Check::new(value.span()))
+            } else {
+                value.meta.require_list()?.parse_args()
+            }
+        } else {
+            Err(utility::error(path, |path| {
+                let paths = PATHS.into_iter().map(|path| utility::join("::", path));
+                format!(
+                    "invalid attribute path '{path}'\nmust be one of [{}]",
+                    utility::join(", ", paths)
+                )
+            }))
+        }
     }
 }
