@@ -1,6 +1,6 @@
 use crate::{generate::State, prove::Prove, random, shrink::Shrink, Generate};
 use core::{error, fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
-use std::{borrow::Cow, panic::catch_unwind};
+use std::{borrow::Cow, panic::catch_unwind, result};
 
 /// Bounds the generation process.
 #[derive(Clone, Debug)]
@@ -80,38 +80,47 @@ pub trait Check: Generate {
     fn check<P: Prove, F: FnMut(Self::Item) -> P>(
         &self,
         check: F,
-    ) -> Result<(), Error<Self::Item, P::Error>> {
+    ) -> Option<Fail<Self::Item, P::Error>> {
         let mut checker = self.checker();
         checker.generate.items = false;
         checker.shrink.items = false;
         checker.shrink.errors = false;
-        match checker.checks(check).last() {
-            Some(Ok(_)) | None => Ok(()),
-            Some(Err(error)) => Err(error),
+        match checker.checks(check).last()? {
+            Result::Pass(_) => None,
+            Result::Fail(fail) => Some(fail),
+            Result::Shrink(_) | Result::Shrunk(_) => {
+                unreachable!("it is invalid for the `Checks` iterator to end on a shrinking result")
+            }
         }
     }
 }
 
 #[derive(Clone, Debug)]
-/// An item that represents a successful check.
-pub struct Item<T, P> {
+pub enum Result<T, P: Prove> {
+    Pass(Pass<T, P::Proof>),
+    Shrink(Pass<T, P::Proof>),
+    Shrunk(Fail<T, P::Error>),
+    Fail(Fail<T, P::Error>),
+}
+
+#[derive(Clone, Debug)]
+/// A structure that represents a passed check.
+pub struct Pass<T, P> {
     pub item: T,
     pub proof: P,
     pub generates: usize,
     pub shrinks: usize,
-    pub shrink: bool,
     /// The generator state that produced the item.
     pub state: State,
 }
 
 #[derive(Clone, Debug)]
-/// An error that represents a failed check.
-pub struct Error<T, E> {
+/// A structure that represents a failed check.
+pub struct Fail<T, E> {
     pub item: T,
     pub cause: Cause<E>,
     pub generates: usize,
     pub shrinks: usize,
-    pub shrink: bool,
     /// The generator state that caused the error.
     pub state: State,
 }
@@ -173,7 +182,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
 impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
     for Checks<'_, G, P::Error, F>
 {
-    type Item = Result<Item<G::Item, P::Proof>, Error<G::Item, P::Error>>;
+    type Item = Result<G::Item, P>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -192,11 +201,10 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                         Ok(proof) => {
                             self.machine = Machine::Generate { index: index + 1 };
                             if self.checker.generate.items {
-                                break Some(Ok(Item {
+                                break Some(Result::Pass(Pass {
                                     item: shrinker.item(),
                                     generates: index,
                                     shrinks: 0,
-                                    shrink: false,
                                     proof,
                                     state,
                                 }));
@@ -219,30 +227,28 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     cause,
                 } => {
                     if indices.1 >= self.checker.shrink.count {
-                        break Some(Err(Error {
+                        break Some(Result::Fail(Fail {
                             item: shrinker.item(),
                             generates: indices.0,
                             shrinks: indices.1,
-                            shrink: false,
                             state,
                             cause,
                         }));
                     }
 
-                    let new_shrinker = match shrinker.shrink() {
+                    let new = match shrinker.shrink() {
                         Some(shrinker) => shrinker,
                         None => {
-                            break Some(Err(Error {
+                            break Some(Result::Fail(Fail {
                                 item: shrinker.item(),
                                 generates: indices.0,
                                 shrinks: indices.1,
-                                shrink: false,
                                 state,
                                 cause,
                             }));
                         }
                     };
-                    let result = handle(new_shrinker.item(), &mut self.check);
+                    let result = handle(new.item(), &mut self.check);
                     match result {
                         Ok(proof) => {
                             self.machine = Machine::Shrink {
@@ -252,11 +258,10 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                                 cause,
                             };
                             if self.checker.shrink.items {
-                                break Some(Ok(Item {
-                                    item: new_shrinker.item(),
+                                break Some(Result::Shrink(Pass {
+                                    item: new.item(),
                                     generates: indices.0,
                                     shrinks: indices.1,
-                                    shrink: true,
                                     proof,
                                     state,
                                 }));
@@ -266,15 +271,14 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                             self.machine = Machine::Shrink {
                                 indices: (indices.0, indices.1 + 1),
                                 state: state.clone(),
-                                shrinker: new_shrinker,
+                                shrinker: new,
                                 cause: new_cause,
                             };
                             if self.checker.shrink.errors {
-                                break Some(Err(Error {
+                                break Some(Result::Shrunk(Fail {
                                     item: shrinker.item(),
                                     generates: indices.0,
                                     shrinks: indices.1,
-                                    shrink: true,
                                     cause,
                                     state,
                                 }));
@@ -288,22 +292,82 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
     }
 }
 
-impl<T, P> Item<T, P> {
-    pub fn seed(&self) -> u64 {
+impl<T, P: Prove> Result<T, P> {
+    pub const fn seed(&self) -> u64 {
+        match self {
+            Result::Pass(pass) | Result::Shrink(pass) => pass.seed(),
+            Result::Fail(fail) | Result::Shrunk(fail) => fail.seed(),
+        }
+    }
+
+    pub const fn size(&self) -> f64 {
+        match self {
+            Result::Pass(pass) | Result::Shrink(pass) => pass.size(),
+            Result::Fail(fail) | Result::Shrunk(fail) => fail.size(),
+        }
+    }
+
+    pub const fn item(&self) -> &T {
+        match self {
+            Result::Pass(pass) | Result::Shrink(pass) => &pass.item,
+            Result::Fail(fail) | Result::Shrunk(fail) => &fail.item,
+        }
+    }
+
+    pub const fn generates(&self) -> usize {
+        match self {
+            Result::Pass(pass) | Result::Shrink(pass) => pass.generates,
+            Result::Fail(fail) | Result::Shrunk(fail) => fail.generates,
+        }
+    }
+
+    pub const fn shrinks(&self) -> usize {
+        match self {
+            Result::Pass(pass) | Result::Shrink(pass) => pass.shrinks,
+            Result::Fail(fail) | Result::Shrunk(fail) => fail.shrinks,
+        }
+    }
+
+    pub const fn state(&self) -> &State {
+        match self {
+            Result::Pass(pass) | Result::Shrink(pass) => &pass.state,
+            Result::Fail(fail) | Result::Shrunk(fail) => &fail.state,
+        }
+    }
+
+    pub fn pass(self, shrink: bool) -> Option<Pass<T, P::Proof>> {
+        match self {
+            Result::Pass(pass) => Some(pass),
+            Result::Shrink(pass) if shrink => Some(pass),
+            Result::Fail(_) | Result::Shrink(_) | Result::Shrunk(_) => None,
+        }
+    }
+
+    pub fn fail(self, shrunk: bool) -> Option<Fail<T, P::Error>> {
+        match self {
+            Result::Fail(fail) => Some(fail),
+            Result::Shrunk(fail) if shrunk => Some(fail),
+            Result::Pass(_) | Result::Shrunk(_) | Result::Shrink(_) => None,
+        }
+    }
+}
+
+impl<T, P> Pass<T, P> {
+    pub const fn seed(&self) -> u64 {
         self.state.seed()
     }
 
-    pub fn size(&self) -> f64 {
+    pub const fn size(&self) -> f64 {
         self.state.size()
     }
 }
 
-impl<T, P> Error<T, P> {
-    pub fn seed(&self) -> u64 {
+impl<T, P> Fail<T, P> {
+    pub const fn seed(&self) -> u64 {
         self.state.seed()
     }
 
-    pub fn size(&self) -> f64 {
+    pub const fn size(&self) -> f64 {
         self.state.size()
     }
 
@@ -322,7 +386,7 @@ impl<T, P> Error<T, P> {
 fn handle<T, P: Prove, F: FnMut(T) -> P>(
     item: T,
     mut check: F,
-) -> Result<P::Proof, Cause<P::Error>> {
+) -> result::Result<P::Proof, Cause<P::Error>> {
     let error = match catch_unwind(AssertUnwindSafe(move || check(item))) {
         Ok(prove) => match prove.prove() {
             Ok(ok) => return Ok(ok),
@@ -348,17 +412,17 @@ fn handle<T, P: Prove, F: FnMut(T) -> P>(
     }
 }
 
-impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Error<T, E> {
+impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
 }
 
-impl<T: fmt::Debug, E: fmt::Debug> error::Error for Error<T, E> {}
+impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
 #[doc(hidden)]
 pub mod help {
-    use super::{environment, Check, Checker, Error, Item};
+    use super::{environment, Check, Checker, Fail, Pass, Result};
     use crate::{Generate, Prove};
     use core::{
         any::type_name,
@@ -429,36 +493,21 @@ pub mod help {
             color,
             verbose,
             |prefix, item| {
-                if item.shrink {
-                    println!(
-                        "{prefix} {{ item: {:?}, proof: {:?} }}",
-                        &item.item, &item.proof,
-                    )
-                } else {
-                    println!(
-                        "{prefix} {{ item: {:?}, size: {}, proof: {:?} }}",
-                        &item.item,
-                        item.size(),
-                        &item.proof,
-                    )
-                }
+                println!(
+                    "{prefix} {{ item: {:?}, size: {}, proof: {:?} }}",
+                    &item.item,
+                    item.size(),
+                    &item.proof,
+                )
             },
             |prefix, error| {
-                if error.shrink {
-                    eprintln!(
-                        "{prefix} {{ item: {:?}, message: \"{}\" }}",
-                        &error.item,
-                        error.message(),
-                    )
-                } else {
-                    eprintln!(
-                        "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
-                        &error.item,
-                        error.seed(),
-                        error.size(),
-                        error.message(),
-                    )
-                }
+                eprintln!(
+                    "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
+                    &error.item,
+                    error.seed(),
+                    error.size(),
+                    error.message(),
+                )
             },
         );
     }
@@ -502,28 +551,20 @@ pub mod help {
             color,
             verbose,
             |prefix, item| {
-                if item.shrink {
-                    println!("{prefix}")
-                } else {
-                    println!(
-                        "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                        type_name::<G::Item>(),
-                        item.seed(),
-                        item.size(),
-                    )
-                }
+                println!(
+                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
+                    type_name::<G::Item>(),
+                    item.seed(),
+                    item.size(),
+                )
             },
             |prefix, error| {
-                if error.shrink {
-                    eprintln!("{prefix}")
-                } else {
-                    eprintln!(
-                        "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                        type_name::<G::Item>(),
-                        error.seed(),
-                        error.size(),
-                    )
-                }
+                eprintln!(
+                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
+                    type_name::<G::Item>(),
+                    error.seed(),
+                    error.size(),
+                )
             },
         );
     }
@@ -534,16 +575,16 @@ pub mod help {
         U: FnOnce(&mut Checker<G>),
         P: Prove,
         C: Fn(G::Item) -> P,
-        I: Fn(Arguments, Item<G::Item, P::Proof>),
-        E: Fn(Arguments, Error<G::Item, P::Error>),
+        WP: Fn(Arguments, Pass<G::Item, P::Proof>),
+        WF: Fn(Arguments, Fail<G::Item, P::Error>),
     >(
         generator: G,
         update: U,
         check: C,
         color: bool,
         verbose: bool,
-        item: I,
-        error: E,
+        pass: WP,
+        fail: WF,
     ) {
         let mut checker = generator.checker();
         checker.generate.items = verbose;
@@ -563,42 +604,23 @@ pub mod help {
         } = Colors::new(color);
         for result in checker.checks(check) {
             match result {
-                Ok(
-                    value @ Item {
-                        shrink: false,
-                        generates,
-                        ..
-                    },
-                ) => item(format_args!("{green}PASS({generates}){reset}"), value),
-                Ok(
-                    value @ Item {
-                        shrink: true,
-                        shrinks,
-                        ..
-                    },
-                ) => item(
+                Result::Pass(value @ Pass { generates, .. }) => {
+                    pass(format_args!("{green}PASS({generates}){reset}"), value)
+                }
+                Result::Shrink(value @ Pass { shrinks, .. }) => pass(
                     format_args!("{dim}{yellow}SHRINK({shrinks}, {green}PASS{yellow}){reset}"),
                     value,
                 ),
-                Err(
-                    value @ Error {
-                        shrink: true,
-                        shrinks,
-                        ..
-                    },
-                ) => error(
+                Result::Shrunk(value @ Fail { shrinks, .. }) => fail(
                     format_args!("{yellow}SHRUNK({shrinks}, {red}FAIL{yellow}){reset}"),
                     value,
                 ),
-                Err(
-                    value @ Error {
-                        shrink: false,
-                        generates,
-                        shrinks,
-                        ..
+                Result::Fail(
+                    value @ Fail {
+                        generates, shrinks, ..
                     },
                 ) => {
-                    error(
+                    fail(
                         format_args!("{bold}{red}FAIL({generates}, {shrinks}){reset}"),
                         value,
                     );

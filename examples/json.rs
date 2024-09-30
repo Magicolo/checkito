@@ -93,5 +93,5 @@ fn main() {
     // Will fail as soon as a node tree holds 100 nodes or more. The shrunk node tree should have exactly 100 nodes,
     // each with their smallest value.
     let result = node().check(|node| node.size() < 100);
-    dbg!(result.unwrap_err());
+    dbg!(result.unwrap());
 }

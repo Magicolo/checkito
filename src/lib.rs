@@ -34,7 +34,7 @@ pub use crate::{
 pub use checkito_macro::{check, regex};
 use core::{
     fmt,
-    ops::{Neg, RangeFrom, RangeFull, RangeToInclusive},
+    ops::{RangeFrom, RangeFull, RangeToInclusive},
 };
 use primitive::Range;
 
@@ -107,7 +107,7 @@ where
     (T::default()..).generator()
 }
 
-pub fn negative<T: Neg + Default>() -> impl Generate<Item = T>
+pub fn negative<T: Default>() -> impl Generate<Item = T>
 where
     RangeToInclusive<T>: IntoGenerate<Item = T>,
 {

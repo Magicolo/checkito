@@ -14,10 +14,9 @@ fn samples_false() {
 #[test]
 fn first_size_is_0_and_false() {
     let result = bool::generator().check(|_| false);
-    let error = result.err().unwrap();
-    assert_eq!(error.state.size(), 0.);
-    assert_eq!(error.cause, Cause::Disprove(()));
-    assert!(!error.item);
-    assert!(!error.shrink);
-    assert_eq!(error.shrinks, 0);
+    let fail = result.unwrap();
+    assert_eq!(fail.state.size(), 0.);
+    assert_eq!(fail.cause, Cause::Disprove(()));
+    assert!(!fail.item);
+    assert_eq!(fail.shrinks, 0);
 }

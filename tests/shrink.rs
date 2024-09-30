@@ -3,15 +3,16 @@ use common::*;
 
 #[test]
 fn finds_minimum() {
-    let result = <(usize, usize)>::generator().check(|(left, right)| left >= right);
-    let error = result.err().unwrap();
-    assert_eq!(error.item, (0, 1));
+    let fail = <(usize, usize)>::generator()
+        .check(|(left, right)| left >= right)
+        .unwrap();
+    assert_eq!(fail.item, (0, 1));
 }
 
 #[test]
 fn integer_shrink_to_minimum() {
     for high in (1usize..).samples(100) {
-        if let Err(error) = usize::generator().check(|item| item < high) {
+        if let Some(error) = usize::generator().check(|item| item < high) {
             assert!(error.item - high <= 1);
         }
     }
@@ -19,12 +20,11 @@ fn integer_shrink_to_minimum() {
 
 #[test]
 fn vec_removes_irrelevant_then_shrinks() {
-    let error = (..100usize)
+    let fail = (..100usize)
         .collect::<Vec<_>>()
         .check(|items| items.len() < 10 || items.iter().all(|&item| item < 10))
-        .err()
         .unwrap();
-    let shrunk = error.item;
+    let shrunk = fail.item;
     assert_eq!(shrunk.len(), 10);
     assert_eq!(shrunk.iter().filter(|&&item| item == 10).count(), 1);
 }

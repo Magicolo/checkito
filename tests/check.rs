@@ -68,7 +68,7 @@ fn compiles_with_regex_input(value: String) {
     assert!(value.chars().all(|value| value.is_numeric()));
 }
 
-#[check("boba")]
+#[check("a string")]
 fn compiles_with_constant_str(_: &str) {}
 
 #[check]

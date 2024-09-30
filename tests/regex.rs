@@ -3,29 +3,28 @@ use checkito::regex::Regex;
 use common::*;
 
 #[test]
-fn generate_matches_regex() -> Result {
+fn generate_matches_regex() {
     const PATTERN: &str = "((a|b)*[A-Z]*[\\u0000-\\u0FFF^\\u00AF-\\u00FF]*c{4}d{2,10})+";
     let matcher = ::regex::RegexBuilder::new(PATTERN).build().unwrap();
-    Regex::new(PATTERN)
+    assert!(Regex::new(PATTERN)
         .unwrap()
-        .check(|item| matcher.is_match(&item))?;
-    Ok(())
+        .check(|item| matcher.is_match(&item))
+        .is_none());
 }
 
 #[test]
-fn generate_constant() -> Result {
-    regex!("[a-zA-Z0-9_]+")
+fn generate_constant() {
+    assert!(regex!("[a-zA-Z0-9_]+")
         .flat_map(|pattern| (Regex::new(pattern.clone()).unwrap(), pattern))
-        .check(|(item, pattern)| item == pattern)?;
-    Ok(())
+        .check(|(item, pattern)| item == pattern)
+        .is_none());
 }
 
 #[test]
 fn range_shrinks() {
-    let error = regex!("[a-z]+")
+    let fail = regex!("[a-z]+")
         .check(|item| !item.contains('w') || !item.contains('y'))
-        .err()
         .unwrap();
-    assert!(error.item.chars().all(|symbol| symbol.is_ascii_lowercase()));
-    assert!(error.item == "wy" || error.item == "yw");
+    assert!(fail.item.chars().all(|symbol| symbol.is_ascii_lowercase()));
+    assert!(fail.item == "wy" || fail.item == "yw");
 }
