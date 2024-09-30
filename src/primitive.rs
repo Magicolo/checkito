@@ -323,23 +323,37 @@ macro_rules! shrink {
         match $s.direction {
             Direction::None if $s.item >= 0 as $t => {
                 $s.range.start = $s.range.start.max(0 as $t);
-                $s.range.end = $s.item;
-                $s.direction = Direction::High;
-                Some(Shrinker {
-                    direction: Direction::High,
-                    range: $s.range,
-                    item: $s.range.start,
-                })
+                if $s.range.start == $s.item {
+                    None
+                } else {
+                    $s.direction = Direction::High;
+                    $s.range.end = $s.item;
+                    Some(Shrinker {
+                        direction: $s.direction,
+                        range: Range {
+                            start: $s.range.start,
+                            end: $s.range.start,
+                        },
+                        item: $s.range.start,
+                    })
+                }
             }
             Direction::None => {
-                $s.range.start = $s.item;
                 $s.range.end = $s.range.end.min(0 as $t);
-                $s.direction = Direction::Low;
-                Some(Shrinker {
-                    direction: Direction::Low,
-                    range: $s.range,
-                    item: $s.range.end,
-                })
+                if $s.range.end == $s.item {
+                    None
+                } else {
+                    $s.direction = Direction::Low;
+                    $s.range.start = $s.item;
+                    Some(Shrinker {
+                        direction: $s.direction,
+                        range: Range {
+                            start: $s.range.end,
+                            end: $s.range.end,
+                        },
+                        item: $s.range.end,
+                    })
+                }
             }
             Direction::Low => {
                 let delta = $s.range.end / 2 as $t - $s.range.start / 2 as $t;

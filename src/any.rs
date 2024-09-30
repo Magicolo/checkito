@@ -1,3 +1,5 @@
+use core::f64;
+
 use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
@@ -9,20 +11,28 @@ use crate::{
 pub struct Any<T: ?Sized>(pub T);
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
-pub struct Weight<W, T: ?Sized> {
-    pub weight: W,
-    pub value: T,
+pub struct Weight<T: ?Sized> {
+    weight: f64,
+    value: T,
 }
 
-impl<W: Generate<Item = f64>, T> Weight<W, T> {
-    pub const fn new(weight: W, value: T) -> Self {
+impl<T> Weight<T> {
+    pub fn new(weight: f64, value: T) -> Self {
+        assert!(weight.is_finite());
+        assert!(weight > f64::EPSILON);
         Self { weight, value }
     }
-}
 
-impl<W: Generate, T: Generate + ?Sized> Weight<W, T> {
-    pub(crate) fn constant(&self) -> bool {
-        self.value.constant()
+    pub fn weight(&self) -> f64 {
+        self.weight
+    }
+
+    pub fn value(&self) -> &T {
+        &self.value
+    }
+
+    pub fn into_value(self) -> T {
+        self.value
     }
 }
 
@@ -34,24 +44,26 @@ fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
     }
 }
 
-fn weighted<'a, W: Generate<Item = f64>, T>(
-    items: &'a [Weight<W, T>],
-    state: &mut State,
-) -> Option<&'a T> {
-    let weights = items
-        .iter()
-        .map(|weight| (weight.weight.generate(state).item().max(0.0), &weight.value))
-        .collect::<Vec<_>>();
-    let total = weights.iter().map(|pair| pair.0).sum::<f64>();
-    let mut random = state.random().f64() * total;
-    for (weight, value) in weights {
-        if random < weight {
-            return Some(value);
-        } else {
-            random -= weight;
+fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
+    if items.is_empty() {
+        None
+    } else {
+        let total = items
+            .iter()
+            .map(|Weight { weight, .. }| weight.max(f64::EPSILON))
+            .sum::<f64>();
+        assert!(total.is_finite());
+        let mut random = state.random().f64() * total;
+        for Weight { weight, value } in items {
+            let weight = weight.max(f64::EPSILON);
+            if random < weight {
+                return Some(value);
+            } else {
+                random -= weight;
+            }
         }
+        unreachable!("there is at least one item in the slice and weights are finite and `> 0.0`");
     }
-    None
 }
 
 impl<T: ?Sized> AsRef<T> for Any<T> {
@@ -89,32 +101,32 @@ const fn as_slice<T>(slice: &[T]) -> &[T] {
 }
 
 macro_rules! collection {
-    ($t:ty, $i:ident, [$($w:ident)?], [$($n:ident)?]) => {
-        impl<T: Generate $(,$w: Generate<Item = f64>)? $(,const $n: usize)?> Generate for $t {
+    ($t:ty, $i:ident, [$($n:ident)?]) => {
+        impl<T: Generate $(,const $n: usize)?> Generate for $t {
             type Item = Option<T::Item>;
             type Shrink = Option<T::Shrink>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                Some($i(self.as_ref(), state)?.generate(state))
+                Some($i(as_slice(self.as_ref()), state)?.generate(state))
             }
 
             fn constant(&self) -> bool {
-                as_slice(self.as_ref()).iter().all(|item| item.constant())
+                as_slice(self.as_ref()).len() <= 1
             }
         }
     };
 }
 
-collection!(Any<[T]>, indexed, [], []);
-collection!(Any<&[T]>, indexed, [], []);
-collection!(Any<&mut [T]>, indexed, [], []);
-collection!([Weight<W, T>], weighted, [W], []);
-collection!(Any<[T; N]>, indexed, [], [N]);
-collection!([Weight<W, T>; N], weighted, [W], [N]);
-collection!(Any<Box<[T]>>, indexed, [], []);
-collection!(Box<[Weight<W, T>]>, weighted, [W], []);
-collection!(Any<Vec<T>>, indexed, [], []);
-collection!(Vec<Weight<W, T>>, weighted, [W], []);
+collection!(Any<[T]>, indexed, []);
+collection!(Any<&[T]>, indexed, []);
+collection!(Any<&mut [T]>, indexed, []);
+collection!([Weight<T>], weighted, []);
+collection!(Any<[T; N]>, indexed, [N]);
+collection!([Weight<T>; N], weighted, [N]);
+collection!(Any<Box<[T]>>, indexed, []);
+collection!(Box<[Weight<T>]>, weighted, []);
+collection!(Any<Vec<T>>, indexed, []);
+collection!(Vec<Weight<T>>, weighted, []);
 
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
@@ -164,31 +176,32 @@ macro_rules! tuple {
             }
 
             fn constant(&self) -> bool {
-                $(self.0.$is.constant() &&)* true
+                $c <= 1
             }
         }
 
-        #[allow(non_camel_case_types)]
-        impl<$($ps: Generate<Item = f64>, $ts: Generate,)*> Generate for ($(Weight<$ps, $ts>,)*) {
+        impl<$($ts: Generate,)*> Generate for ($(Weight<$ts>,)*) {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let weights = ($(self.$is.weight.generate(state).item().max(0.0),)*);
-                let total = $(weights.$is +)* 0.0;
-                let mut _weight = state.random().f64() * total;
+                let _total = $(self.$is.weight.max(f64::EPSILON) +)* 0.0;
+                assert!(_total.is_finite());
+                let mut _weight = state.random().f64() * _total;
                 $(
-                    if _weight < weights.$is {
-                        return orn::$n::Or::$ts(self.$is.value.generate(state));
+                    let Weight { weight, value } = &self.$is;
+                    let weight = weight.max(f64::EPSILON);
+                    if _weight < weight {
+                        return orn::$n::Or::$ts(value.generate(state));
                     } else {
-                        _weight -= weights.$is;
+                        _weight -= weight;
                     }
                 )*
-                unreachable!();
+                unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");
             }
 
             fn constant(&self) -> bool {
-                $(self.$is.value.constant() &&)* true
+                $c <= 1
             }
         }
     };

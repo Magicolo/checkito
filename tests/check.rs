@@ -160,10 +160,3 @@ struct A;
 struct B;
 #[check(with(|| A), Same(B), debug = false)]
 fn compiles_with_non_debug_parameter(_a: A, _b: B) {}
-
-#[check(.., verbose = true)]
-fn boba(values: Vec<usize>) {
-    // TODO: Fix weird shrinking.
-    assert!(values.len() < 10);
-    // assert!(values.len() < 100 || values.iter().all(|&value| value < 1_000_000_000));
-}
