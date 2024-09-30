@@ -24,7 +24,7 @@ fn main() {
         // The `Generate::map` method combines the `usize` pair in the `Input` structure.
         .map(|(value, maximum)| Input { value, maximum })
         // The `Generate::check` method will generate 1000 `Input` values that will get gradually larger.
-        .check(1000, |input| {
+        .check(|input| {
             let result = filter_less_than(&input);
             // - This assertion will fail for inputs where `input.value > 1000 && input.value > input.maximum` and when this happens,
             // `checkito` will try to find the minimum sample that reproduces the failure.

@@ -1,41 +1,47 @@
 use crate::{generate::State, prove::Prove, random, shrink::Shrink, Generate};
-use core::{error, fmt, ops::Range, panic::AssertUnwindSafe, time::Duration};
-use std::{borrow::Cow, panic::catch_unwind, time::Instant};
+use core::{error, fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
+use std::{borrow::Cow, panic::catch_unwind};
 
-/// Bounds the shrinking process.
-#[derive(Clone, Copy, Debug)]
-pub struct Shrinks {
-    /// Maximum number of successful attempts at reducing the 'size' of the input before aborting the shrinking process.
-    /// Defaults to `usize::MAX`.
-    pub accept: usize,
-    /// Maximum number of failed attempts at reducing the 'size' of the input before aborting the shrinking process.
-    /// Defaults to `usize::MAX`.
-    pub reject: usize,
-    /// Maximum time spent shrinking.
-    /// Defaults to 30 seconds.
-    pub duration: Duration,
-}
-
-/// The [`Checker`] structure holds a reference to a [`Generate`] instance and some configuration options for the checking and shrinking processes.
-#[derive(Debug)]
-pub struct Checker<'a, G: ?Sized> {
-    /// A generator that will provide the values and shrinkers for the checking and shrinking processes.
-    pub generator: &'a G,
-    /// Whether or not the [`Checks`] iterator will yield items. When `false`, the iterator will only yield errors.
-    /// Defaults to `true`.
-    pub items: bool,
-    /// Limits the shrinking process.
-    /// Defaults to a duration limit of 30 seconds.
-    pub shrinks: Shrinks,
+/// Bounds the generation process.
+#[derive(Clone, Debug)]
+pub struct Generates {
     /// Seed for the random number generator used to generate random primitives.
     /// Defaults to a random value.
     pub seed: u64,
     /// Range of sizes that will be gradually traversed while generating values.
     /// Defaults to `0.0..1.0`.
     pub size: Range<f64>,
-    /// Number of checks that will be performed.
+    /// Maximum number of items that will be generated.
     /// Defaults to `1000`.
     pub count: usize,
+    /// Whether or not the [`Checks`] iterator will yield generation items.
+    /// Defaults to `true`.
+    pub items: bool,
+}
+
+/// Bounds the shrinking process.
+#[derive(Clone, Debug)]
+pub struct Shrinks {
+    /// Maximum number of attempts at shrinking an item that has failed a check.
+    /// Defaults to `usize::MAX`.
+    pub count: usize,
+    /// Whether or not the [`Checks`] iterator will yield shrinking items.
+    /// Defaults to `true`.
+    pub items: bool,
+    /// Whether or not the [`Checks`] iterator will yield shrinking errors.
+    /// Defaults to `true`.
+    pub errors: bool,
+}
+
+/// The [`Checker`] structure holds a reference to a [`Generate`] instance and some configuration options for the checking and shrinking processes.
+#[derive(Debug)]
+pub struct Checker<'a, G: ?Sized> {
+    /// A generator that will generate items and their shrinkers for checking a property.
+    generator: &'a G,
+    /// Bounds the generation process.
+    pub generate: Generates,
+    /// Bounds the shrinking process.
+    pub shrink: Shrinks,
 }
 
 /// A structure representing a series of checks to be performed on a generator.
@@ -43,13 +49,23 @@ pub struct Checker<'a, G: ?Sized> {
 /// This structure is used to iterate over a sequence of checks, where each check
 /// is performed on a generated item. It keeps track of the number of errors
 /// encountered and the number of checks remaining.
-#[derive(Debug)]
-pub struct Checks<'a, G: ?Sized, F> {
+pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     checker: Checker<'a, G>,
-    items: bool,
-    index: usize,
-    count: usize,
+    machine: Machine<G::Shrink, E>,
     check: F,
+}
+
+enum Machine<S, E> {
+    Generate {
+        index: usize,
+    },
+    Shrink {
+        indices: (usize, usize),
+        state: State,
+        shrinker: S,
+        cause: Cause<E>,
+    },
+    Done,
 }
 
 pub trait Check: Generate {
@@ -57,50 +73,55 @@ pub trait Check: Generate {
         Checker::new(self, random::seed())
     }
 
-    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
-        &self,
-        count: usize,
-        check: F,
-    ) -> Checks<Self, F> {
-        let mut checker = self.checker();
-        checker.count = count;
-        checker.checks(check)
+    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(&self, check: F) -> Checks<Self, P::Error, F> {
+        self.checker().checks(check)
     }
 
     fn check<P: Prove, F: FnMut(Self::Item) -> P>(
         &self,
-        count: usize,
         check: F,
-    ) -> Result<(), Error<Self::Item, P>> {
+    ) -> Result<(), Error<Self::Item, P::Error>> {
         let mut checker = self.checker();
-        checker.count = count;
-        checker.items = false;
-        for result in checker.checks(check) {
-            result?;
+        checker.generate.items = false;
+        checker.shrink.items = false;
+        checker.shrink.errors = false;
+        match checker.checks(check).last() {
+            Some(Ok(_)) | None => Ok(()),
+            Some(Err(error)) => Err(error),
         }
-        Ok(())
     }
 }
 
 #[derive(Clone, Debug)]
-/// An error produced by a check failure.
-/// A check fails when a proof `P` is `false` for a given generated value.
-pub struct Error<T, P> {
-    /// The generator state that caused the error.
-    pub original: T,
-    pub shrunk: Option<T>,
+/// An item that represents a successful check.
+pub struct Item<T, P> {
+    pub item: T,
+    pub proof: P,
+    pub generates: usize,
+    pub shrinks: usize,
+    pub shrink: bool,
+    /// The generator state that produced the item.
     pub state: State,
-    pub cause: Cause<P>,
-    pub shrinks: Shrinks,
+}
+
+#[derive(Clone, Debug)]
+/// An error that represents a failed check.
+pub struct Error<T, E> {
+    pub item: T,
+    pub cause: Cause<E>,
+    pub generates: usize,
+    pub shrinks: usize,
+    pub shrink: bool,
+    /// The generator state that caused the error.
+    pub state: State,
 }
 
 /// The cause of a check failure.
-/// A check fails when a proof `P` is `false` for a given generated value.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Cause<P> {
+pub enum Cause<E> {
     /// A `Disprove` cause is a value that, when checked, returns a value of type `P`
     /// that does not satisfy the property.
-    Disprove(P),
+    Disprove(E),
     /// A `Panic` cause is produced when a check panics during its evaluation.
     /// The message associated with the panic is included if it can be casted to a string.
     Panic(Option<Cow<'static, str>>),
@@ -114,15 +135,17 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub(crate) fn new(generator: &'a G, seed: u64) -> Self {
         Self {
             generator,
-            items: true,
-            shrinks: Shrinks {
-                accept: usize::MAX,
-                reject: usize::MAX,
-                duration: Duration::from_secs(30),
+            generate: Generates {
+                items: true,
+                count: if generator.constant() { 1 } else { COUNT },
+                seed,
+                size: 0.0..1.0,
             },
-            seed,
-            size: 0.0..1.0,
-            count: if generator.constant() { 1 } else { COUNT },
+            shrink: Shrinks {
+                count: usize::MAX,
+                items: true,
+                errors: true,
+            },
         }
     }
 }
@@ -131,64 +154,30 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
     fn clone(&self) -> Self {
         Self {
             generator: self.generator,
-            items: self.items,
-            shrinks: self.shrinks,
-            seed: self.seed,
-            count: self.count,
-            size: self.size.clone(),
-        }
-    }
-}
-
-impl<G: ?Sized, F: Clone> Clone for Checks<'_, G, F> {
-    fn clone(&self) -> Self {
-        Self {
-            checker: self.checker.clone(),
-            check: self.check.clone(),
-            items: self.items,
-            index: self.index,
-            count: self.count,
+            generate: self.generate.clone(),
+            shrink: self.shrink.clone(),
         }
     }
 }
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
-        &self,
-        size: f64,
-        check: F,
-    ) -> Result<G::Item, Error<G::Item, P>> {
-        next(
-            self.generator,
-            State::new(0, 1, size..size, self.seed),
-            self.shrinks,
-            check,
-        )
-        .map(|shrink| shrink.item())
-    }
-
-    pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, F> {
+    pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
         Checks {
             checker: self.clone(),
-            items: self.items,
-            count: self.count,
+            machine: Machine::Generate { index: 0 },
             check,
-            index: 0,
         }
     }
 }
 
 #[cfg(feature = "parallel")]
-impl<'a, G: Generate + ?Sized + Sync> Checker<'a, G>
-where
-    G::Item: Send,
-{
-    pub fn check_parallel<'b, P: Prove + Send + 'b, F: Fn(G::Item) -> P + Sync + 'b>(
-        &'b self,
+impl<G: Generate<Item: Send> + ?Sized + Sync> Checker<'_, G> {
+    pub fn check_parallel<P: Prove<Error: Send>, F: Fn(G::Item) -> P + Sync>(
+        &self,
         count: usize,
         parallel: Option<usize>,
         check: F,
-    ) -> impl Iterator<Item = Result<G::Item, Error<G::Item, P>>> + 'b {
+    ) -> impl Iterator<Item = Result<Item<G::Item, P::Proof>, Error<G::Item, P::Error>>> {
         use std::{
             num::NonZeroUsize,
             sync::{
@@ -197,9 +186,6 @@ where
             },
             thread::{available_parallelism, scope},
         };
-
-        type Results<G, P> =
-            Mutex<Vec<Result<<G as Generate>::Item, Error<<G as Generate>::Item, P>>>>;
 
         const fn divide_ceiling(left: usize, right: usize) -> usize {
             let value = left / right;
@@ -213,7 +199,7 @@ where
 
         fn batch<G: Generate + ?Sized, P: Prove, F: Fn(G::Item) -> P>(
             generator: &G,
-            results: &Results<G, P>,
+            results: &Mutex<Vec<Result<Item<G::Item, P::Proof>, Error<G::Item, P::Error>>>>,
             (offset, step, count): (usize, usize, usize),
             shrinks: Shrinks,
             errors: &AtomicUsize,
@@ -222,9 +208,9 @@ where
         ) {
             for index in (offset..count).step_by(step) {
                 let state = State::new(index, count, size.clone(), seed);
-                match next(generator, state, shrinks, &check) {
-                    Ok(shrink) if errors.load(Ordering::Relaxed) == 0 => {
-                        results.lock().unwrap().push(Ok(shrink.item()))
+                match generate(generator, state, shrinks, &check) {
+                    Ok(shrinker) if errors.load(Ordering::Relaxed) == 0 => {
+                        results.lock().unwrap().push(Ok(shrinker.item()))
                     }
                     Err(error) if errors.fetch_add(1, Ordering::Relaxed) == 0 => {
                         results.lock().unwrap().push(Err(error))
@@ -287,44 +273,141 @@ where
     }
 }
 
-impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator for Checks<'_, G, F> {
-    type Item = Result<G::Item, Error<G::Item, P>>;
+impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
+    for Checks<'_, G, P::Error, F>
+{
+    type Item = Result<Item<G::Item, P::Proof>, Error<G::Item, P::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.index < self.count {
-            let result = next(
-                self.checker.generator,
-                State::new(
-                    self.index,
-                    self.count,
-                    self.checker.size.clone(),
-                    self.checker.seed,
-                ),
-                self.checker.shrinks,
-                &mut self.check,
-            );
-            self.index += 1;
-            match result {
-                Ok(shrink) if self.items => return Some(Ok(shrink.item())),
-                Ok(_) => continue,
-                Err(error) => return Some(Err(error)),
+        loop {
+            match replace(&mut self.machine, Machine::Done) {
+                Machine::Generate { index } if index >= self.checker.generate.count => break None,
+                Machine::Generate { index } => {
+                    let mut state = State::new(
+                        index,
+                        self.checker.generate.count,
+                        self.checker.generate.size.clone(),
+                        self.checker.generate.seed,
+                    );
+                    let shrinker = self.checker.generator.generate(&mut state);
+                    let result = handle(shrinker.item(), &mut self.check);
+                    match result {
+                        Ok(proof) => {
+                            self.machine = Machine::Generate { index: index + 1 };
+                            if self.checker.generate.items {
+                                break Some(Ok(Item {
+                                    item: shrinker.item(),
+                                    generates: index,
+                                    shrinks: 0,
+                                    shrink: false,
+                                    proof,
+                                    state,
+                                }));
+                            }
+                        }
+                        Err(cause) => {
+                            self.machine = Machine::Shrink {
+                                indices: (index, 0),
+                                state,
+                                shrinker,
+                                cause,
+                            };
+                        }
+                    }
+                }
+                Machine::Shrink {
+                    indices,
+                    state,
+                    mut shrinker,
+                    cause,
+                } => {
+                    if indices.1 >= self.checker.shrink.count {
+                        break Some(Err(Error {
+                            item: shrinker.item(),
+                            generates: indices.0,
+                            shrinks: indices.1,
+                            shrink: false,
+                            state,
+                            cause,
+                        }));
+                    }
+
+                    let new_shrinker = match shrinker.shrink() {
+                        Some(shrinker) => shrinker,
+                        None => {
+                            break Some(Err(Error {
+                                item: shrinker.item(),
+                                generates: indices.0,
+                                shrinks: indices.1,
+                                shrink: false,
+                                state,
+                                cause,
+                            }));
+                        }
+                    };
+                    let result = handle(new_shrinker.item(), &mut self.check);
+                    match result {
+                        Ok(proof) => {
+                            self.machine = Machine::Shrink {
+                                indices: (indices.0, indices.1 + 1),
+                                state: state.clone(),
+                                shrinker,
+                                cause,
+                            };
+                            if self.checker.shrink.items {
+                                break Some(Ok(Item {
+                                    item: new_shrinker.item(),
+                                    generates: indices.0,
+                                    shrinks: indices.1,
+                                    shrink: true,
+                                    proof,
+                                    state,
+                                }));
+                            }
+                        }
+                        Err(new_cause) => {
+                            self.machine = Machine::Shrink {
+                                indices: (indices.0, indices.1 + 1),
+                                state: state.clone(),
+                                shrinker: new_shrinker,
+                                cause: new_cause,
+                            };
+                            if self.checker.shrink.errors {
+                                break Some(Err(Error {
+                                    item: shrinker.item(),
+                                    generates: indices.0,
+                                    shrinks: indices.1,
+                                    shrink: true,
+                                    cause,
+                                    state,
+                                }));
+                            }
+                        }
+                    }
+                }
+                _ => break None,
             }
         }
-        None
     }
 }
 
-impl<T, P> Error<T, P> {
-    pub fn item(&self) -> &T {
-        self.shrunk.as_ref().unwrap_or(&self.original)
-    }
-
+impl<T, P> Item<T, P> {
     pub fn seed(&self) -> u64 {
         self.state.seed()
     }
 
-    pub fn index(&self) -> usize {
-        self.state.index()
+    pub fn size(&self) -> f64 {
+        self.state.size()
+    }
+}
+
+impl<T, P> Error<T, P> {
+    pub fn seed(&self) -> u64 {
+        self.state.seed()
+    }
+
+    pub fn size(&self) -> f64 {
+        self.state.size()
     }
 
     pub fn message(&self) -> Cow<'static, str>
@@ -339,253 +422,414 @@ impl<T, P> Error<T, P> {
     }
 }
 
-fn handle<T, P: Prove, F: FnMut(T) -> P>(item: T, mut check: F) -> Option<Cause<P>> {
-    let error = match catch_unwind(AssertUnwindSafe(|| check(item))) {
-        Ok(prove) if prove.prove() => return None,
-        Ok(prove) => return Some(Cause::Disprove(prove)),
+fn handle<T, P: Prove, F: FnMut(T) -> P>(
+    item: T,
+    mut check: F,
+) -> Result<P::Proof, Cause<P::Error>> {
+    let error = match catch_unwind(AssertUnwindSafe(move || check(item))) {
+        Ok(prove) => match prove.prove() {
+            Ok(ok) => return Ok(ok),
+            Err(error) => return Err(Cause::Disprove(error)),
+        },
         Err(error) => error,
     };
     let error = match error.downcast::<&'static str>() {
-        Ok(error) => return Some(Cause::Panic(Some(Cow::Borrowed(*error)))),
+        Ok(error) => return Err(Cause::Panic(Some(Cow::Borrowed(*error)))),
         Err(error) => error,
     };
     let error = match error.downcast::<String>() {
-        Ok(error) => return Some(Cause::Panic(Some(Cow::Owned(*error)))),
+        Ok(error) => return Err(Cause::Panic(Some(Cow::Owned(*error)))),
         Err(error) => error,
     };
     let error = match error.downcast::<Box<str>>() {
-        Ok(error) => return Some(Cause::Panic(Some(Cow::Owned(error.to_string())))),
+        Ok(error) => return Err(Cause::Panic(Some(Cow::Owned(error.to_string())))),
         Err(error) => error,
     };
     match error.downcast::<Cow<'static, str>>() {
-        Ok(error) => Some(Cause::Panic(Some(*error))),
-        Err(_) => Some(Cause::Panic(None)),
+        Ok(error) => Err(Cause::Panic(Some(*error))),
+        Err(_) => Err(Cause::Panic(None)),
     }
 }
 
-fn shrink<S: Shrink, P: Prove, F: FnMut(S::Item) -> P>(
-    shrinks: Shrinks,
-    shrinker: &mut S,
-    error: &mut Error<S::Item, P>,
-    check: F,
-) -> Option<bool> {
-    if error.shrinks.reject < shrinks.reject
-        && error.shrinks.accept < shrinks.accept
-        && error.shrinks.duration < shrinks.duration
-    {
-        let now = Instant::now();
-        let shrunk = shrinker.shrink()?;
-        match handle(shrunk.item(), check) {
-            Some(cause) => {
-                *shrinker = shrunk;
-                error.shrunk = Some(shrinker.item());
-                error.cause = cause;
-                error.shrinks.reject = 0;
-                error.shrinks.accept += 1;
-                error.shrinks.duration += Instant::now() - now;
-                Some(true)
-            }
-            _ => {
-                error.shrinks.reject += 1;
-                error.shrinks.duration += Instant::now() - now;
-                Some(false)
-            }
-        }
-    } else {
-        None
-    }
-}
-
-fn next<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P>(
-    generator: &G,
-    mut state: State,
-    shrinks: Shrinks,
-    mut check: F,
-) -> Result<G::Shrink, Error<G::Item, P>> {
-    let mut shrinker = generator.generate(&mut state);
-    let Some(cause) = handle(shrinker.item(), &mut check) else {
-        return Ok(shrinker);
-    };
-    let mut error = Error {
-        state,
-        cause,
-        original: shrinker.item(),
-        shrunk: None,
-        shrinks: Shrinks {
-            accept: 0,
-            reject: 0,
-            duration: Duration::ZERO,
-        },
-    };
-    while shrink(shrinks, &mut shrinker, &mut error, &mut check).is_some() {}
-    Err(error)
-}
-
-impl<T: fmt::Debug, P: fmt::Debug> fmt::Display for Error<T, P> {
+impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Error<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
 }
 
-impl<T: fmt::Debug, P: fmt::Debug> error::Error for Error<T, P> {}
+impl<T: fmt::Debug, E: fmt::Debug> error::Error for Error<T, E> {}
 
 #[doc(hidden)]
-pub mod run {
-    use super::{environment, Check, Checker, Error};
+pub mod help {
+    use super::{environment, Check, Checker, Error, Item};
     use crate::{Generate, Prove};
-    use core::{any::type_name, fmt};
+    use core::{
+        any::type_name,
+        fmt::{self, Arguments},
+        ops::Range,
+        time::Duration,
+    };
     use std::panic;
 
-    pub fn debug<
+    pub trait IntoRange<T> {
+        fn range(self) -> Range<T>;
+    }
+
+    pub trait IntoDuration {
+        fn duration(self) -> Duration;
+    }
+
+    struct Colors {
+        red: &'static str,
+        green: &'static str,
+        yellow: &'static str,
+        dim: &'static str,
+        bold: &'static str,
+        reset: &'static str,
+    }
+
+    impl Colors {
+        pub const fn new(color: bool) -> Self {
+            if color {
+                Self {
+                    red: "\x1b[31m",
+                    green: "\x1b[32m",
+                    yellow: "\x1b[33m",
+                    bold: "\x1b[1m",
+                    dim: "\x1b[2m",
+                    reset: "\x1b[0m",
+                }
+            } else {
+                Self {
+                    red: "",
+                    green: "",
+                    yellow: "",
+                    bold: "",
+                    dim: "",
+                    reset: "",
+                }
+            }
+        }
+    }
+
+    #[track_caller]
+    pub fn default<
         G: Generate<Item: fmt::Debug>,
         U: FnOnce(&mut Checker<G>),
-        P: Prove + fmt::Debug,
+        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
         C: Fn(G::Item) -> P,
     >(
         generator: G,
         update: U,
         check: C,
+        color: bool,
+        verbose: bool,
     ) {
         with(
             generator,
-            true,
             update,
             check,
-            |index, result| match result {
-                Ok(item) => {
-                    println!("\x1b[32mCHECK({})\x1b[0m: {:?}", index + 1, item);
+            color,
+            verbose,
+            |prefix, item| {
+                if item.shrink {
+                    println!(
+                        "{prefix} {{ item: {:?}, proof: {:?} }}",
+                        &item.item, &item.proof,
+                    )
+                } else {
+                    println!(
+                        "{prefix} {{ item: {:?}, size: {}, proof: {:?} }}",
+                        &item.item,
+                        item.size(),
+                        &item.proof,
+                    )
                 }
-                Err(error) => {
-                    eprintln!("\x1b[31mCHECK({})\x1b[0m: {error:?}", index + 1);
-                    panic!();
+            },
+            |prefix, error| {
+                if error.shrink {
+                    eprintln!(
+                        "{prefix} {{ item: {:?}, message: \"{}\" }}",
+                        &error.item,
+                        error.message(),
+                    )
+                } else {
+                    eprintln!(
+                        "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
+                        &error.item,
+                        error.seed(),
+                        error.size(),
+                        error.message(),
+                    )
                 }
             },
         );
     }
 
-    pub fn default<
+    #[track_caller]
+    pub fn debug<
         G: Generate<Item: fmt::Debug>,
         U: FnOnce(&mut Checker<G>),
-        P: Prove + fmt::Debug,
+        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
         C: Fn(G::Item) -> P,
     >(
         generator: G,
         update: U,
         check: C,
+        color: bool,
+        verbose: bool,
     ) {
-        with(generator, false, update, check, |_, result| {
-            if let Err(error) = result {
-                eprintln!();
-                eprintln!(
-                    "\x1b[31mCHECK({})\x1b[0m: {{ item: {:?}, seed: {}, message: \"{}\" }}",
-                    error.index() + 1,
-                    error.item(),
-                    error.seed(),
-                    error.message()
-                );
-                panic!();
-            }
-        });
+        with(
+            generator,
+            update,
+            check,
+            color,
+            verbose,
+            |prefix, item| println!("{prefix} {item:?}"),
+            |prefix, error| eprintln!("{prefix} {error:?}"),
+        );
     }
 
-    pub fn minimal<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G>),
-        P: Prove + fmt::Debug,
-        C: Fn(G::Item) -> P,
-    >(
+    #[track_caller]
+    pub fn minimal<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
         generator: G,
         update: U,
         check: C,
+        color: bool,
+        verbose: bool,
     ) {
-        with(generator, false, update, check, |_, result| {
-            if let Err(error) = result {
-                eprintln!();
-                eprintln!(
-                    "\x1b[31mCHECK({})\x1b[0m: {{ type: {:?}, seed: {} }}",
-                    error.index() + 1,
-                    type_name::<G::Item>(),
-                    error.seed()
-                );
-                panic!();
-            }
-        });
+        with(
+            generator,
+            update,
+            check,
+            color,
+            verbose,
+            |prefix, item| {
+                if item.shrink {
+                    println!("{prefix}")
+                } else {
+                    println!(
+                        "{prefix} {{ type: {}, seed: {}, size: {} }}",
+                        type_name::<G::Item>(),
+                        item.seed(),
+                        item.size(),
+                    )
+                }
+            },
+            |prefix, error| {
+                if error.shrink {
+                    eprintln!("{prefix}")
+                } else {
+                    eprintln!(
+                        "{prefix} {{ type: {}, seed: {}, size: {} }}",
+                        type_name::<G::Item>(),
+                        error.seed(),
+                        error.size(),
+                    )
+                }
+            },
+        );
     }
 
+    #[track_caller]
     fn with<
         G: Generate,
-        P: Prove,
         U: FnOnce(&mut Checker<G>),
+        P: Prove,
         C: Fn(G::Item) -> P,
-        H: Fn(usize, Result<G::Item, Error<G::Item, P>>),
+        I: Fn(Arguments, Item<G::Item, P::Proof>),
+        E: Fn(Arguments, Error<G::Item, P::Error>),
     >(
         generator: G,
-        debug: bool,
         update: U,
         check: C,
-        handle: H,
+        color: bool,
+        verbose: bool,
+        item: I,
+        error: E,
     ) {
         let mut checker = generator.checker();
+        checker.generate.items = verbose;
+        checker.shrink.items = verbose;
+        checker.shrink.errors = verbose;
         environment::update(&mut checker);
-        update(&mut checker);
-        checker.items = debug;
-        if !debug {
-            panic::set_hook(Box::new(|_| {}));
+        (update)(&mut checker);
+        let hook = panic::take_hook();
+        panic::set_hook(Box::new(|_| {}));
+        let Colors {
+            red,
+            green,
+            yellow,
+            dim,
+            bold,
+            reset,
+        } = Colors::new(color);
+        for result in checker.checks(check) {
+            match result {
+                Ok(
+                    value @ Item {
+                        shrink: false,
+                        generates,
+                        ..
+                    },
+                ) => item(format_args!("{green}PASS({generates}){reset}"), value),
+                Ok(
+                    value @ Item {
+                        shrink: true,
+                        shrinks,
+                        ..
+                    },
+                ) => item(
+                    format_args!("{dim}{yellow}SHRINK({shrinks}, {green}PASS{yellow}){reset}"),
+                    value,
+                ),
+                Err(
+                    value @ Error {
+                        shrink: true,
+                        shrinks,
+                        ..
+                    },
+                ) => error(
+                    format_args!("{yellow}SHRUNK({shrinks}, {red}FAIL{yellow}){reset}"),
+                    value,
+                ),
+                Err(
+                    value @ Error {
+                        shrink: false,
+                        generates,
+                        shrinks,
+                        ..
+                    },
+                ) => {
+                    error(
+                        format_args!("{bold}{red}FAIL({generates}, {shrinks}){reset}"),
+                        value,
+                    );
+                    panic::set_hook(hook);
+                    panic!();
+                }
+            }
         }
-        for (index, result) in checker.checks(check).enumerate() {
-            handle(index, result);
+        panic::set_hook(hook);
+    }
+
+    impl<T> IntoRange<T> for Range<T> {
+        fn range(self) -> Range<T> {
+            self
         }
     }
+
+    macro_rules! range {
+        ($($from: ty),*) => {
+            $(
+                impl IntoRange<$from> for $from {
+                    fn range(self) -> Range<$from> {
+                        self..self
+                    }
+                }
+            )*
+        };
+    }
+    range!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, char, bool);
+
+    impl IntoDuration for f32 {
+        fn duration(self) -> Duration {
+            Duration::from_secs_f32(self)
+        }
+    }
+
+    impl IntoDuration for f64 {
+        fn duration(self) -> Duration {
+            Duration::from_secs_f64(self)
+        }
+    }
+
+    macro_rules! duration {
+        ($($from: ty),*) => {
+            $(
+                impl IntoDuration for $from {
+                    fn duration(self) -> Duration {
+                        Duration::from_secs(self as _)
+                    }
+                }
+            )*
+        };
+    }
+    duration!(u8, u16, u32, u64, u128, usize);
 }
 
 #[doc(hidden)]
 pub mod environment {
     use super::Checker;
-    use std::{env, str::FromStr, time::Duration};
+    use core::str::FromStr;
+    use std::env;
 
-    pub fn count() -> Option<usize> {
-        parse("CHECKITO_COUNT")
+    pub mod generate {
+        use super::*;
+
+        pub fn count() -> Option<usize> {
+            parse("CHECKITO_GENERATE_COUNT")
+        }
+
+        pub fn size() -> Option<f64> {
+            parse("CHECKITO_GENERATE_SIZE")
+        }
+
+        pub fn seed() -> Option<u64> {
+            parse("CHECKITO_GENERATE_SEED")
+        }
+
+        pub fn items() -> Option<bool> {
+            parse("CHECKITO_GENERATE_ITEMS")
+        }
+
+        pub fn update<G>(checker: &mut Checker<'_, G>) {
+            if let Some(value) = size() {
+                checker.generate.size = value..value;
+            }
+            if let Some(value) = count() {
+                checker.generate.count = value;
+            }
+            if let Some(value) = seed() {
+                checker.generate.seed = value;
+            }
+            if let Some(value) = items() {
+                checker.generate.items = value;
+            }
+        }
     }
 
-    pub fn size() -> Option<f64> {
-        parse("CHECKITO_SIZE")
-    }
+    pub mod shrink {
+        use super::*;
 
-    pub fn seed() -> Option<u64> {
-        parse("CHECKITO_SEED")
-    }
+        pub fn count() -> Option<usize> {
+            parse("CHECKITO_SHRINK_COUNT")
+        }
 
-    pub fn accept() -> Option<usize> {
-        parse("CHECKITO_ACCEPT")
-    }
+        pub fn items() -> Option<bool> {
+            parse("CHECKITO_SHRINK_ITEMS")
+        }
 
-    pub fn reject() -> Option<usize> {
-        parse("CHECKITO_REJECT")
-    }
+        pub fn errors() -> Option<bool> {
+            parse("CHECKITO_SHRINK_ERRORS")
+        }
 
-    pub fn duration() -> Option<Duration> {
-        parse("CHECKITO_DURATION").map(Duration::from_secs_f64)
+        pub fn update<G>(checker: &mut Checker<'_, G>) {
+            if let Some(value) = count() {
+                checker.shrink.count = value;
+            }
+            if let Some(value) = items() {
+                checker.shrink.items = value;
+            }
+            if let Some(value) = errors() {
+                checker.shrink.errors = value;
+            }
+        }
     }
 
     pub fn update<G>(checker: &mut Checker<'_, G>) {
-        if let Some(value) = size() {
-            checker.size = value..value;
-        }
-        if let Some(value) = count() {
-            checker.count = value;
-        }
-        if let Some(value) = seed() {
-            checker.seed = value;
-        }
-        if let Some(value) = accept() {
-            checker.shrinks.accept = value;
-        }
-        if let Some(value) = reject() {
-            checker.shrinks.reject = value;
-        }
-        if let Some(value) = duration() {
-            checker.shrinks.duration = value;
-        }
+        generate::update(checker);
+        shrink::update(checker);
     }
 
     fn parse<T: FromStr>(key: &str) -> Option<T> {

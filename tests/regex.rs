@@ -8,7 +8,7 @@ fn generate_matches_regex() -> Result {
     let matcher = ::regex::RegexBuilder::new(PATTERN).build().unwrap();
     Regex::new(PATTERN)
         .unwrap()
-        .check(COUNT, |item| matcher.is_match(&item))?;
+        .check(|item| matcher.is_match(&item))?;
     Ok(())
 }
 
@@ -16,19 +16,16 @@ fn generate_matches_regex() -> Result {
 fn generate_constant() -> Result {
     regex!("[a-zA-Z0-9_]+")
         .flat_map(|pattern| (Regex::new(pattern.clone()).unwrap(), pattern))
-        .check(COUNT, |(item, pattern)| item == pattern)?;
+        .check(|(item, pattern)| item == pattern)?;
     Ok(())
 }
 
 #[test]
 fn range_shrinks() {
     let error = regex!("[a-z]+")
-        .check(COUNT, |item| !item.contains('w') || !item.contains('y'))
+        .check(|item| !item.contains('w') || !item.contains('y'))
         .err()
         .unwrap();
-    assert!(error
-        .item()
-        .chars()
-        .all(|symbol| symbol.is_ascii_lowercase()));
-    assert!(error.item() == "wy" || error.item() == "yw");
+    assert!(error.item.chars().all(|symbol| symbol.is_ascii_lowercase()));
+    assert!(error.item == "wy" || error.item == "yw");
 }

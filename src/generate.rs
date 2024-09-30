@@ -21,11 +21,10 @@ const COUNT: usize = u8::MAX as usize;
 
 #[derive(Clone, Debug)]
 pub struct State {
-    pub(crate) size: (f64, ops::Range<f64>),
-    pub(crate) count: usize,
-    pub(crate) depth: usize,
-    index: usize,
     seed: u64,
+    pub(crate) size: (f64, ops::Range<f64>),
+    pub(crate) limit: u32,
+    pub(crate) depth: u32,
     random: Random,
 }
 
@@ -55,6 +54,8 @@ pub trait Generate {
     /// [`Generate::Item`] and shrink itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
+    /// Returns true if the generator will always produce the same item.
+    /// This is used in some optimizations to prevent redundant generations.
     fn constant(&self) -> bool {
         false
     }
@@ -300,23 +301,14 @@ impl State {
         Self {
             size: self::size(index, count, size),
             depth: 0,
-            index,
-            count: 0,
+            limit: 0,
             seed,
             random: Random::new(seed.wrapping_add(index as _)),
         }
     }
 
-    pub const fn index(&self) -> usize {
-        self.index
-    }
-
     pub const fn size(&self) -> f64 {
         self.size.0
-    }
-
-    pub const fn depth(&self) -> usize {
-        self.depth
     }
 
     pub const fn seed(&self) -> u64 {
@@ -341,7 +333,7 @@ pub(crate) fn size(
     } else {
         let range = size.end - size.start;
         assert!(range >= 0.0);
-        assert!(index < count);
+        assert!(index <= count);
         // This size calculation ensures that 25% of samples are fully sized.
         let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
         (size.start + ratio * range, size)

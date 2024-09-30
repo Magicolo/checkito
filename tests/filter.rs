@@ -5,7 +5,7 @@ use common::*;
 fn filtered_pair_preserves_inequality() -> Result {
     <(String, String)>::generator()
         .filter(|(left, right)| left != right)
-        .check(COUNT, |pair| match pair {
+        .check(|pair| match pair {
             Some((left, right)) => left != right,
             None => true,
         })?;
@@ -17,7 +17,7 @@ fn filtered_array_preserves_inequality() -> Result {
     regex!("[a-z]+")
         .array::<3>()
         .filter(|[a, b, c]| a != b && b != c && a != c)
-        .check(COUNT, |array| match array {
+        .check(|array| match array {
             Some([a, b, c]) => a != b && b != c && a != c,
             None => true,
         })?;
@@ -30,7 +30,7 @@ fn shrinked_filter_preserves_inequality() -> Result {
         <(String, String)>::generator().filter(|(left, right)| left != right),
         usize::generator(),
     )
-        .check(COUNT, |(pair, value)| {
+        .check(|(pair, value)| {
             let Some((left, right)) = pair else {
                 return true;
             };
@@ -38,8 +38,8 @@ fn shrinked_filter_preserves_inequality() -> Result {
             value < 1000 // Force the check to fail at some point.
         })
         .unwrap_err();
-    assert_eq!(error.cause, Cause::Disprove(false));
-    let (left, right) = error.item().0.clone().unwrap();
+    assert_eq!(error.cause, Cause::Disprove(()));
+    let (left, right) = error.item.0.clone().unwrap();
     assert_ne!(left, right);
     Ok(())
 }

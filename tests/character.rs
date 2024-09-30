@@ -12,7 +12,7 @@ use std::{
 fn empty_range() {
     char::generator()
         .flat_map(|value| value..value)
-        .check(COUNT, |_| true)
+        .check(|_| true)
         .unwrap();
 }
 
@@ -20,64 +20,90 @@ fn empty_range() {
 fn is_same() -> Result {
     char::generator()
         .flat_map(|value| (value, Same(value)))
-        .check(COUNT, |(left, right)| left == right)?;
+        .check(|(left, right)| left == right)?;
     Ok(())
 }
 
 #[test]
 fn is_ascii() -> Result {
-    ascii().check(COUNT, |value| value.is_ascii())?;
+    ascii().check(|value| value.is_ascii())?;
     Ok(())
 }
 
 #[test]
 fn is_digit() -> Result {
-    digit().check(COUNT, |value| value.is_ascii_digit())?;
+    digit().check(|value| value.is_ascii_digit())?;
     Ok(())
 }
 
 #[test]
 fn is_alphabetic() -> Result {
-    letter().check(COUNT, |value| value.is_ascii_alphabetic())?;
+    letter().check(|value| value.is_ascii_alphabetic())?;
     Ok(())
 }
 
 #[test]
 fn full_does_not_panic() -> Result {
-    char::generator().check(COUNT, |_| true)?;
+    char::generator().check(|_| true)?;
     Ok(())
 }
 
 macro_rules! collection {
-    ($m:ident, $t:ty $(, $i:ident)?) => {
+    ($m:ident, $t:ty, $i:ident) => {
         mod $m {
             use super::*;
 
             #[test]
             fn has_same_count() -> Result {
-                (0..COUNT)
+                (0..100usize)
                     .generator()
                     .flat_map(|count| (count, char::generator().collect_with::<_, $t>(count)))
-                    .check(COUNT, |(count, value)| value $(.$i())? .count() == count)?;
+                    .check(|(count, value)| value.$i().count() == count)?;
                 Ok(())
             }
 
             #[test]
             fn is_ascii() -> Result {
-                ascii().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii()))?;
+                ascii()
+                    .collect::<$t>()
+                    .check(|value| value.$i().all(|value| value.is_ascii()))?;
                 Ok(())
             }
 
             #[test]
             fn is_digit() -> Result {
-                digit().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_digit()))?;
+                digit()
+                    .collect::<$t>()
+                    .check(|value| value.$i().all(|value| value.is_ascii_digit()))?;
                 Ok(())
             }
 
             #[test]
             fn is_alphabetic() -> Result {
-                letter().collect::<$t>().check(COUNT, |value| value $(.$i())? .all(|value| value.is_ascii_alphabetic()))?;
+                letter()
+                    .collect::<$t>()
+                    .check(|value| value.$i().all(|value| value.is_ascii_alphabetic()))?;
                 Ok(())
+            }
+
+            #[allow(clippy::boxed_local)]
+            mod check {
+                use super::*;
+
+                #[check(ascii().collect())]
+                fn is_ascii(value: $t) {
+                    assert!(value.$i().all(|value| value.is_ascii()));
+                }
+
+                #[check(digit().collect())]
+                fn is_digit(value: $t) {
+                    assert!(value.$i().all(|value| value.is_ascii_digit()));
+                }
+
+                #[check(letter().collect())]
+                fn is_alphabetic(value: $t) {
+                    assert!(value.$i().all(|value| value.is_ascii_alphabetic()));
+                }
             }
         }
     };

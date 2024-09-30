@@ -13,7 +13,7 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.size.clone();
-        let new = if state.depth >= self.deepest || state.count >= self.limit {
+        let new = if state.depth as usize >= self.deepest || state.limit as usize >= self.limit {
             0.0
         } else {
             old.0 / (state.depth as f64 * self.pressure).max(1.0)

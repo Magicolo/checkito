@@ -1,8 +1,10 @@
 pub mod common;
-
 use common::*;
 use core::fmt;
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 #[check('a'..='z')]
 fn compiles_range_expression(value: char) {
@@ -66,7 +68,7 @@ fn compiles_with_regex_input(value: String) {
     assert!(value.chars().all(|value| value.is_numeric()));
 }
 
-#[check(same("boba"))]
+#[check("boba")]
 fn compiles_with_constant_str(_: &str) {}
 
 #[check]
@@ -89,17 +91,44 @@ fn compiles_with_debug_true() {}
 #[check(debug = false)]
 fn compiles_with_debug_false() {}
 
-#[check(seed = 1234567890 / 100)]
-fn compiles_with_seed() {}
+#[check(color = true)]
+fn compiles_with_color_true() {}
 
-#[check(reject = 1 + 123_098)]
-fn compiles_with_reject() {}
+#[check(color = false)]
+fn compiles_with_color_false() {}
 
-#[check(accept = !0)]
-fn compiles_with_accept() {}
+#[check(verbose = true)]
+fn compiles_with_verbose_true() {}
 
-#[check(count = 1)]
-fn compiles_with_count() {}
+#[check(verbose = false)]
+fn compiles_with_verbose_false() {}
+
+#[check(generate.seed = 1234567890 / 100)]
+fn compiles_with_generate_seed() {}
+
+#[check(generate.size = 0.25)]
+fn compiles_with_generate_size_constant() {}
+
+#[check(generate.size = 0.25..0.75)]
+fn compiles_with_generate_size_range() {}
+
+#[check(generate.items = false)]
+fn compiles_with_generate_items() {}
+
+#[check(generate.count = 100)]
+fn compiles_with_generate_count() {
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    assert!(COUNT.fetch_add(1, Ordering::Relaxed) < 100);
+}
+
+#[check(shrink.count = 1 + 123_098)]
+fn compiles_with_shrink_count() {}
+
+#[check(shrink.items = false)]
+fn compiles_with_shrink_items() {}
+
+#[check(shrink.errors = true)]
+fn compiles_with_shrink_errors() {}
 
 #[check(true)]
 const fn compiles_with_const(value: bool) -> bool {
@@ -122,7 +151,19 @@ fn compiles_with_multiple_param_generics<T: fmt::Debug>(_a: T) {}
 #[check(1usize)]
 #[check(2usize)]
 fn compiles_with_multiple_constants(value: usize) {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     static COUNT: AtomicUsize = AtomicUsize::new(0);
     assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), value);
+}
+
+struct A;
+#[derive(Clone)]
+struct B;
+#[check(with(|| A), Same(B), debug = false)]
+fn compiles_with_non_debug_parameter(_a: A, _b: B) {}
+
+#[check(.., verbose = true)]
+fn boba(values: Vec<usize>) {
+    // TODO: Fix weird shrinking.
+    assert!(values.len() < 10);
+    // assert!(values.len() < 100 || values.iter().all(|&value| value < 1_000_000_000));
 }

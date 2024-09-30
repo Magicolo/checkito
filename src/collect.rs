@@ -1,6 +1,6 @@
 use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
-    primitive::Range,
+    primitive::{self, Range},
     same::Same,
     sample::Sample,
     shrink::{All, Shrink},
@@ -29,10 +29,11 @@ pub struct Generator<I, F: ?Sized> {
     _marker: PhantomData<F>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Shrinker<I, F: ?Sized> {
     inner: Vec<I>,
     index: usize,
+    count: primitive::Shrinker<usize>,
     minimum: usize,
     _marker: PhantomData<F>,
 }
@@ -59,10 +60,12 @@ impl<G: Generate, F: FromIterator<G::Item>> Generator<G, F> {
 }
 
 impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
-    pub const fn new(shrinks: Vec<S>, minimum: usize) -> Self {
+    pub fn new(shrinks: Vec<S>, minimum: usize) -> Self {
+        let maximum = shrinks.len();
         Self {
             inner: shrinks,
             index: 0,
+            count: primitive::Shrinker::new(Range::usize(minimum..=maximum).unwrap(), maximum),
             minimum,
             _marker: PhantomData,
         }
@@ -89,6 +92,7 @@ impl<I: Clone, F> Clone for Shrinker<I, F> {
         Self {
             inner: self.inner.clone(),
             index: self.index,
+            count: self.count.clone(),
             minimum: self.minimum,
             _marker: PhantomData,
         }
@@ -135,14 +139,28 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
     }
 
     fn shrink(&mut self) -> Option<Self> {
+        // Try to truncate irrelevant generators aggressively.
+        if let Some(count) = self.count.shrink() {
+            let mut inner = self.inner.clone();
+            inner.truncate(count.item());
+            return Some(Self {
+                inner,
+                index: 0,
+                count,
+                minimum: self.minimum,
+                _marker: PhantomData,
+            });
+        }
+
         // Try to remove irrelevant generators one by one.
         if self.index < self.inner.len() && self.minimum < self.inner.len() {
-            let mut shrinks = self.inner.clone();
-            shrinks.remove(self.index);
+            let mut inner = self.inner.clone();
+            inner.remove(self.index);
             self.index += 1;
             return Some(Self {
-                inner: shrinks,
+                inner,
                 index: 0,
+                count: self.count.clone(),
                 minimum: self.minimum,
                 _marker: PhantomData,
             });
@@ -154,11 +172,12 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
         for i in 0..self.inner.len() {
             let index = (start + i) % self.inner.len();
             if let Some(shrink) = self.inner[index].shrink() {
-                let mut shrinks = self.inner.clone();
-                shrinks[index] = shrink;
+                let mut inner = self.inner.clone();
+                inner[index] = shrink;
                 return Some(Self {
-                    inner: shrinks,
+                    inner,
                     index: self.index,
+                    count: self.count.clone(),
                     minimum: self.minimum,
                     _marker: PhantomData,
                 });

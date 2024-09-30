@@ -1,7 +1,9 @@
-use core::{error, fmt};
+use core::{convert::Infallible, error, fmt};
 
 pub trait Prove {
-    fn prove(&self) -> bool;
+    type Proof;
+    type Error;
+    fn prove(self) -> Result<Self::Proof, Self::Error>;
 }
 
 #[derive(Clone, Debug)]
@@ -23,58 +25,56 @@ impl fmt::Display for Error {
 }
 
 impl Prove for () {
-    fn prove(&self) -> bool {
-        true
+    type Proof = ();
+    type Error = Infallible;
+    fn prove(self) -> Result<Self::Proof, Self::Error> {
+        Ok(())
     }
 }
 
 impl Prove for bool {
-    fn prove(&self) -> bool {
-        *self
-    }
-}
-
-impl<T, E> Prove for Result<T, E> {
-    fn prove(&self) -> bool {
-        self.is_ok()
-    }
-}
-
-impl<P: Prove> Prove for Option<P> {
-    fn prove(&self) -> bool {
-        match self {
-            Some(prove) => prove.prove(),
-            None => true,
+    type Proof = ();
+    type Error = ();
+    fn prove(self) -> Result<Self::Proof, Self::Error> {
+        if self {
+            Ok(())
+        } else {
+            Err(())
         }
     }
 }
 
+impl<T, E> Prove for Result<T, E> {
+    type Proof = T;
+    type Error = E;
+    fn prove(self) -> Self {
+        self
+    }
+}
+
 impl Prove for Error {
-    fn prove(&self) -> bool {
-        false
+    type Proof = Infallible;
+    type Error = Self;
+    fn prove(self) -> Result<Self::Proof, Self::Error> {
+        Err(self)
     }
 }
 
 #[macro_export]
 macro_rules! prove {
     ([$($values: expr),*] $prove:expr) => {{
-        let prove = $prove;
-        if $crate::prove::Prove::prove(&prove) {
-            Ok(prove)
-        } else {
-            Err($crate::prove::Error {
+        match $crate::prove::Prove::prove($prove) {
+            Ok(proof) => proof,
+            Err(error) => return Err($crate::prove::Error {
                 values: vec![$(format!("{:?}", $value)),*],
                 expression: stringify!($prove),
                 file: file!(),
                 line: line!(),
                 column: column!(),
                 module: module_path!(),
-            })
+            });
         }
     }};
-    ($prove:expr) => {
-        let prove = $prove;
-        $crate::prove!([prove] prove);
-    };
+    ($prove:expr) => { $crate::prove!([] $prove) };
     ($($prove:expr),*) => { Ok(($($crate::prove!($prove)),*)) }
 }

@@ -1,6 +1,6 @@
 use crate::utility;
 use core::fmt;
-use quote::{format_ident, quote_spanned};
+use quote::{format_ident, quote_spanned, ToTokens};
 use std::{collections::HashSet, ops::Deref};
 use syn::{
     __private::{Span, TokenStream2},
@@ -8,8 +8,8 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
-    Error, Expr, ExprAssign, ExprLit, ExprPath, ExprRange, FnArg, Ident, ItemFn, Lit, LitBool,
-    Meta, PatType, RangeLimits,
+    Error, Expr, ExprAssign, ExprField, ExprPath, ExprRange, FnArg, Ident, Member, Meta, PatType,
+    RangeLimits, Signature,
 };
 
 pub struct Check {
@@ -18,28 +18,38 @@ pub struct Check {
     pub generators: Vec<Expr>,
     pub rest: bool,
     pub debug: Option<bool>,
+    pub color: Option<bool>,
+    pub verbose: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
-    Count,
-    Seed,
-    Size,
-    Accept,
-    Reject,
-    Duration,
+    Color,
     Debug,
+    Verbose,
+    GenerateCount,
+    GenerateSeed,
+    GenerateSize,
+    GenerateItems,
+    GenerateError,
+    ShrinkCount,
+    ShrinkItems,
+    ShrinkErrors,
 }
 
 impl Key {
-    const KEYS: [Key; 7] = [
-        Key::Count,
-        Key::Seed,
-        Key::Size,
-        Key::Accept,
-        Key::Reject,
-        Key::Duration,
+    const KEYS: [Key; 11] = [
+        Key::Color,
         Key::Debug,
+        Key::Verbose,
+        Key::GenerateCount,
+        Key::GenerateSeed,
+        Key::GenerateSize,
+        Key::GenerateItems,
+        Key::GenerateError,
+        Key::ShrinkCount,
+        Key::ShrinkItems,
+        Key::ShrinkErrors,
     ];
 }
 
@@ -60,13 +70,17 @@ impl Deref for Key {
 impl From<Key> for &'static str {
     fn from(value: Key) -> Self {
         match value {
-            Key::Count => "count",
-            Key::Seed => "seed",
-            Key::Size => "size",
-            Key::Accept => "accept",
-            Key::Reject => "reject",
-            Key::Duration => "duration",
+            Key::Color => "color",
             Key::Debug => "debug",
+            Key::Verbose => "verbose",
+            Key::GenerateCount => "generate.count",
+            Key::GenerateSeed => "generate.seed",
+            Key::GenerateSize => "generate.size",
+            Key::GenerateItems => "generate.items",
+            Key::GenerateError => "generate.error",
+            Key::ShrinkCount => "shrink.count",
+            Key::ShrinkItems => "shrink.items",
+            Key::ShrinkErrors => "shrink.errors",
         }
     }
 }
@@ -93,15 +107,45 @@ impl TryFrom<&Expr> for Key {
     type Error = Error;
 
     fn try_from(value: &Expr) -> Result<Self, Self::Error> {
-        if let Expr::Path(ExprPath { path, .. }) = value {
-            Key::try_from(path.require_ident()?)
-        } else {
-            Err(utility::error(value, |key| {
+        let unrecognized = || {
+            utility::error(value, |key| {
+                format!(
+                    "unrecognized key '{key}'\nmust be one of [{}]",
+                    utility::join(", ", Self::KEYS)
+                )
+            })
+        };
+        let invalid = || {
+            utility::error(value, |key| {
                 format!(
                     "invalid expression '{key}'\nmust be a key in [{}].",
                     utility::join(", ", Self::KEYS)
                 )
-            }))
+            })
+        };
+        match value {
+            Expr::Path(ExprPath { path, .. }) => {
+                let ident = path.require_ident()?;
+                for key in Self::KEYS {
+                    if ident == &key {
+                        return Ok(key);
+                    }
+                }
+                Err(unrecognized())
+            }
+            Expr::Field(ExprField { base, member, .. }) => {
+                if let Member::Named(name) = member {
+                    if let Expr::Path(ExprPath { path, .. }) = base.as_ref() {
+                        for key in Self::KEYS {
+                            if [path.require_ident()?, name].into_iter().eq(key.split('.')) {
+                                return Ok(key);
+                            }
+                        }
+                    }
+                }
+                Err(unrecognized())
+            }
+            _ => Err(invalid()),
         }
     }
 }
@@ -120,14 +164,16 @@ impl Check {
             generators: Vec::new(),
             rest: false,
             debug: None,
+            color: None,
+            verbose: None,
         }
     }
 
-    pub fn run(&self, function: &ItemFn) -> Result<TokenStream2, Error> {
+    pub fn run(&self, signature: &Signature) -> Result<TokenStream2, Error> {
         let mut expressions = self.generators.iter();
         let mut generators = Vec::new();
         let mut arguments = Vec::new();
-        for parameter in function.sig.inputs.iter() {
+        for parameter in signature.inputs.iter() {
             let FnArg::Typed(PatType { ty, .. }) = parameter else {
                 return Err(utility::error(parameter, |parameter| {
                     format!("invalid parameter '{parameter}'")
@@ -152,43 +198,68 @@ impl Check {
             arguments.push(format_ident!("_{}", arguments.len()));
         }
 
-        let mut updates = Vec::new();
-        for (key, left, right) in self.settings.iter() {
-            let update = match key {
-                Key::Count => quote_spanned!(left.span() => _checker.count = #right;),
-                Key::Seed => quote_spanned!(left.span() => _checker.seed = #right;),
-                Key::Size => quote_spanned!(left.span() => _checker.size = #right;),
-                Key::Accept => quote_spanned!(left.span() => _checker.shrinks.accept = #right;),
-                Key::Reject => quote_spanned!(left.span() => _checker.shrinks.reject = #right;),
-                Key::Duration => quote_spanned!(left.span() => _checker.shrinks.duration = #right;),
-                Key::Debug => continue,
-            };
-            updates.push(update);
+        for expression in expressions {
+            return Err(utility::error(expression, |expression| {
+                format!("missing parameter for generator '{expression}'\neither add a parameter in the function's signature or remove the generator")
+            }));
         }
 
-        let name = &function.sig.ident;
+        let mut updates = Vec::new();
+        for (key, left, right) in self.settings.iter() {
+            updates.push(match key {
+                Key::GenerateCount => {
+                    quote_spanned!(left.span() => _checker.generate.count = #right;)
+                }
+                Key::GenerateSeed => {
+                    quote_spanned!(left.span() => _checker.generate.seed = #right;)
+                }
+                Key::GenerateSize => {
+                    quote_spanned!(left.span() => _checker.generate.size = #right;)
+                }
+                Key::GenerateItems => {
+                    quote_spanned!(left.span() => _checker.generate.items = #right;)
+                }
+                Key::GenerateError => {
+                    quote_spanned!(left.span() => _checker.generate.error = #right;)
+                }
+                Key::ShrinkCount => {
+                    quote_spanned!(left.span() => _checker.shrink.count = #right;)
+                }
+                Key::ShrinkItems => {
+                    quote_spanned!(left.span() => _checker.shrink.items = #right;)
+                }
+                Key::ShrinkErrors => {
+                    quote_spanned!(left.span() => _checker.shrink.errors = #right;)
+                }
+                Key::Debug | Key::Color | Key::Verbose => continue,
+            });
+        }
+
+        let name = &signature.ident;
+        let color = self.color.unwrap_or(true);
+        let verbose = self.verbose.unwrap_or(false);
         Ok(match self.debug {
-            Some(true) => {
-                quote_spanned!(self.span => ::checkito::check::run::debug(
-                    (#(#generators,)*),
-                    |_checker| { #(#updates)* },
-                    |(#(#arguments,)*)| #name(#(#arguments,)*)
-                ))
-            }
-            Some(false) => {
-                quote_spanned!(self.span => ::checkito::check::run::minimal(
-                    (#(#generators,)*),
-                    |_checker| { #(#updates)* },
-                    |(#(#arguments,)*)| #name(#(#arguments,)*)
-                ))
-            }
-            None => {
-                quote_spanned!(self.span => ::checkito::check::run::default(
-                    (#(#generators,)*),
-                    |_checker| { #(#updates)* },
-                    |(#(#arguments,)*)| #name(#(#arguments,)*)
-                ))
-            }
+            Some(true) => quote_spanned!(self.span => ::checkito::check::help::debug(
+                (#(#generators,)*),
+                |_checker| { #(#updates)* },
+                |(#(#arguments,)*)| #name(#(#arguments,)*),
+                #color,
+                #verbose,
+            )),
+            Some(false) => quote_spanned!(self.span => ::checkito::check::help::minimal(
+                (#(#generators,)*),
+                |_checker| { #(#updates)* },
+                |(#(#arguments,)*)| #name(#(#arguments,)*),
+                #color,
+                #verbose,
+            )),
+            None => quote_spanned!(self.span => ::checkito::check::help::default(
+                (#(#generators,)*),
+                |_checker| { #(#updates)* },
+                |(#(#arguments,)*)| #name(#(#arguments,)*),
+                #color,
+                #verbose,
+            )),
         })
     }
 }
@@ -203,35 +274,22 @@ impl Parse for Check {
                     let key = Key::try_from(left.as_ref())?;
                     if keys.remove(&key) {
                         let right = match key {
-                            Key::Debug => match right.as_ref() {
-                                Expr::Lit(ExprLit {
-                                    lit: Lit::Bool(LitBool { value, .. }),
-                                    ..
-                                }) => {
-                                    check.debug = Some(*value);
-                                    continue;
-                                }
-                                right => {
-                                    return Err(utility::error(right, |right| {
-                                        format!("invalid expression '{right}' for '{}'\nmust be a boolean literal", key)
-                                    }))
-                                }
-                            },
-                            Key::Count => quote_spanned!(right.span() => { #right } as usize),
-                            Key::Seed => quote_spanned!(right.span() => { #right } as u64),
-                            Key::Size => match right.as_ref() {
-                                Expr::Lit(_) => {
-                                    quote_spanned!(right.span() => { #right } as f64..{ #right } as f64)
-                                }
-                                right => {
-                                    quote_spanned!(right.span() => { #right }.try_into().unwrap())
-                                }
-                            },
-                            Key::Accept => quote_spanned!(right.span() => { #right } as usize),
-                            Key::Reject => quote_spanned!(right.span() => { #right } as usize),
-                            Key::Duration => {
-                                quote_spanned!(right.span() => ::core::time::Duration::from_secs_f64({ #right } as f64))
+                            Key::Debug => {
+                                check.debug = Some(utility::as_bool(&right)?);
+                                continue;
                             }
+                            Key::Color => {
+                                check.color = Some(utility::as_bool(&right)?);
+                                continue;
+                            }
+                            Key::Verbose => {
+                                check.verbose = Some(utility::as_bool(&right)?);
+                                continue;
+                            }
+                            Key::GenerateSize => {
+                                quote_spanned!(right.span() => ::checkito::check::help::IntoRange::<f64>::range(#right))
+                            }
+                            _ => right.to_token_stream(),
                         };
                         check.settings.push((key, *left, right));
                     } else {
@@ -265,7 +323,10 @@ impl TryFrom<&syn::Attribute> for Check {
         const PATHS: [&[&str]; 2] = [&["checkito", "check"], &["check"]];
 
         let path = value.path();
-        if PATHS.into_iter().any(|legal| utility::is(path, legal)) {
+        if PATHS
+            .into_iter()
+            .any(|legal| utility::idents(path).eq(legal))
+        {
             if matches!(value.meta, Meta::Path(_)) {
                 Ok(Check::new(value.span()))
             } else {

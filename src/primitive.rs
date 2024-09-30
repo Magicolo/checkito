@@ -14,8 +14,8 @@ pub struct Full<T: ?Sized>(PhantomData<T>);
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Range<T> {
-    pub start: T,
-    pub end: T,
+    start: T,
+    end: T,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -63,6 +63,10 @@ impl<T> Shrinker<T> {
             item,
             direction: Direction::None,
         }
+    }
+
+    pub fn range(self) -> Range<T> {
+        self.range
     }
 
     pub fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Shrinker<U> {
@@ -316,36 +320,53 @@ macro_rules! shrinked {
 
 macro_rules! shrink {
     ($s:expr, $t:ident) => {{
-        let target = match $s.direction {
+        match $s.direction {
             Direction::None if $s.item >= 0 as $t => {
+                $s.range.start = $s.range.start.max(0 as $t);
                 $s.range.end = $s.item;
-                $s.item = $s.range.start.max(0 as $t);
                 $s.direction = Direction::High;
-                $s.range.end
+                Some(Shrinker {
+                    direction: Direction::High,
+                    range: $s.range,
+                    item: $s.range.start,
+                })
             }
             Direction::None => {
                 $s.range.start = $s.item;
-                $s.item = $s.range.end.min(0 as $t);
+                $s.range.end = $s.range.end.min(0 as $t);
                 $s.direction = Direction::Low;
-                $s.range.start
+                Some(Shrinker {
+                    direction: Direction::Low,
+                    range: $s.range,
+                    item: $s.range.end,
+                })
             }
-            Direction::Low => $s.range.start,
-            Direction::High => $s.range.end,
-        };
-
-        let old = $s.item;
-        // Divide both sides of the division by 2 to prevent overflows.
-        let delta = target / 2 as $t - old / 2 as $t;
-        let new = old + delta;
-        if old == new {
-            None
-        } else {
-            $s.item = new;
-            Some(Shrinker {
-                direction: Direction::None,
-                range: $s.range,
-                item: old,
-            })
+            Direction::Low => {
+                let delta = $s.range.end / 2 as $t - $s.range.start / 2 as $t;
+                let middle = $s.range.start + delta;
+                if middle == $s.range.start || middle == $s.range.end {
+                    None
+                } else {
+                    let mut shrinker = $s.clone();
+                    shrinker.range.start = middle;
+                    shrinker.item = middle;
+                    $s.range.end = middle;
+                    Some(shrinker)
+                }
+            }
+            Direction::High => {
+                let delta = $s.range.end / 2 as $t - $s.range.start / 2 as $t;
+                let middle = $s.range.start + delta;
+                if middle == $s.range.start || middle == $s.range.end {
+                    None
+                } else {
+                    let mut shrinker = $s.clone();
+                    shrinker.range.end = middle;
+                    shrinker.item = middle;
+                    $s.range.start = middle;
+                    Some(shrinker)
+                }
+            }
         }
     }};
 }

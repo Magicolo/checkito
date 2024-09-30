@@ -1,9 +1,9 @@
-use quote::{quote_spanned, ToTokens};
+use quote::ToTokens;
 use std::mem::replace;
-use syn::{spanned::Spanned, Error, Ident, Path};
+use syn::{Error, Expr, ExprLit, Ident, Lit, LitBool, Path, PathSegment};
 
 pub fn string<T: ToTokens>(tokens: &T) -> String {
-    quote_spanned!(tokens.span() => #tokens).to_string()
+    tokens.to_token_stream().to_string()
 }
 
 pub fn error<T: ToTokens>(tokens: T, format: impl FnOnce(String) -> String) -> Error {
@@ -28,12 +28,17 @@ pub fn join<'a, S: AsRef<str>, I: AsRef<str>>(
 }
 
 pub fn idents(path: &Path) -> impl Iterator<Item = &Ident> {
-    path.segments.iter().map(|segment| &segment.ident)
+    path.segments.iter().map(|PathSegment { ident, .. }| ident)
 }
 
-pub fn is<'a, T: AsRef<str> + ?Sized + 'a>(
-    left: &Path,
-    right: impl IntoIterator<Item = &'a T>,
-) -> bool {
-    idents(left).eq(right)
+pub fn as_bool(expression: &Expr) -> Result<bool, Error> {
+    match expression {
+        Expr::Lit(ExprLit {
+            lit: Lit::Bool(LitBool { value, .. }),
+            ..
+        }) => Ok(*value),
+        expression => Err(error(expression, |expression| {
+            format!("expression '{expression}' must be a boolean literal",)
+        })),
+    }
 }
