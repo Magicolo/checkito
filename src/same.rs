@@ -1,15 +1,15 @@
 use crate::{
+    FullGenerate,
     generate::{Generate, State},
     shrink::{FullShrink, IntoShrink, Shrink},
-    FullGenerate,
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Same<T: ?Sized>(pub T);
 
 impl<T: Default + Clone> FullGenerate for Same<T> {
-    type Item = T;
     type Generate = Same<T>;
+    type Item = T;
 
     fn generator() -> Self::Generate {
         Same(T::default())

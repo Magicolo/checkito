@@ -28,19 +28,22 @@ pub struct Samples<'a, G: ?Sized> {
 }
 
 pub trait Sample: Generate {
-    /// Provides a [`Sampler`] that allows to configure sampling settings and generate samples.
+    /// Provides a [`Sampler`] that allows to configure sampling settings and
+    /// generate samples.
     fn sampler(&self) -> Sampler<Self> {
         Sampler::new(self, random::seed())
     }
 
-    /// Generates `count` random values the are progressively larger in size. For additional sampling settings, see [`Generate::sampler`].
+    /// Generates `count` random values the are progressively larger in size.
+    /// For additional sampling settings, see [`Generate::sampler`].
     fn samples(&self, count: usize) -> Samples<Self> {
         let mut sampler = self.sampler();
         sampler.count = count;
         sampler.samples()
     }
 
-    /// Generates a random value of `size` (0.0..=1.0). For additional sampling settings, see [`Generate::sampler`].
+    /// Generates a random value of `size` (0.0..=1.0). For additional sampling
+    /// settings, see [`Generate::sampler`].
     fn sample(&self, size: f64) -> Self::Item {
         self.sampler().sample(size)
     }

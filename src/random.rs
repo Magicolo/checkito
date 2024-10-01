@@ -1,5 +1,5 @@
 use core::ops::RangeBounds;
-use fastrand::{u64, Rng};
+use fastrand::{Rng, u64};
 
 #[derive(Debug, Clone)]
 pub struct Random(Rng);
@@ -41,4 +41,6 @@ macro_rules! range {
 }
 
 bridge!(f32, f64, bool);
-range!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, char);
+range!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, char
+);

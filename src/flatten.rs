@@ -1,6 +1,6 @@
 use crate::{
-    generate::{Generate, State},
     Shrink,
+    generate::{Generate, State},
 };
 
 #[derive(Clone, Debug, Default)]

@@ -1,7 +1,7 @@
 use crate::{
+    IntoShrink,
     generate::{self, Generate, State},
     shrink::Shrink,
-    IntoShrink,
 };
 
 #[derive(Clone, Debug, Default)]

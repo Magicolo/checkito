@@ -1,15 +1,15 @@
 use crate::{
+    FullGenerate, FullShrink, IntoGenerate, IntoShrink,
     generate::{Generate, State},
     shrink::{All, Shrink},
-    FullGenerate, FullShrink, IntoGenerate, IntoShrink,
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Array<T: ?Sized, const N: usize>(pub T);
 
 impl<G: FullGenerate, const N: usize> FullGenerate for Array<G, N> {
-    type Item = [G::Item; N];
     type Generate = Array<G::Generate, N>;
+    type Item = [G::Item; N];
 
     fn generator() -> Self::Generate {
         Array(G::generator())
@@ -17,8 +17,8 @@ impl<G: FullGenerate, const N: usize> FullGenerate for Array<G, N> {
 }
 
 impl<G: IntoGenerate, const N: usize> IntoGenerate for Array<G, N> {
-    type Item = [G::Item; N];
     type Generate = Array<G::Generate, N>;
+    type Item = [G::Item; N];
 
     fn generator(self) -> Self::Generate {
         Array(self.0.generator())
@@ -65,8 +65,8 @@ impl<S: IntoShrink, const N: usize> IntoShrink for Array<S, N> {
 }
 
 impl<G: FullGenerate, const N: usize> FullGenerate for [G; N] {
-    type Item = [G::Item; N];
     type Generate = [G::Generate; N];
+    type Item = [G::Item; N];
 
     fn generator() -> Self::Generate {
         [(); N].map(|_| G::generator())
@@ -74,8 +74,8 @@ impl<G: FullGenerate, const N: usize> FullGenerate for [G; N] {
 }
 
 impl<G: IntoGenerate, const N: usize> IntoGenerate for [G; N] {
-    type Item = [G::Item; N];
     type Generate = [G::Generate; N];
+    type Item = [G::Item; N];
 
     fn generator(self) -> Self::Generate {
         self.map(|generate| generate.generator())

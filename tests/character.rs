@@ -10,18 +10,22 @@ use std::{
 #[test]
 #[should_panic]
 fn empty_range() {
-    assert!(char::generator()
-        .flat_map(|value| value..value)
-        .check(|_| true)
-        .is_none());
+    assert!(
+        char::generator()
+            .flat_map(|value| value..value)
+            .check(|_| true)
+            .is_none()
+    );
 }
 
 #[test]
 fn is_same() {
-    assert!(char::generator()
-        .flat_map(|value| (value, Same(value)))
-        .check(|(left, right)| left == right)
-        .is_none());
+    assert!(
+        char::generator()
+            .flat_map(|value| (value, Same(value)))
+            .check(|(left, right)| left == right)
+            .is_none()
+    );
 }
 
 #[test]
@@ -36,9 +40,11 @@ fn is_digit() {
 
 #[test]
 fn is_alphabetic() {
-    assert!(letter()
-        .check(|value| value.is_ascii_alphabetic())
-        .is_none());
+    assert!(
+        letter()
+            .check(|value| value.is_ascii_alphabetic())
+            .is_none()
+    );
 }
 
 #[test]
@@ -53,35 +59,43 @@ macro_rules! collection {
 
             #[test]
             fn has_same_count() {
-                assert!((0..100usize)
-                    .generator()
-                    .flat_map(|count| (count, char::generator().collect_with::<_, $t>(count)))
-                    .check(|(count, value)| value.$i().count() == count)
-                    .is_none());
+                assert!(
+                    (0..100usize)
+                        .generator()
+                        .flat_map(|count| (count, char::generator().collect_with::<_, $t>(count)))
+                        .check(|(count, value)| value.$i().count() == count)
+                        .is_none()
+                );
             }
 
             #[test]
             fn is_ascii() {
-                assert!(ascii()
-                    .collect::<$t>()
-                    .check(|value| value.$i().all(|value| value.is_ascii()))
-                    .is_none());
+                assert!(
+                    ascii()
+                        .collect::<$t>()
+                        .check(|value| value.$i().all(|value| value.is_ascii()))
+                        .is_none()
+                );
             }
 
             #[test]
             fn is_digit() {
-                assert!(digit()
-                    .collect::<$t>()
-                    .check(|value| value.$i().all(|value| value.is_ascii_digit()))
-                    .is_none());
+                assert!(
+                    digit()
+                        .collect::<$t>()
+                        .check(|value| value.$i().all(|value| value.is_ascii_digit()))
+                        .is_none()
+                );
             }
 
             #[test]
             fn is_alphabetic() {
-                assert!(letter()
-                    .collect::<$t>()
-                    .check(|value| value.$i().all(|value| value.is_ascii_alphabetic()))
-                    .is_none());
+                assert!(
+                    letter()
+                        .collect::<$t>()
+                        .check(|value| value.$i().all(|value| value.is_ascii_alphabetic()))
+                        .is_none()
+                );
             }
 
             #[allow(clippy::boxed_local)]

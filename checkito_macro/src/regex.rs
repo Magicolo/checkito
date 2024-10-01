@@ -1,10 +1,9 @@
+use crate::utility;
 use regex_syntax::Parser;
 use syn::{
-    parse::{Parse, ParseStream},
     Error, Lit, LitStr,
+    parse::{Parse, ParseStream},
 };
-
-use crate::utility;
 
 pub struct Regex(pub LitStr);
 
@@ -15,7 +14,7 @@ impl Parse for Regex {
             literal => {
                 return Err(utility::error(literal, |literal| {
                     format!("expected '{}' to be a string literal", literal)
-                }))
+                }));
             }
         };
         match Parser::new().parse(&string.value()) {

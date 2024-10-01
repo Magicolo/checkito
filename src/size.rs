@@ -1,6 +1,6 @@
 use crate::{
-    generate::{Generate, State},
     IntoShrink,
+    generate::{Generate, State},
 };
 
 pub struct Size<G, F = fn(f64) -> f64>(pub G, pub F);

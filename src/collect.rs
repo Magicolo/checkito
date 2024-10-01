@@ -130,6 +130,7 @@ impl<G: Generate, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generate
 {
     type Item = F;
     type Shrink = Shrinker<G::Shrink, F>;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let shrinks = self.items.iter().map(|generate| generate.generate(state));
         Shrinker::new(shrinks.collect(), 0)
@@ -208,8 +209,9 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
 macro_rules! full {
     ($t:ty, $f:ty) => {
         impl<G: FullGenerate> FullGenerate for $t {
-            type Item = $f;
             type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+            type Item = $f;
+
             fn generator() -> Self::Generate {
                 G::generator().collect()
             }
@@ -220,8 +222,9 @@ macro_rules! full {
 macro_rules! into {
     ($t:ty, $g:ty, $f:ty) => {
         impl<G: IntoGenerate> IntoGenerate for $t {
-            type Item = $f;
             type Generate = $g;
+            type Item = $f;
+
             fn generator(self) -> Self::Generate {
                 self.into_iter().map(G::generator).collect()
             }
@@ -286,16 +289,18 @@ slice!(Rc<[G]>, Rc<[G::Item]>);
 slice!(Arc<[G]>, Arc<[G::Item]>);
 
 impl<G: IntoGenerate> IntoGenerate for Box<[G]> {
-    type Item = Box<[G::Item]>;
     type Generate = Box<[G::Generate]>;
+    type Item = Box<[G::Item]>;
+
     fn generator(self) -> Self::Generate {
         self.into_vec().into_iter().map(G::generator).collect()
     }
 }
 
 impl FullGenerate for String {
-    type Item = Self;
     type Generate = Collect<<char as FullGenerate>::Generate, Range<usize>, Self::Item>;
+    type Item = Self;
+
     fn generator() -> Self::Generate {
         char::generator().collect()
     }
@@ -304,25 +309,29 @@ impl FullGenerate for String {
 impl Generate for String {
     type Item = Self;
     type Shrink = Shrinker<char, Self::Item>;
+
     fn generate(&self, _: &mut State) -> Self::Shrink {
         Shrinker::new(self.chars().collect(), 0)
     }
+
     fn constant(&self) -> bool {
         true
     }
 }
 
 impl<K: FullGenerate<Item = impl Ord>, V: FullGenerate> FullGenerate for BTreeMap<K, V> {
-    type Item = BTreeMap<K::Item, V::Item>;
     type Generate = Collect<<(K, V) as FullGenerate>::Generate, Range<usize>, Self::Item>;
+    type Item = BTreeMap<K::Item, V::Item>;
+
     fn generator() -> Self::Generate {
         <(K, V)>::generator().collect()
     }
 }
 
 impl<K: Ord + Clone, V: IntoGenerate> IntoGenerate for BTreeMap<K, V> {
-    type Item = BTreeMap<K, V::Item>;
     type Generate = Generator<(Same<K>, V::Generate), Self::Item>;
+    type Item = BTreeMap<K, V::Item>;
+
     fn generator(self) -> Self::Generate {
         Generator::new(
             self.into_iter()
@@ -334,25 +343,29 @@ impl<K: Ord + Clone, V: IntoGenerate> IntoGenerate for BTreeMap<K, V> {
 impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
     type Item = BTreeMap<K, V::Item>;
     type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
+
     fn constant(&self) -> bool {
         self.iter().all(|(_, value)| value.constant())
     }
 }
 
 impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BTreeSet<G> {
-    type Item = BTreeSet<G::Item>;
     type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+    type Item = BTreeSet<G::Item>;
+
     fn generator() -> Self::Generate {
         G::generator().collect()
     }
 }
 
 impl<G: IntoGenerate<Item = impl Ord>> IntoGenerate for BTreeSet<G> {
-    type Item = BTreeSet<G::Item>;
     type Generate = Generator<G::Generate, Self::Item>;
+    type Item = BTreeSet<G::Item>;
+
     fn generator(self) -> Self::Generate {
         Generator::new(self.into_iter().map(G::generator))
     }
@@ -361,9 +374,11 @@ impl<G: IntoGenerate<Item = impl Ord>> IntoGenerate for BTreeSet<G> {
 impl<G: Generate<Item = impl Ord>> Generate for BTreeSet<G> {
     type Item = BTreeSet<G::Item>;
     type Shrink = Shrinker<G::Shrink, Self::Item>;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self).generate(state)
     }
+
     fn constant(&self) -> bool {
         self.iter().all(G::constant)
     }
@@ -372,8 +387,9 @@ impl<G: Generate<Item = impl Ord>> Generate for BTreeSet<G> {
 impl<K: FullGenerate<Item = impl Eq + Hash>, V: FullGenerate, S: BuildHasher + Default> FullGenerate
     for HashMap<K, V, S>
 {
-    type Item = HashMap<K::Item, V::Item, S>;
     type Generate = Collect<<(K, V) as FullGenerate>::Generate, Range<usize>, Self::Item>;
+    type Item = HashMap<K::Item, V::Item, S>;
+
     fn generator() -> Self::Generate {
         <(K, V)>::generator().collect()
     }
@@ -382,8 +398,9 @@ impl<K: FullGenerate<Item = impl Eq + Hash>, V: FullGenerate, S: BuildHasher + D
 impl<K: Eq + Hash + Clone, V: IntoGenerate, S: BuildHasher + Default> IntoGenerate
     for HashMap<K, V, S>
 {
-    type Item = HashMap<K, V::Item, S>;
     type Generate = Generator<(Same<K>, V::Generate), Self::Item>;
+    type Item = HashMap<K, V::Item, S>;
+
     fn generator(self) -> Self::Generate {
         Generator::new(
             self.into_iter()
@@ -395,9 +412,11 @@ impl<K: Eq + Hash + Clone, V: IntoGenerate, S: BuildHasher + Default> IntoGenera
 impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for HashMap<K, V, S> {
     type Item = HashMap<K, V::Item, S>;
     type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
+
     fn constant(&self) -> bool {
         self.iter().all(|(_, value)| value.constant())
     }
@@ -406,16 +425,18 @@ impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for H
 impl<G: FullGenerate<Item = impl Eq + Hash>, S: BuildHasher + Default> FullGenerate
     for HashSet<G, S>
 {
-    type Item = HashSet<G::Item, S>;
     type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+    type Item = HashSet<G::Item, S>;
+
     fn generator() -> Self::Generate {
         G::generator().collect()
     }
 }
 
 impl<G: IntoGenerate<Item = impl Eq + Hash>> IntoGenerate for HashSet<G> {
-    type Item = HashSet<G::Item>;
     type Generate = Generator<G::Generate, Self::Item>;
+    type Item = HashSet<G::Item>;
+
     fn generator(self) -> Self::Generate {
         Generator::new(self.into_iter().map(G::generator))
     }
@@ -424,25 +445,29 @@ impl<G: IntoGenerate<Item = impl Eq + Hash>> IntoGenerate for HashSet<G> {
 impl<G: Generate<Item = impl Eq + Hash>> Generate for HashSet<G> {
     type Item = HashSet<G::Item>;
     type Shrink = Shrinker<G::Shrink, Self::Item>;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self).generate(state)
     }
+
     fn constant(&self) -> bool {
         self.iter().all(G::constant)
     }
 }
 
 impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BinaryHeap<G> {
-    type Item = BinaryHeap<G::Item>;
     type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+    type Item = BinaryHeap<G::Item>;
+
     fn generator() -> Self::Generate {
         G::generator().collect()
     }
 }
 
 impl<G: IntoGenerate<Item = impl Ord>> IntoGenerate for BinaryHeap<G> {
-    type Item = BinaryHeap<G::Item>;
     type Generate = Generator<G::Generate, Self::Item>;
+    type Item = BinaryHeap<G::Item>;
+
     fn generator(self) -> Self::Generate {
         Generator::new(self.into_iter().map(G::generator))
     }
@@ -451,9 +476,11 @@ impl<G: IntoGenerate<Item = impl Ord>> IntoGenerate for BinaryHeap<G> {
 impl<G: Generate<Item = impl Ord>> Generate for BinaryHeap<G> {
     type Item = BinaryHeap<G::Item>;
     type Shrink = Shrinker<G::Shrink, Self::Item>;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Generator::new(self).generate(state)
     }
+
     fn constant(&self) -> bool {
         self.iter().all(G::constant)
     }

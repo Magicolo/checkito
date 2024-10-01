@@ -1,17 +1,17 @@
 use crate::{
+    FullGenerate, IntoGenerate,
     any::Any,
     generate::{Generate, State},
     map::Map,
     shrink::{FullShrink, IntoShrink, Shrink},
-    FullGenerate, IntoGenerate,
 };
 use orn::Or2;
 use std::{rc::Rc, sync::Arc};
 
 impl<G: FullGenerate> FullGenerate for Option<G> {
-    type Item = Option<G::Item>;
     type Generate =
         Map<Any<(G::Generate, ())>, fn(<Any<(G::Generate, ())> as Generate>::Item) -> Self::Item>;
+    type Item = Option<G::Item>;
 
     fn generator() -> Self::Generate {
         Any((G::generator(), ())).map(|item| match item {
@@ -65,11 +65,11 @@ impl<S: Shrink> Shrink for Option<S> {
 }
 
 impl<G: FullGenerate, E: FullGenerate> FullGenerate for Result<G, E> {
-    type Item = Result<G::Item, E::Item>;
     type Generate = Map<
         Any<(G::Generate, E::Generate)>,
         fn(<Any<(G::Generate, E::Generate)> as Generate>::Item) -> Self::Item,
     >;
+    type Item = Result<G::Item, E::Item>;
 
     fn generator() -> Self::Generate {
         Any((G::generator(), E::generator())).map(|item| match item {
@@ -142,8 +142,8 @@ impl<S: Shrink, E: Shrink> Shrink for Result<S, E> {
 }
 
 impl<G: FullGenerate> FullGenerate for Box<G> {
-    type Item = G::Item;
     type Generate = G::Generate;
+    type Item = G::Item;
 
     fn generator() -> Self::Generate {
         G::generator()
@@ -151,8 +151,8 @@ impl<G: FullGenerate> FullGenerate for Box<G> {
 }
 
 impl<G: IntoGenerate> IntoGenerate for Box<G> {
-    type Item = G::Item;
     type Generate = G::Generate;
+    type Item = G::Item;
 
     fn generator(self) -> Self::Generate {
         G::generator(*self)
@@ -173,8 +173,8 @@ impl<G: Generate> Generate for Box<G> {
 }
 
 impl<G: FullGenerate> FullGenerate for Rc<G> {
-    type Item = G::Item;
     type Generate = G::Generate;
+    type Item = G::Item;
 
     fn generator() -> Self::Generate {
         G::generator()
@@ -195,8 +195,8 @@ impl<G: Generate> Generate for Rc<G> {
 }
 
 impl<G: FullGenerate> FullGenerate for Arc<G> {
-    type Item = G::Item;
     type Generate = G::Generate;
+    type Item = G::Item;
 
     fn generator() -> Self::Generate {
         G::generator()

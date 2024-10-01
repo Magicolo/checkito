@@ -1,10 +1,9 @@
-use core::f64;
-
 use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
     shrink::Shrink,
     utility::tuples,
 };
+use core::f64;
 
 #[repr(transparent)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -76,8 +75,8 @@ impl<G: FullGenerate + ?Sized> FullGenerate for Any<G>
 where
     Any<G::Generate>: Generate,
 {
-    type Item = <Any<G::Generate> as Generate>::Item;
     type Generate = Any<G::Generate>;
+    type Item = <Any<G::Generate> as Generate>::Item;
 
     fn generator() -> Self::Generate {
         Any(G::generator())
@@ -88,8 +87,8 @@ impl<G: IntoGenerate> IntoGenerate for Any<G>
 where
     Any<G::Generate>: Generate,
 {
-    type Item = <Any<G::Generate> as Generate>::Item;
     type Generate = Any<G::Generate>;
+    type Item = <Any<G::Generate> as Generate>::Item;
 
     fn generator(self) -> Self::Generate {
         Any(self.0.generator())

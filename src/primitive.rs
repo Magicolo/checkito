@@ -174,8 +174,8 @@ macro_rules! same {
 macro_rules! full {
     ($t:ty) => {
         impl FullGenerate for $t {
-            type Item = $t;
             type Generate = Full<$t>;
+            type Item = $t;
 
             fn generator() -> Self::Generate {
                 Full::<$t>::new()
@@ -206,8 +206,9 @@ macro_rules! range {
         }
 
         impl IntoGenerate for $r {
-            type Item = $i;
             type Generate = $t;
+            type Item = $i;
+
             fn generator(self) -> Self::Generate {
                 <$t as TryFrom<$r>>::try_from(self).unwrap()
             }
@@ -266,8 +267,8 @@ macro_rules! shrinked {
         impl Range<$t> {
             pub(super) fn shrinked(&self, size: f64) -> Self {
                 fn shrink(range: f64, size: f64) -> f64 {
-                    // This adjustment of the size tries to prevent large ranges (such as `u64`) from rushing into huge
-                    // values as soon as the `size > 0`.
+                    // This adjustment of the size tries to prevent large ranges (such as `u64`)
+                    // from rushing into huge values as soon as the `size > 0`.
                     let power = range.abs().log2() / 8.0;
                     if power < 1.0 {
                         range * size
@@ -877,6 +878,8 @@ pub mod number {
         ($($ts:ident),*) => { $(floating!($ts);)* };
     }
 
-    integer!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
+    integer!(
+        u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
+    );
     floating!(f32, f64);
 }

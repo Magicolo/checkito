@@ -6,8 +6,8 @@ use crate::{
 };
 use core::fmt;
 use regex_syntax::{
-    hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
     Parser,
+    hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
 };
 use std::borrow::Cow;
 

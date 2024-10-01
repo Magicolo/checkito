@@ -4,11 +4,10 @@ mod check;
 mod regex;
 mod utility;
 
-use std::mem::replace;
-
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, ItemFn, Visibility};
+use std::mem::replace;
+use syn::{ItemFn, Visibility, parse_macro_input};
 
 #[proc_macro]
 pub fn regex(input: TokenStream) -> TokenStream {

@@ -1,15 +1,15 @@
 use crate::utility;
 use core::fmt;
-use quote::{format_ident, quote_spanned, ToTokens};
+use quote::{ToTokens, format_ident, quote_spanned};
 use std::{collections::HashSet, ops::Deref};
 use syn::{
     __private::{Span, TokenStream2},
+    Error, Expr, ExprAssign, ExprField, ExprPath, ExprRange, FnArg, Ident, Member, Meta, PatType,
+    RangeLimits, Signature,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
-    Error, Expr, ExprAssign, ExprField, ExprPath, ExprRange, FnArg, Ident, Member, Meta, PatType,
-    RangeLimits, Signature,
 };
 
 pub struct Check {
@@ -190,8 +190,12 @@ impl Check {
                 }
                 None => {
                     return Err(utility::error(parameter, |parameter| {
-                        format!("missing generator for parameter '{parameter}'\neither add a generator in the '#[check]' macro, use '_' to fill in a single parameter or use '..' operator to fill in all remaining parameters")
-                    }))
+                        format!(
+                            "missing generator for parameter '{parameter}'\neither add a \
+                             generator in the '#[check]' macro, use '_' to fill in a single \
+                             parameter or use '..' operator to fill in all remaining parameters"
+                        )
+                    }));
                 }
             };
             generators.push(generator);
@@ -200,7 +204,10 @@ impl Check {
 
         for expression in expressions {
             return Err(utility::error(expression, |expression| {
-                format!("missing parameter for generator '{expression}'\neither add a parameter in the function's signature or remove the generator")
+                format!(
+                    "missing parameter for generator '{expression}'\neither add a parameter in \
+                     the function's signature or remove the generator"
+                )
             }));
         }
 
@@ -300,8 +307,11 @@ impl Parse for Check {
                 }
                 expression if check.rest => {
                     return Err(utility::error(expression, |expression| {
-                        format!("excess expression '{expression}' after '..' operator\nonly configuration assignment expressions are allowed in this position")
-                    }))
+                        format!(
+                            "excess expression '{expression}' after '..' operator\nonly \
+                             configuration assignment expressions are allowed in this position"
+                        )
+                    }));
                 }
                 Expr::Range(ExprRange {
                     start: None,

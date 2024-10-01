@@ -1,4 +1,4 @@
-use crate::{generate::State, prove::Prove, random, shrink::Shrink, Generate};
+use crate::{Generate, generate::State, prove::Prove, random, shrink::Shrink};
 use core::{error, fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
 use std::{any::Any, borrow::Cow, panic::catch_unwind, result};
 
@@ -33,10 +33,12 @@ pub struct Shrinks {
     pub errors: bool,
 }
 
-/// The [`Checker`] structure holds a reference to a [`Generate`] instance and some configuration options for the checking and shrinking processes.
+/// The [`Checker`] structure holds a reference to a [`Generate`] instance and
+/// some configuration options for the checking and shrinking processes.
 #[derive(Debug)]
 pub struct Checker<'a, G: ?Sized> {
-    /// A generator that will generate items and their shrinkers for checking a property.
+    /// A generator that will generate items and their shrinkers for checking a
+    /// property.
     generator: &'a G,
     /// Bounds the generation process.
     pub generate: Generates,
@@ -46,9 +48,9 @@ pub struct Checker<'a, G: ?Sized> {
 
 /// A structure representing a series of checks to be performed on a generator.
 ///
-/// This structure is used to iterate over a sequence of checks, where each check
-/// is performed on a generated item. It keeps track of the number of errors
-/// encountered and the number of checks remaining.
+/// This structure is used to iterate over a sequence of checks, where each
+/// check is performed on a generated item. It keeps track of the number of
+/// errors encountered and the number of checks remaining.
 pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     checker: Checker<'a, G>,
     machine: Machine<G::Shrink, E>,
@@ -128,11 +130,12 @@ pub struct Fail<T, E> {
 /// The cause of a check failure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause<E> {
-    /// A `Disprove` cause is a value that, when checked, returns a value of type `P`
-    /// that does not satisfy the property.
+    /// A `Disprove` cause is a value that, when checked, returns a value of
+    /// type `P` that does not satisfy the property.
     Disprove(E),
     /// A `Panic` cause is produced when a check panics during its evaluation.
-    /// The message associated with the panic is included if it can be casted to a string.
+    /// The message associated with the panic is included if it can be casted to
+    /// a string.
     Panic(Option<Cow<'static, str>>),
 }
 
@@ -425,7 +428,7 @@ impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
 #[doc(hidden)]
 pub mod help {
-    use super::{environment, hook, Check, Checker, Fail, Pass, Result};
+    use super::{Check, Checker, Fail, Pass, Result, environment, hook};
     use crate::{Generate, Prove};
     use core::{
         any::type_name,
@@ -650,7 +653,9 @@ pub mod help {
             )*
         };
     }
-    range!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, char, bool);
+    range!(
+        u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, char, bool
+    );
 
     impl IntoDuration for f32 {
         fn duration(self) -> Duration {
