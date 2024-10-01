@@ -29,6 +29,16 @@ jobs:
       run: cargo hack test --release --all-targets --verbose --feature-powerset
     - name: Run Documentation
       run: cargo hack test --release --doc --verbose --feature-powerset
+  semver:
+    runs-on: ubuntu-latest
+    container: 
+      image: rust:latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install
+      run: cargo install cargo-sermver-checks
+    - name: Run
+      run: cargo semver-checks --verbose
   clippy:
     runs-on: ubuntu-latest
     container: 
