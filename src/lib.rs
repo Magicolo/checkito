@@ -39,8 +39,6 @@ use core::{
 use primitive::Range;
 
 /*
-    FIXME: README.md example is no longer valid.
-        - Use a README.tpl with cargo readme to copy the content of an example file?
     FIXME: skeptic test don't seem to be working...
     FIXME: #[check] macro produces duplicate compile errors (see 'Excess expression').
     FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...

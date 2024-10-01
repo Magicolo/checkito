@@ -54,6 +54,13 @@ fn is_ascii(value: String) {
     assert!(value.is_ascii());
 }
 
+/// An empty `#[check]` attribute acts just like `#[test]`. It exists for consistency between tests.
+#[check]
+fn empty() {}
+/// An empty `#[check]` attribute acts just like `#[test]`. It exists for consistency between tests.
+#[check]
+fn empty2() {}
+
 /// The `_` and `..` operators can be used to infer the [`FullGenerate`] generator implementation for a type.
 ///
 /// Since this test will panic, `#[should_panic]` can be used in the usual way.
