@@ -57,9 +57,6 @@ fn is_ascii(value: String) {
 /// An empty `#[check]` attribute acts just like `#[test]`. It exists for consistency between tests.
 #[check]
 fn empty() {}
-/// An empty `#[check]` attribute acts just like `#[test]`. It exists for consistency between tests.
-#[check]
-fn empty2() {}
 
 /// The `_` and `..` operators can be used to infer the [`FullGenerate`] generator implementation for a type.
 ///
