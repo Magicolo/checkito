@@ -29,6 +29,14 @@ One would use this library to prove more general properties about a program than
 ```rust
 use checkito::*;
 
+/// The builtin `letter()` generator will yield ascii letters.
+///
+/// This test will be run many times with different generated values to find a failing input.
+#[check(letter())]
+fn is_letter(value: char) {
+    assert!(value.is_ascii_alphabetic());
+}
+
 /// Ranges can be used as generators and will yield values within its bounds.
 ///
 /// [`bool`] can be returned and if `true`, it will be considered a _proof_ of the property under test.
