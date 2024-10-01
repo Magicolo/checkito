@@ -12,9 +12,8 @@ fn finds_minimum() {
 #[test]
 fn integer_shrink_to_minimum() {
     for high in (1usize..).samples(100) {
-        if let Some(error) = usize::generator().check(|item| item < high) {
-            assert!(error.item - high <= 1);
-        }
+        let fail = usize::generator().check(|item| item < high).unwrap();
+        assert_eq!(fail.item, high);
     }
 }
 

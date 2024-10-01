@@ -39,54 +39,12 @@ use core::{
 use primitive::Range;
 
 /*
-    FIXME: skeptic test don't seem to be working...
     FIXME: #[check] macro produces duplicate compile errors (see 'Excess expression').
-    FIXME: Sometimes, integers don't shrink completely; they stop at 1 from the smallest value...
-        - See `tests::shrink::integer_shrink_to_minimum`.
-    FIXME: When the check uses interdependent generated values, it sometimes doesn't shrink completely.
-        - Ex: (regex!("[a-z]+"), regex!("[A-Z]+")).check(|(left, right)| assert!(left.len() + right.len() > 10));
-        - Here, the shrinked values will have the proper length sum, but the characters may not be shrinked down to 'a' or 'A'.
-        - The fully shrinked values should be string of only 'a' or 'A' with a length sum of 10.
-
-    TODO: Shrink vectors faster (shrink to minimum size and grow back up in binary search style).
     TODO: Review clamping of `size` in `Size` and `Dampen`.
         - Should they be allowed to go outside the range?
         - If `size` is set to a fixed value (ex: #[check(size = 1.0)]), then `Dampen` cannot prevent exponential
         growth of recursive structures.
-    TODO: If #[check] holds only constant generators (including if it is empty), set the count to 1.
     TODO: Provide named implementations for builtin generators.
-    TODO: Review `primitive::shrinked`.
-    TODO: Support for test macro with 'type expressions'?
-        - Adds a lot of complexity for a limited syntactic convenience...
-        - Support for 'or' generators would be nice; would require a fancy macro.
-
-
-        - The '..' means that the rest of the fields should be filled with 'FullGenerate'.
-        - Parameters that have no explicit generator will be filled with 'FullGenerate'.
-        #[check(digit(), Person { name: letter().collect(), .. })]
-        fn is_digit(value: char, person: Person, count: usize) {
-            assert!(value.is_ascii_digit());
-        }
-
-
-        #[checkito::test(shrink = 1, count = COUNT, seed = 11376, errors = 1)]
-        i: usize | u8 | i16, // Generates tests for every permutation of type expressions.
-        r: 0..100usize | 256..1000, // The 'or' type expression allows to combine any other type expression.
-        a: (Dog {} | Cat {}) as &dyn Animal, // Cast as a trait.
-        p: "[a-zA-Z]+", // &str will be interpreted as regexes and checked at compile time. -> String
-        s: String,
-        s: char::collect_with::<String>(100), -> String
-        d: digit(), -> char
-        d: digit().collect::<String>(), -> String
-        n: number<f64>(), // Use builtin generator functions. -> f64
-        l: letter(), -> char
-        l: letter().collect::<String>(), -> String
-        a: [0..1238; 17], // If a number of elements is specified, this is an array.
-        p: Person { name: "a-z", node: || Node::Null }, // Construct composite types inline.
-        z: Dopple { name: p.name.clone() }, // Refer to previously defined values?
-        v: [usize], // If no number of elements is specified, this is a vector.
-        t: (usize, 0..10000),
-        u: ()
 */
 
 pub fn number<T>() -> impl Generate<Item = T>
