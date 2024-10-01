@@ -1,6 +1,6 @@
 use crate::{generate::State, prove::Prove, random, shrink::Shrink, Generate};
 use core::{error, fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
-use std::{borrow::Cow, panic::catch_unwind, result};
+use std::{any::Any, borrow::Cow, panic::catch_unwind, result};
 
 /// Bounds the generation process.
 #[derive(Clone, Debug)]
@@ -383,32 +383,35 @@ impl<T, P> Fail<T, P> {
     }
 }
 
+fn cast(error: Box<dyn Any + Send>) -> Option<Cow<'static, str>> {
+    let error = match error.downcast::<&'static str>() {
+        Ok(error) => return Some(Cow::Borrowed(*error)),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<String>() {
+        Ok(error) => return Some(Cow::Owned(*error)),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<Box<str>>() {
+        Ok(error) => return Some(Cow::Owned(error.to_string())),
+        Err(error) => error,
+    };
+    match error.downcast::<Cow<'static, str>>() {
+        Ok(error) => Some(*error),
+        Err(_) => None,
+    }
+}
+
 fn handle<T, P: Prove, F: FnMut(T) -> P>(
     item: T,
     mut check: F,
 ) -> result::Result<P::Proof, Cause<P::Error>> {
-    let error = match catch_unwind(AssertUnwindSafe(move || check(item))) {
+    match catch_unwind(AssertUnwindSafe(move || check(item))) {
         Ok(prove) => match prove.prove() {
-            Ok(ok) => return Ok(ok),
-            Err(error) => return Err(Cause::Disprove(error)),
+            Ok(ok) => Ok(ok),
+            Err(error) => Err(Cause::Disprove(error)),
         },
-        Err(error) => error,
-    };
-    let error = match error.downcast::<&'static str>() {
-        Ok(error) => return Err(Cause::Panic(Some(Cow::Borrowed(*error)))),
-        Err(error) => error,
-    };
-    let error = match error.downcast::<String>() {
-        Ok(error) => return Err(Cause::Panic(Some(Cow::Owned(*error)))),
-        Err(error) => error,
-    };
-    let error = match error.downcast::<Box<str>>() {
-        Ok(error) => return Err(Cause::Panic(Some(Cow::Owned(error.to_string())))),
-        Err(error) => error,
-    };
-    match error.downcast::<Cow<'static, str>>() {
-        Ok(error) => Err(Cause::Panic(Some(*error))),
-        Err(_) => Err(Cause::Panic(None)),
+        Err(error) => Err(Cause::Panic(cast(error))),
     }
 }
 
@@ -422,7 +425,7 @@ impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
 #[doc(hidden)]
 pub mod help {
-    use super::{environment, Check, Checker, Fail, Pass, Result};
+    use super::{environment, hook, Check, Checker, Fail, Pass, Result};
     use crate::{Generate, Prove};
     use core::{
         any::type_name,
@@ -430,7 +433,6 @@ pub mod help {
         ops::Range,
         time::Duration,
     };
-    use std::panic;
 
     pub trait IntoRange<T> {
         fn range(self) -> Range<T>;
@@ -592,8 +594,6 @@ pub mod help {
         checker.shrink.errors = verbose;
         environment::update(&mut checker);
         (update)(&mut checker);
-        let hook = panic::take_hook();
-        panic::set_hook(Box::new(|_| {}));
         let Colors {
             red,
             green,
@@ -602,7 +602,9 @@ pub mod help {
             bold,
             reset,
         } = Colors::new(color);
-        for result in checker.checks(check) {
+
+        hook::reserve();
+        for result in checker.checks(hook::wrap(check)) {
             match result {
                 Result::Pass(value @ Pass { generates, .. }) => {
                     pass(format_args!("{green}PASS({generates}){reset}"), value)
@@ -624,12 +626,11 @@ pub mod help {
                         format_args!("{bold}{red}FAIL({generates}, {shrinks}){reset}"),
                         value,
                     );
-                    panic::set_hook(hook);
-                    panic!();
+                    hook::panic();
                 }
             }
         }
-        panic::set_hook(hook);
+        hook::release();
     }
 
     impl<T> IntoRange<T> for Range<T> {
@@ -677,13 +678,58 @@ pub mod help {
     duration!(u8, u16, u32, u64, u128, usize);
 }
 
-#[doc(hidden)]
-pub mod environment {
+mod hook {
+    use core::cell::Cell;
+    use std::panic::{self, PanicHookInfo};
+
+    type Handle = Box<dyn Fn(&PanicHookInfo) + 'static + Sync + Send>;
+    thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
+
+    pub fn reserve() {
+        HOOK.with(|cell| cell.set(Some(panic::take_hook())));
+        panic::set_hook(Box::new(handle));
+    }
+
+    pub fn wrap<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
+        move |input| {
+            HOOK.with(|cell| {
+                let hook = cell.replace(None);
+                let output = function(input);
+                cell.set(hook);
+                output
+            })
+        }
+    }
+
+    pub fn release() {
+        HOOK.with(|cell| {
+            if let Some(hook) = cell.take() {
+                panic::set_hook(hook);
+            }
+        });
+    }
+
+    pub fn panic() -> ! {
+        release();
+        panic!();
+    }
+
+    fn handle(panic: &PanicHookInfo) {
+        HOOK.with(|cell| {
+            if let Some(hook) = cell.replace(None) {
+                hook(panic);
+                cell.set(Some(hook));
+            }
+        });
+    }
+}
+
+mod environment {
     use super::Checker;
     use core::str::FromStr;
     use std::env;
 
-    pub mod generate {
+    mod generate {
         use super::*;
 
         pub fn count() -> Option<usize> {
@@ -718,7 +764,7 @@ pub mod environment {
         }
     }
 
-    pub mod shrink {
+    mod shrink {
         use super::*;
 
         pub fn count() -> Option<usize> {

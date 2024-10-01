@@ -160,3 +160,7 @@ struct A;
 struct B;
 #[check(with(|| A), Same(B), debug = false)]
 fn compiles_with_non_debug_parameter(_a: A, _b: B) {}
+
+#[check(Option::<usize>::generator().map(Option::unwrap))]
+#[should_panic]
+fn panics_with_option_unwrap(_: usize) {}
