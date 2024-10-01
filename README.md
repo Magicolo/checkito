@@ -12,8 +12,9 @@ A safe, efficient and simple [QuickCheck](https://hackage.haskell.org/package/Qu
     <a href="https://crates.io/crates/checkito"> <img src="https://img.shields.io/crates/v/checkito.svg"> </a>
 </div>
 
-<p align="center">
-    <em> 
+---
+### In Brief
+
 The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
 
 - When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the test (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
@@ -22,8 +23,6 @@ The purpose of the library is to test general properties of a program rather tha
 - Once a failing case is found, `checkito` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process much easier.
 - Note that `checkito` does not guarantee any kind of exhaustive search of the input space (the size of it gets out of hand rather quickly) and is meant as a complement to other testing strategies.
 - It is recommended to write a regular unit test with the exact failing input to prevent a regression and to truly guarantee that the failing input is always tested.
-    </em>
-</p>
 
 ---
 ### Main Traits
