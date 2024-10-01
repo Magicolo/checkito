@@ -1,6 +1,6 @@
 #!/bin/bash
 
-while IFS= read -r line; do
+while IFS= read -r line || [[ -n "$line" ]]; do
     while [[ "$line" =~ \{\{([^[:space:]]+)\}\} ]]; do
         key="${BASH_REMATCH[1]}"
 
