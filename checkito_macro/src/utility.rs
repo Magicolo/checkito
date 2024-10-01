@@ -11,7 +11,7 @@ pub fn error<T: ToTokens>(tokens: T, format: impl FnOnce(String) -> String) -> E
     Error::new_spanned(tokens, message)
 }
 
-pub fn join<'a, S: AsRef<str>, I: AsRef<str>>(
+pub fn join<S: AsRef<str>, I: AsRef<str>>(
     separator: S,
     items: impl IntoIterator<Item = I>,
 ) -> String {

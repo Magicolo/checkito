@@ -202,7 +202,7 @@ impl Check {
             arguments.push(format_ident!("_{}", arguments.len()));
         }
 
-        for expression in expressions {
+        if let Some(expression) = expressions.next() {
             return Err(utility::error(expression, |expression| {
                 format!(
                     "missing parameter for generator '{expression}'\neither add a parameter in \

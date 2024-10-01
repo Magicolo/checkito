@@ -15,7 +15,10 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install
       run: cargo install cargo-hack
-    - name: Run
+    - name: Run Main
+      run: cargo hack build --release --all-targets --verbose --feature-powerset
+    - name: Run Macro
+      working-directory: checkito_macro
       run: cargo hack build --release --all-targets --verbose --feature-powerset
   test:
     runs-on: ubuntu-latest
@@ -47,7 +50,10 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install
       run: rustup component add clippy && cargo install cargo-hack
-    - name: Run
+    - name: Run Main
+      run: cargo hack clippy --release --verbose --feature-powerset -- -D warnings
+    - name: Run Macro
+      working-directory: checkito_macro
       run: cargo hack clippy --release --verbose --feature-powerset -- -D warnings
   audit:
     runs-on: ubuntu-latest
@@ -57,5 +63,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: Install
       run: cargo install cargo-audit
-    - name: Run
+    - name: Run Main
+      run: cargo audit
+    - name: Run Macro
+      working-directory: checkito_macro
       run: cargo audit
