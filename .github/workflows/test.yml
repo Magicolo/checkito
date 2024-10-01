@@ -36,7 +36,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install
-      run: apt update && apt install cmake --yes && cargo install cargo-semver-checks
+      run: sudo apt update && sudo apt install cmake --yes && cargo install cargo-semver-checks
     - name: Run
       run: cargo semver-checks --verbose
   clippy:
