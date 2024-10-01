@@ -269,12 +269,7 @@ macro_rules! shrinked {
                 fn shrink(range: f64, size: f64) -> f64 {
                     // This adjustment of the size tries to prevent large ranges (such as `u64`)
                     // from rushing into huge values as soon as the `size > 0`.
-                    let power = range.abs().log2() / 8.0;
-                    if power < 1.0 {
-                        range * size
-                    } else {
-                        range * size.powf(power)
-                    }
+                    range * size.powf(range.abs().log2() / 12.0)
                 }
 
                 if self.start >= 0 as $t {

@@ -17,7 +17,7 @@ use crate::{
 };
 use core::{iter::FromIterator, ops};
 
-const COUNT: usize = u8::MAX as usize;
+const COUNT: usize = 1024;
 
 #[derive(Clone, Debug)]
 pub struct State {
