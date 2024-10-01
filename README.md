@@ -1,4 +1,4 @@
-<div align="center"> <h1> checkito 2.0.1 </h1> </div>
+<div align="center"> <h1> checkito 2.0.2 </h1> </div>
 
 <p align="center">
     <em> 
