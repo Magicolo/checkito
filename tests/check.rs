@@ -78,7 +78,7 @@ fn compiles_and_runs_once() {
     assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), 0);
 }
 
-#[check(1u8, 'a')] // More than 1 attribute?
+#[check(1u8, 'a')]
 fn compiles_with_constants_and_runs_once(_: u8, _: char) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static COUNT: AtomicUsize = AtomicUsize::new(0);

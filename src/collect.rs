@@ -174,7 +174,7 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                         self.machine = Machine::Remove(index + 1);
                         break Some(Self {
                             items,
-                            machine: Machine::Remove(0),
+                            machine: Machine::Remove(index),
                             minimum: self.minimum,
                             _marker: PhantomData,
                         });
@@ -184,21 +184,23 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                 }
                 // Try to shrink each generator and succeed if any generator is shrunk.
                 Machine::Shrink(index) => {
-                    for i in 0..self.items.len() {
-                        let at = (index + i) % self.items.len();
-                        if let Some(shrink) = self.items[at].shrink() {
+                    if let Some(old) = self.items.get_mut(index) {
+                        if let Some(new) = old.shrink() {
                             let mut items = self.items.clone();
-                            items[at] = shrink;
-                            self.machine = Machine::Shrink(index + 1);
+                            items[index] = new;
+                            self.machine = Machine::Shrink(index);
                             return Some(Self {
                                 items,
-                                machine: Machine::Shrink(index + 1),
+                                machine: Machine::Shrink(index),
                                 minimum: self.minimum,
                                 _marker: PhantomData,
                             });
+                        } else {
+                            self.machine = Machine::Shrink(index + 1);
                         }
+                    } else {
+                        self.machine = Machine::Done;
                     }
-                    self.machine = Machine::Done;
                 }
                 Machine::Done => break None,
             }

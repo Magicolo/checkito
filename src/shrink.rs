@@ -1,10 +1,9 @@
 use crate::{boxed, utility::tuples};
-use core::num::NonZeroUsize;
 
 #[derive(Clone, Debug)]
 pub struct All<T: ?Sized> {
     pub index: usize,
-    pub inner: T,
+    pub items: T,
 }
 
 pub trait FullShrink {
@@ -71,7 +70,10 @@ impl<T: IntoShrink> IntoShrink for &mut T {
 
 impl<T> All<T> {
     pub const fn new(inner: T) -> Self {
-        Self { inner, index: 0 }
+        Self {
+            items: inner,
+            index: 0,
+        }
     }
 }
 
@@ -100,29 +102,24 @@ macro_rules! tuple {
 
             #[allow(clippy::unused_unit)]
             fn item(&self) -> Self::Item {
-                ($(self.inner.$i.item(),)*)
+                ($(self.items.$i.item(),)*)
             }
 
             fn shrink(&mut self) -> Option<Self> {
-                let count = NonZeroUsize::new($c)?;
-                let start = self.index;
-                self.index += 1;
-                for i in 0..count.get() {
-                    match (start + i) % count.get() {
+                loop {
+                    match self.index {
                         $($i => {
-                            if let Some(shrink) = self.inner.$i.shrink() {
-                                let mut shrinks = self.inner.clone();
-                                shrinks.$i = shrink;
-                                return Some(Self {
-                                    inner: shrinks,
-                                    index: self.index
-                                });
+                            if let Some(shrinker) = self.items.$i.shrink() {
+                                let mut items = self.items.clone();
+                                items.$i = shrinker;
+                                break Some(Self { items, index: self.index });
+                            } else {
+                                self.index += 1;
                             }
-                            })*
-                        _ => {}
+                        })*
+                        _ => break None,
                     }
                 }
-                None
             }
         }
     };

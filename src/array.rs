@@ -132,24 +132,23 @@ impl<S: Shrink, const N: usize> Shrink for All<[S; N]> {
     fn item(&self) -> Self::Item {
         let mut index = 0;
         [(); N].map(|_| {
-            let shrink = self.inner[index].item();
+            let item = self.items[index].item();
             index += 1;
-            shrink
+            item
         })
     }
 
     fn shrink(&mut self) -> Option<Self> {
-        let start = self.index;
-        self.index += 1;
-        for i in 0..N {
-            let index = (start + i) % N;
-            if let Some(shrink) = self.inner[index].shrink() {
-                let mut shrinks = self.inner.clone();
-                shrinks[index] = shrink;
+        while let Some(old) = self.items.get_mut(self.index) {
+            if let Some(new) = old.shrink() {
+                let mut items = self.items.clone();
+                items[self.index] = new;
                 return Some(Self {
-                    inner: shrinks,
+                    items,
                     index: self.index,
                 });
+            } else {
+                self.index += 1;
             }
         }
         None
