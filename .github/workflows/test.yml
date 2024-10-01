@@ -16,7 +16,7 @@ jobs:
     - name: Install
       run: cargo install cargo-hack
     - name: Run
-      run: cargo hack build --release --verbose --feature-powerset
+      run: cargo hack build --release --all-targets --verbose --feature-powerset
   test:
     runs-on: ubuntu-latest
     container: 
