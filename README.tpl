@@ -39,5 +39,3 @@ _See the [examples](examples/) and [tests](tests/) folder for more detailed exam
 - [quickcheck](https://crates.io/crates/quickcheck)
 - [arbitrary](https://crates.io/crates/arbitrary)
 - [monkey_test](https://crates.io/crates/monkey_test)
-
-{{readme}}
