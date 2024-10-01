@@ -16,7 +16,7 @@ rust-version = "1.65.0"
 github = { repository = "Magicolo/checkito", workflow = "test" }
 
 [dependencies]
-checkito_macro = "0.2.2"
+checkito_macro = "0.2.3"
 fastrand = "2.1.1"
 regex-syntax = "0.8.5"
 orn = "0.4.3"
