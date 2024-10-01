@@ -18,7 +18,8 @@ fn is_in_range(value: usize) -> bool {
 
 /// Regexes can be used and validated at compile-time with the [`regex!`] macro.
 ///
-/// Usual panicking assertions can be used in the body of the checking function.
+/// Usual panicking assertions can be used in the body of the checking function since a panic is considered
+/// a failed property.
 #[check(regex!("[a-zA-Z0-9_]*"))]
 fn is_ascii(value: String) {
     assert!(value.is_ascii());
