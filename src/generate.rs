@@ -49,6 +49,7 @@ pub trait IntoGenerate {
     fn generator(self) -> Self::Generate;
 }
 
+#[must_use = "generators do nothing until used"]
 pub trait Generate {
     type Item;
     type Shrink: Shrink<Item = Self::Item>;

@@ -24,7 +24,6 @@ pub struct Sampler<'a, G: ?Sized> {
 pub struct Samples<'a, G: ?Sized> {
     sampler: Sampler<'a, G>,
     index: usize,
-    count: usize,
 }
 
 pub trait Sample: Generate {
@@ -85,7 +84,6 @@ impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
         Samples {
             sampler: self.clone(),
             index: 0,
-            count: self.count,
         }
     }
 }
@@ -94,10 +92,10 @@ impl<G: Generate + ?Sized> Iterator for Samples<'_, G> {
     type Item = G::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.count {
+        if self.index < self.sampler.count {
             let mut state = State::new(
                 self.index,
-                self.count,
+                self.sampler.count,
                 self.sampler.size.clone(),
                 self.sampler.seed,
             );
@@ -111,6 +109,6 @@ impl<G: Generate + ?Sized> Iterator for Samples<'_, G> {
 
 impl<G: Generate + ?Sized> ExactSizeIterator for Samples<'_, G> {
     fn len(&self) -> usize {
-        self.count - self.index
+        self.sampler.count - self.index
     }
 }
