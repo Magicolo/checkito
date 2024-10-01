@@ -174,3 +174,43 @@ mod range {
 
     tests!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64);
 }
+
+mod check {
+    use super::*;
+
+    #[check(positive::<u8>(), 0u8)]
+    #[check(positive::<u16>(), 0u16)]
+    #[check(positive::<u32>(), 0u32)]
+    #[check(positive::<u64>(), 0u64)]
+    #[check(positive::<u128>(), 0u128)]
+    #[check(positive::<usize>(), 0usize)]
+    #[check(positive::<i8>(), 0i8)]
+    #[check(positive::<i16>(), 0i16)]
+    #[check(positive::<i32>(), 0i32)]
+    #[check(positive::<i64>(), 0i64)]
+    #[check(positive::<i128>(), 0i128)]
+    #[check(positive::<isize>(), 0isize)]
+    #[check(positive::<f32>(), 0f32)]
+    #[check(positive::<f64>(), 0f64)]
+    fn is_positive<T: PartialOrd>(value: T, zero: T) {
+        assert!(value >= zero);
+    }
+
+    #[check(negative::<u8>(), 0u8)]
+    #[check(negative::<u16>(), 0u16)]
+    #[check(negative::<u32>(), 0u32)]
+    #[check(negative::<u64>(), 0u64)]
+    #[check(negative::<u128>(), 0u128)]
+    #[check(negative::<usize>(), 0usize)]
+    #[check(negative::<i8>(), 0i8)]
+    #[check(negative::<i16>(), 0i16)]
+    #[check(negative::<i32>(), 0i32)]
+    #[check(negative::<i64>(), 0i64)]
+    #[check(negative::<i128>(), 0i128)]
+    #[check(negative::<isize>(), 0isize)]
+    #[check(negative::<f32>(), 0f32)]
+    #[check(negative::<f64>(), 0f64)]
+    fn is_negative<T: PartialOrd>(value: T, zero: T) {
+        assert!(value <= zero);
+    }
+}
