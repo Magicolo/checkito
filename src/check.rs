@@ -603,8 +603,8 @@ pub mod help {
             reset,
         } = Colors::new(color);
 
-        hook::reserve();
-        for result in checker.checks(hook::wrap(check)) {
+        hook::begin();
+        for result in checker.checks(hook::silent(check)) {
             match result {
                 Result::Pass(value @ Pass { generates, .. }) => {
                     pass(format_args!("{green}PASS({generates}){reset}"), value)
@@ -630,7 +630,7 @@ pub mod help {
                 }
             }
         }
-        hook::release();
+        hook::end();
     }
 
     impl<T> IntoRange<T> for Range<T> {
@@ -685,12 +685,12 @@ mod hook {
     type Handle = Box<dyn Fn(&PanicHookInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
-    pub fn reserve() {
+    pub fn begin() {
         HOOK.with(|cell| cell.set(Some(panic::take_hook())));
         panic::set_hook(Box::new(handle));
     }
 
-    pub fn wrap<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
+    pub fn silent<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
         move |input| {
             HOOK.with(|cell| {
                 let hook = cell.replace(None);
@@ -701,7 +701,7 @@ mod hook {
         }
     }
 
-    pub fn release() {
+    pub fn end() {
         HOOK.with(|cell| {
             if let Some(hook) = cell.take() {
                 panic::set_hook(hook);
@@ -710,7 +710,7 @@ mod hook {
     }
 
     pub fn panic() -> ! {
-        release();
+        end();
         panic!();
     }
 
