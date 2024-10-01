@@ -4,7 +4,16 @@
     <em> 
 
 A safe, efficient and simple [QuickCheck](https://hackage.haskell.org/package/QuickCheck) inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing.
+    </em>
+</p>
 
+<div align="right">
+    <a href="https://github.com/Magicolo/checkito/actions/workflows/test.yml"> <img src="https://github.com/Magicolo/checkito/actions/workflows/test.yml/badge.svg"> </a>
+    <a href="https://crates.io/crates/checkito"> <img src="https://img.shields.io/crates/v/checkito.svg"> </a>
+</div>
+
+<p align="center">
+    <em> 
 The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
 
 - When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the test (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
@@ -15,12 +24,6 @@ The purpose of the library is to test general properties of a program rather tha
 - It is recommended to write a regular unit test with the exact failing input to prevent a regression and to truly guarantee that the failing input is always tested.
     </em>
 </p>
-
-<div align="right">
-    <a href="https://github.com/Magicolo/checkito/actions/workflows/test.yml"> <img src="https://github.com/Magicolo/checkito/actions/workflows/test.yml/badge.svg"> </a>
-    <a href="https://crates.io/crates/checkito"> <img src="https://img.shields.io/crates/v/checkito.svg"> </a>
-</div>
-<p/>
 
 ---
 ### Main Traits
