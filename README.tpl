@@ -17,7 +17,7 @@
 
 The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
 
-- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the test (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
+- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
 - Generators can produce arbitrary complex values with its combinators in a similar way that `Iterator`s can.
 - Given a proper generator, `checkito` will sample the input space to find a failing case for your test.
 - Once a failing case is found, `checkito` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process much easier.

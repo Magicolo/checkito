@@ -17,7 +17,7 @@ A safe, efficient and simple [QuickCheck](https://hackage.haskell.org/package/Qu
 
 The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
 
-- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the test (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
+- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
 - Generators can produce arbitrary complex values with its combinators in a similar way that `Iterator`s can.
 - Given a proper generator, `checkito` will sample the input space to find a failing case for your test.
 - Once a failing case is found, `checkito` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process much easier.
@@ -37,6 +37,18 @@ The purpose of the library is to test general properties of a program rather tha
 
 ```rust
 use checkito::*;
+
+/// __HOLD ON!__ Yes, there is an attribute which might repulse some of you by
+/// fear of too much macro-magic. The attribute is designed to be as thin as
+/// possible and everything that is expressible with the attribute is also
+/// ergonomically expressible as _regular_ code (see below). To convince
+/// yourself, try running `cargo expand` and you'll see that each `#[check]`
+/// attribute expands to a single function call.
+///
+/// An empty `#[check]` attribute acts just like `#[test]`. It exists for
+/// consistency between tests.
+#[check]
+fn empty() {}
 
 /// The builtin `letter()` generator will yield ascii letters.
 ///
@@ -64,11 +76,6 @@ fn is_in_range(value: usize) -> bool {
 fn is_ascii(value: String) {
     assert!(value.is_ascii());
 }
-
-/// An empty `#[check]` attribute acts just like `#[test]`. It exists for
-/// consistency between tests.
-#[check]
-fn empty() {}
 
 /// The `_` and `..` operators can be used to infer the [`FullGenerate`]
 /// generator implementation for a type.

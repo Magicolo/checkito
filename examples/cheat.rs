@@ -1,5 +1,17 @@
 use checkito::*;
 
+/// __HOLD ON!__ Yes, there is an attribute which might repulse some of you by
+/// fear of too much macro-magic. The attribute is designed to be as thin as
+/// possible and everything that is expressible with the attribute is also
+/// ergonomically expressible as _regular_ code (see below). To convince
+/// yourself, try running `cargo expand` and you'll see that each `#[check]`
+/// attribute expands to a single function call.
+///
+/// An empty `#[check]` attribute acts just like `#[test]`. It exists for
+/// consistency between tests.
+#[check]
+fn empty() {}
+
 /// The builtin `letter()` generator will yield ascii letters.
 ///
 /// This test will be run many times with different generated values to find a
@@ -26,11 +38,6 @@ fn is_in_range(value: usize) -> bool {
 fn is_ascii(value: String) {
     assert!(value.is_ascii());
 }
-
-/// An empty `#[check]` attribute acts just like `#[test]`. It exists for
-/// consistency between tests.
-#[check]
-fn empty() {}
 
 /// The `_` and `..` operators can be used to infer the [`FullGenerate`]
 /// generator implementation for a type.
