@@ -1,11 +1,9 @@
 use checkito::*;
 
-/// __HOLD ON!__ Yes, there is an attribute which might repulse some of you by
-/// fear of too much macro-magic. The attribute is designed to be as thin as
-/// possible and everything that is expressible with the attribute is also
-/// ergonomically expressible as _regular_ code (see below). To convince
-/// yourself, try running `cargo expand` and you'll see that each `#[check]`
-/// attribute expands to a single function call.
+/// The `#[check]` attribute is designed to be as thin as possible and
+/// everything that is expressible with it is also ergonomically expressible as
+/// _regular_ code (see below). Each `#[check]` attribute expands to a single
+/// function call.
 ///
 /// An empty `#[check]` attribute acts just like `#[test]`. It exists for
 /// consistency between tests.
