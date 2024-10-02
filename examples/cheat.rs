@@ -5,7 +5,7 @@ use checkito::*;
 /// _regular_ code (see below). Each `#[check]` attribute expands to a single
 /// function call.
 ///
-/// An empty `#[check]` attribute acts just like `#[test]`. It exists for
+/// An empty `#[check]` attribute acts just like `#[test]`. It is allowed for
 /// consistency between tests.
 #[check]
 fn empty() {}
