@@ -135,6 +135,18 @@ const fn compiles_with_const(value: bool) -> bool {
     value
 }
 
+#[check(.., _, _, negative::<isize>(), _)]
+#[check(..)]
+#[check(negative::<f64>(), _, ..)]
+#[check(_, .., negative::<i16>())]
+#[should_panic]
+fn compiles_with_mixed_infer_rest_operators(first: f64, second: i8, third: isize, fourth: i16) {
+    assert!(first < 0.0);
+    assert!(second < 0);
+    assert!(third < 0);
+    assert!(fourth < 0);
+}
+
 #[check(1usize)]
 #[check(2u8)]
 #[check('a')]
@@ -154,6 +166,15 @@ fn compiles_with_multiple_constants(value: usize) {
     static COUNT: AtomicUsize = AtomicUsize::new(0);
     assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), value);
 }
+
+#[check(..)]
+#[check(_)]
+#[check(1usize)]
+#[check(1usize)]
+#[check(1usize)]
+#[check(_)]
+#[check(..)]
+fn compiles_with_multiple_identical_check(_: usize) {}
 
 struct A;
 #[derive(Clone)]

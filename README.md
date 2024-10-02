@@ -78,12 +78,16 @@ fn is_ascii(value: String) {
 }
 
 /// The `_` and `..` operators can be used to infer the [`FullGenerate`]
-/// generator implementation for a type.
+/// generator implementation for a type. Specifically, the `..` operator works
+/// the same way as slice match patterns.
 ///
 /// Since this test will panic, `#[should_panic]` can be used in the usual way.
-#[check(_, _, _, _)]
-#[check(_, _, ..)]
 #[check(..)]
+#[check(_, _, _, _)]
+#[check(negative::<f64>(), ..)]
+#[check(.., negative::<i16>())]
+#[check(_, .., _)]
+#[check(negative::<f64>(), _, .., _, negative::<i16>())]
 #[should_panic]
 fn is_negative(first: f64, second: i8, third: isize, fourth: i16) {
     assert!(first < 0.0);

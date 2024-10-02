@@ -16,7 +16,7 @@ pub struct Check {
     pub span: Span,
     pub settings: Vec<(Key, Expr, TokenStream2)>,
     pub generators: Vec<Expr>,
-    pub rest: bool,
+    pub rest: Option<(usize, Span)>,
     pub debug: Option<bool>,
     pub color: Option<bool>,
     pub verbose: Option<bool>,
@@ -157,12 +157,12 @@ impl fmt::Display for Key {
 }
 
 impl Check {
-    pub fn new(span: Span) -> Self {
+    pub const fn new(span: Span) -> Self {
         Self {
             span,
             settings: Vec::new(),
             generators: Vec::new(),
-            rest: false,
+            rest: None,
             debug: None,
             color: None,
             verbose: None,
@@ -170,32 +170,42 @@ impl Check {
     }
 
     pub fn run(&self, signature: &Signature) -> Result<TokenStream2, Error> {
+        let rest = match self.rest {
+            Some((rest, span)) => (
+                rest,
+                rest + signature.inputs.len().saturating_sub(self.generators.len()),
+                span,
+            ),
+            None => (usize::MAX, usize::MAX, Span::call_site()),
+        };
         let mut expressions = self.generators.iter();
         let mut generators = Vec::new();
         let mut arguments = Vec::new();
-        for parameter in signature.inputs.iter() {
+        for (index, parameter) in signature.inputs.iter().enumerate() {
             let FnArg::Typed(PatType { ty, .. }) = parameter else {
                 return Err(utility::error(parameter, |parameter| {
                     format!("invalid parameter '{parameter}'")
                 }));
             };
 
-            let generator = match expressions.next() {
-                Some(Expr::Infer(infer)) => {
-                    quote_spanned!(infer.span() => <#ty as ::checkito::FullGenerate>::generator())
-                }
-                Some(expression) => quote_spanned!(expression.span() => #expression),
-                None if self.rest => {
-                    quote_spanned!(parameter.span() => <#ty as ::checkito::FullGenerate>::generator())
-                }
-                None => {
-                    return Err(utility::error(parameter, |parameter| {
-                        format!(
-                            "missing generator for parameter '{parameter}'\neither add a \
-                             generator in the '#[check]' macro, use '_' to fill in a single \
-                             parameter or use '..' operator to fill in all remaining parameters"
-                        )
-                    }));
+            let generator = if index >= rest.0 && index < rest.1 {
+                quote_spanned!(rest.2 => <#ty as ::checkito::FullGenerate>::generator())
+            } else {
+                match expressions.next() {
+                    Some(Expr::Infer(infer)) => {
+                        quote_spanned!(infer.span() => <#ty as ::checkito::FullGenerate>::generator())
+                    }
+                    Some(expression) => quote_spanned!(expression.span() => #expression),
+                    None => {
+                        return Err(utility::error(parameter, |parameter| {
+                            format!(
+                                "missing generator for parameter '{parameter}'\neither add a \
+                                 generator in the '#[check]' macro, use '_' to fill in a single \
+                                 parameter or use '..' operator to fill in all remaining \
+                                 parameters"
+                            )
+                        }));
+                    }
                 }
             };
             generators.push(generator);
@@ -305,20 +315,18 @@ impl Parse for Check {
                         }));
                     }
                 }
-                expression if check.rest => {
-                    return Err(utility::error(expression, |expression| {
-                        format!(
-                            "excess expression '{expression}' after '..' operator\nonly \
-                             configuration assignment expressions are allowed in this position"
-                        )
-                    }));
-                }
                 Expr::Range(ExprRange {
                     start: None,
                     end: None,
                     limits: RangeLimits::HalfOpen(_),
                     ..
-                }) => check.rest = true,
+                }) => {
+                    if check.rest.is_some() {
+                        return Err(Error::new_spanned(expression, "duplicate '..' operator"));
+                    } else {
+                        check.rest = Some((check.generators.len(), expression.span()));
+                    }
+                }
                 expression => check.generators.push(expression),
             }
         }
