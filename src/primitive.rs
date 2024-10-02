@@ -22,7 +22,6 @@ pub struct Range<T> {
 pub enum Error {
     Overflow,
     Empty,
-    Invalid,
 }
 
 #[derive(Copy, Clone, Debug)]
