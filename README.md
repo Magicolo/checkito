@@ -86,7 +86,7 @@ fn is_ascii(value: String) {
 #[check(..)]
 #[should_panic]
 fn is_negative(first: f64, second: i8, third: isize, fourth: i16) {
-    assert!(first < 0);
+    assert!(first < 0.0);
     assert!(second < 0);
     assert!(third < 0);
     assert!(fourth < 0);
