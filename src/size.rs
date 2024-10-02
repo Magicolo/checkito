@@ -10,12 +10,12 @@ impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
     type Shrink = G::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let old = state.size.clone();
-        let new = self.1(old.0).clamp(old.1.start, old.1.end);
+        let old = state.size.0;
+        let new = self.1(old).clamp(0.0, 1.0);
         assert!(new.is_finite());
-        state.size = (new, old.1.clone());
+        state.size.0 = new;
         let shrink = self.0.generate(state);
-        state.size = old;
+        state.size.0 = old;
         shrink
     }
 

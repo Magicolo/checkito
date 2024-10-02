@@ -22,7 +22,7 @@ const COUNT: usize = 1024;
 #[derive(Clone, Debug)]
 pub struct State {
     seed: u64,
-    pub(crate) size: (f64, ops::Range<f64>),
+    pub(crate) size: (f64, f64),
     pub(crate) limit: u32,
     pub(crate) depth: u32,
     random: Random,
@@ -353,23 +353,19 @@ impl State {
     }
 }
 
-pub(crate) fn size(
-    index: usize,
-    count: usize,
-    mut size: ops::Range<f64>,
-) -> (f64, ops::Range<f64>) {
+pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f64, f64) {
     size.start = size.start.clamp(0.0, 1.0);
     size.end = size.end.clamp(0.0, 1.0);
 
     if count <= 1 {
-        (size.end, size)
+        (size.end, size.end)
     } else {
         let range = size.end - size.start;
         assert!(range >= 0.0);
         assert!(index <= count);
         // This size calculation ensures that 25% of samples are fully sized.
         let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
-        (size.start + ratio * range, size)
+        (size.start + ratio * range, size.end)
     }
 }
 

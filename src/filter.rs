@@ -33,10 +33,9 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
-        let old = state.size.clone();
+        let size = state.size;
         for i in 0..self.retries {
-            let new = generate::size(i, self.retries, state.size.1.clone());
-            state.size = new;
+            state.size = generate::size(i, self.retries, size.0..size.1);
             let inner = self.inner.generate(state);
             let item = inner.item();
             if self.constant() || (self.filter)(&item) {
@@ -44,7 +43,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
                 break;
             }
         }
-        state.size = old;
+        state.size = size;
         Shrinker {
             inner: outer,
             filter: self.filter.clone(),
