@@ -85,11 +85,11 @@ fn is_ascii(value: String) {
 #[check(_, _, ..)]
 #[check(..)]
 #[should_panic]
-fn is_negative(first: f64, second: u8, third: isize, fourth: i16) {
-    assert!(first < 0.0);
-    assert!(second < 1);
-    assert!(third < 2);
-    assert!(fourth < 3);
+fn is_negative(first: f64, second: i8, third: isize, fourth: i16) {
+    assert!(first < 0);
+    assert!(second < 0);
+    assert!(third < 0);
+    assert!(fourth < 0);
 }
 
 /// `color = false` disables coloring of the output.
