@@ -72,3 +72,11 @@ jobs:
     - run: cargo audit
     - working-directory: checkito_macro
       run: cargo audit
+  coverage:
+    runs-on: ubuntu-latest
+    container: 
+      image: ghcr.io/magicolo/rust
+    steps:
+    - uses: actions/checkout@v4
+    - run: cargo llvm-cov --all-features --lcov --output-path lcov.info
+    - uses: codecov/codecov-action@v3
