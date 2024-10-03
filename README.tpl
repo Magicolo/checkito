@@ -45,7 +45,7 @@ _See the [examples](examples/) and [tests](tests/) folder for more detailed exam
 ### Contribute
 - If you find a bug or have a feature request, please open an [issues](https://github.com/Magicolo/{{name}}/issues).
 - `{{name}}` is actively maintained and [pull requests](https://github.com/Magicolo/{{name}}/pulls) are welcome.
-- If `{{name}}` was useful to you, please consider leaving a star on [GitHub](https://github.com/Magicolo/{{name}})!
+- If `{{name}}` was useful to you, please consider leaving a [star](https://github.com/Magicolo/{{name}})!
 
 ---
 ### Alternatives
