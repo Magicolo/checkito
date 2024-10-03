@@ -195,7 +195,12 @@ fn main() {
 _See the [examples](examples/) and [tests](tests/) folder for more detailed examples._
 
 ---
+### Contribute
+- If you find a bug or have a feature request, please open an [issues](https://github.com/Magicolo/checkito/issues).
+- `checkito` is actively maintained and [pull requests](https://github.com/Magicolo/checkito/pulls) are welcome.
+- If `checkito` was useful to you, please consider leaving a star on [GitHub](https://github.com/Magicolo/checkito)!
 
+---
 ### Alternatives
 - [proptest](https://crates.io/crates/proptest)
 - [quickcheck](https://crates.io/crates/quickcheck)
