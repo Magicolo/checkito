@@ -11,10 +11,7 @@ impl Parse for Regex {
         let string = match Lit::parse(input)? {
             Lit::Str(string) => string,
             literal => {
-                return Err(Error::new(
-                    literal.span(),
-                    format!("expected a string literal"),
-                ));
+                return Err(Error::new(literal.span(), "expected a string literal"));
             }
         };
         match Parser::new().parse(&string.value()) {
