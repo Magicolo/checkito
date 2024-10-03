@@ -1,11 +1,10 @@
-use crate::utility;
-use core::fmt;
+use core::{fmt, mem::replace, ops::Deref};
 use quote::{ToTokens, format_ident, quote_spanned};
-use std::{collections::HashSet, ops::Deref};
+use std::collections::HashSet;
 use syn::{
     __private::{Span, TokenStream2},
-    Error, Expr, ExprAssign, ExprField, ExprPath, ExprRange, FnArg, Ident, Member, Meta, PatType,
-    RangeLimits, Signature,
+    Error, Expr, ExprAssign, ExprField, ExprLit, ExprPath, ExprRange, FnArg, Ident, Lit, LitBool,
+    Member, Meta, PatType, Path, PathSegment, RangeLimits, Signature,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -94,10 +93,10 @@ impl TryFrom<&Ident> for Key {
                 return Ok(key);
             }
         }
-        Err(utility::error(value, |key| {
+        Err(error(value, |key| {
             format!(
                 "unrecognized key '{key}'\nmust be one of [{}]",
-                utility::join(", ", Self::KEYS)
+                join(", ", Self::KEYS)
             )
         }))
     }
@@ -108,18 +107,18 @@ impl TryFrom<&Expr> for Key {
 
     fn try_from(value: &Expr) -> Result<Self, Self::Error> {
         let unrecognized = || {
-            utility::error(value, |key| {
+            error(value, |key| {
                 format!(
                     "unrecognized key '{key}'\nmust be one of [{}]",
-                    utility::join(", ", Self::KEYS)
+                    join(", ", Self::KEYS)
                 )
             })
         };
         let invalid = || {
-            utility::error(value, |key| {
+            error(value, |key| {
                 format!(
                     "invalid expression '{key}'\nmust be a key in [{}].",
-                    utility::join(", ", Self::KEYS)
+                    join(", ", Self::KEYS)
                 )
             })
         };
@@ -183,7 +182,7 @@ impl Check {
         let mut arguments = Vec::new();
         for (index, parameter) in signature.inputs.iter().enumerate() {
             let FnArg::Typed(PatType { ty, .. }) = parameter else {
-                return Err(utility::error(parameter, |parameter| {
+                return Err(error(parameter, |parameter| {
                     format!("invalid parameter '{parameter}'")
                 }));
             };
@@ -197,7 +196,7 @@ impl Check {
                     }
                     Some(expression) => quote_spanned!(expression.span() => #expression),
                     None => {
-                        return Err(utility::error(parameter, |parameter| {
+                        return Err(error(parameter, |parameter| {
                             format!(
                                 "missing generator for parameter '{parameter}'\neither add a \
                                  generator in the '#[check]' macro, use '_' to fill in a single \
@@ -213,7 +212,7 @@ impl Check {
         }
 
         if let Some(expression) = expressions.next() {
-            return Err(utility::error(expression, |expression| {
+            return Err(error(expression, |expression| {
                 format!(
                     "missing parameter for generator '{expression}'\neither add a parameter in \
                      the function's signature or remove the generator"
@@ -292,15 +291,15 @@ impl Parse for Check {
                     if keys.remove(&key) {
                         let right = match key {
                             Key::Debug => {
-                                check.debug = Some(utility::as_bool(&right)?);
+                                check.debug = Some(as_bool(&right)?);
                                 continue;
                             }
                             Key::Color => {
-                                check.color = Some(utility::as_bool(&right)?);
+                                check.color = Some(as_bool(&right)?);
                                 continue;
                             }
                             Key::Verbose => {
-                                check.verbose = Some(utility::as_bool(&right)?);
+                                check.verbose = Some(as_bool(&right)?);
                                 continue;
                             }
                             Key::GenerateSize => {
@@ -310,9 +309,7 @@ impl Parse for Check {
                         };
                         check.settings.push((key, *left, right));
                     } else {
-                        return Err(utility::error(left, |left| {
-                            format!("duplicate key '{left}'")
-                        }));
+                        return Err(error(left, |left| format!("duplicate key '{left}'")));
                     }
                 }
                 Expr::Range(ExprRange {
@@ -341,23 +338,58 @@ impl TryFrom<&syn::Attribute> for Check {
         const PATHS: [&[&str]; 2] = [&["checkito", "check"], &["check"]];
 
         let path = value.path();
-        if PATHS
-            .into_iter()
-            .any(|legal| utility::idents(path).eq(legal))
-        {
+        if PATHS.into_iter().any(|legal| idents(path).eq(legal)) {
             if matches!(value.meta, Meta::Path(_)) {
                 Ok(Check::new(value.span()))
             } else {
                 value.meta.require_list()?.parse_args()
             }
         } else {
-            Err(utility::error(path, |path| {
-                let paths = PATHS.into_iter().map(|path| utility::join("::", path));
+            Err(error(path, |path| {
+                let paths = PATHS.into_iter().map(|path| join("::", path));
                 format!(
                     "invalid attribute path '{path}'\nmust be one of [{}]",
-                    utility::join(", ", paths)
+                    join(", ", paths)
                 )
             }))
         }
+    }
+}
+
+fn string<T: ToTokens>(tokens: &T) -> String {
+    tokens.to_token_stream().to_string()
+}
+
+fn error<T: ToTokens>(tokens: T, format: impl FnOnce(String) -> String) -> Error {
+    let message = format(string(&tokens));
+    Error::new_spanned(tokens, message)
+}
+
+fn join<S: AsRef<str>, I: AsRef<str>>(separator: S, items: impl IntoIterator<Item = I>) -> String {
+    let mut buffer = String::new();
+    let mut join = false;
+    let separator = separator.as_ref();
+    for item in items {
+        if replace(&mut join, true) {
+            buffer.push_str(separator);
+        }
+        buffer.push_str(item.as_ref());
+    }
+    buffer
+}
+
+fn idents(path: &Path) -> impl Iterator<Item = &Ident> {
+    path.segments.iter().map(|PathSegment { ident, .. }| ident)
+}
+
+fn as_bool(expression: &Expr) -> Result<bool, Error> {
+    match expression {
+        Expr::Lit(ExprLit {
+            lit: Lit::Bool(LitBool { value, .. }),
+            ..
+        }) => Ok(*value),
+        expression => Err(error(expression, |expression| {
+            format!("expression '{expression}' must be a boolean literal",)
+        })),
     }
 }

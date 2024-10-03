@@ -1,22 +1,30 @@
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "check")]
 mod check;
+#[cfg(feature = "regex")]
 mod regex;
-mod utility;
 
-use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use std::mem::{replace, take};
-use syn::{ItemFn, Visibility, parse_macro_input};
-
+#[cfg(feature = "regex")]
 #[proc_macro]
-pub fn regex(input: TokenStream) -> TokenStream {
+pub fn regex(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    use quote::quote;
+    use syn::parse_macro_input;
     let regex::Regex(string) = parse_macro_input!(input);
-    quote!(::checkito::regex::Regex::new(#string).unwrap()).into()
+    let token = string.token();
+    quote!(::checkito::regex::Regex::new(#token).unwrap()).into()
 }
 
+#[cfg(feature = "check")]
 #[proc_macro_attribute]
-pub fn check(attribute: TokenStream, item: TokenStream) -> TokenStream {
+pub fn check(
+    attribute: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    use core::mem::{replace, take};
+    use quote::{format_ident, quote};
+    use syn::{ItemFn, Visibility, parse_macro_input};
+
     let check: check::Check = parse_macro_input!(attribute);
     let mut checks = vec![check];
     let mut function: ItemFn = parse_macro_input!(item);

@@ -1,4 +1,3 @@
-use crate::utility;
 use regex_syntax::Parser;
 use syn::{
     Error, Lit, LitStr,
@@ -12,14 +11,15 @@ impl Parse for Regex {
         let string = match Lit::parse(input)? {
             Lit::Str(string) => string,
             literal => {
-                return Err(utility::error(literal, |literal| {
-                    format!("expected '{}' to be a string literal", literal)
-                }));
+                return Err(Error::new(
+                    literal.span(),
+                    format!("expected a string literal"),
+                ));
             }
         };
         match Parser::new().parse(&string.value()) {
             Ok(_) => Ok(Regex(string)),
-            Err(error) => Err(Error::new_spanned(string, format!("{error}"))),
+            Err(error) => Err(Error::new(string.span(), format!("{error}"))),
         }
     }
 }

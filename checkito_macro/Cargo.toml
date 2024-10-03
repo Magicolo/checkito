@@ -14,7 +14,15 @@ rust-version = "1.65.0"
 [lib]
 proc-macro = true
 
+[features]
+default = ["regex", "check"]
+regex = ["regex-syntax/unicode", "syn", "quote"]
+check = ["syn/full", "syn/printing", "quote"]
+
 [dependencies]
-syn = { version = "2.0.79", features = ["full"] }
-quote = "1.0.37"
-regex-syntax = "0.8.5"
+syn = { version = "2.0.79", features = [
+    "proc-macro",
+    "parsing",
+], default-features = false, optional = true }
+quote = { version = "1.0.37", default-features = false, optional = true }
+regex-syntax = { version = "0.8.5", default-features = false, optional = true }
