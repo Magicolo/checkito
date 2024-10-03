@@ -61,6 +61,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: cargo msrv verify
+    - working-directory: checkito_macro
+      run: cargo msrv verify
   audit:
     runs-on: ubuntu-latest
     container: 
