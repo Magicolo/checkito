@@ -54,6 +54,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: cargo semver-checks --verbose
+  msrv:
+    runs-on: ubuntu-latest
+    container: 
+      image: ghcr.io/magicolo/rust
+    steps:
+    - uses: actions/checkout@v4
+    - run: cargo msrv verify
   audit:
     runs-on: ubuntu-latest
     container: 

@@ -1,6 +1,6 @@
 use crate::{Generate, generate::State, prove::Prove, random, shrink::Shrink};
-use core::{error, fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
-use std::{any::Any, borrow::Cow, panic::catch_unwind, result};
+use core::{fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
+use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
 
 /// Bounds the generation process.
 #[derive(Clone, Debug)]
@@ -520,18 +520,17 @@ pub mod help {
     }
 
     #[track_caller]
-    pub fn default<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G>),
-        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
-        C: Fn(G::Item) -> P,
-    >(
+    pub fn default<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
         generator: G,
         update: U,
         check: C,
         color: bool,
         verbose: bool,
-    ) {
+    ) where
+        G::Item: fmt::Debug,
+        P::Proof: fmt::Debug,
+        P::Error: fmt::Debug,
+    {
         with(
             generator,
             update,
@@ -559,18 +558,17 @@ pub mod help {
     }
 
     #[track_caller]
-    pub fn debug<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G>),
-        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
-        C: Fn(G::Item) -> P,
-    >(
+    pub fn debug<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
         generator: G,
         update: U,
         check: C,
         color: bool,
         verbose: bool,
-    ) {
+    ) where
+        G::Item: fmt::Debug,
+        P::Proof: fmt::Debug,
+        P::Error: fmt::Debug,
+    {
         with(
             generator,
             update,
@@ -726,9 +724,9 @@ pub mod help {
 
 mod hook {
     use core::cell::Cell;
-    use std::panic::{self, PanicHookInfo};
+    use std::panic::{self, PanicInfo};
 
-    type Handle = Box<dyn Fn(&PanicHookInfo) + 'static + Sync + Send>;
+    type Handle = Box<dyn Fn(&PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
     pub fn begin() {
@@ -760,7 +758,7 @@ mod hook {
         panic!();
     }
 
-    fn handle(panic: &PanicHookInfo) {
+    fn handle(panic: &PanicInfo) {
         HOOK.with(|cell| {
             if let Some(hook) = cell.replace(None) {
                 hook(panic);
