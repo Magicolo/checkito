@@ -1,4 +1,3 @@
-#![cfg(feature = "default")]
 use checkito::*;
 use core::fmt;
 

@@ -36,7 +36,6 @@ The purpose of the library is to test general properties of a program rather tha
 ### Cheat Sheet
 
 ```rust
-#![cfg(feature = "default")]
 use checkito::*;
 
 /// The `#[check]` attribute is designed to be as thin as possible and
