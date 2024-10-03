@@ -34,7 +34,7 @@ pub trait Sample: Generate {
     }
 
     /// Generates `count` random values the are progressively larger in size.
-    /// For additional sampling settings, see [`Generate::sampler`].
+    /// For additional sampling settings, see [`Sample::sampler`].
     fn samples(&self, count: usize) -> Samples<Self> {
         let mut sampler = self.sampler();
         sampler.count = count;
@@ -42,7 +42,7 @@ pub trait Sample: Generate {
     }
 
     /// Generates a random value of `size` (0.0..=1.0). For additional sampling
-    /// settings, see [`Generate::sampler`].
+    /// settings, see [`Sample::sampler`].
     fn sample(&self, size: f64) -> Self::Item {
         self.sampler().sample(size)
     }
