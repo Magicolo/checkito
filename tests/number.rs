@@ -177,6 +177,7 @@ mod range {
     );
 }
 
+#[cfg(feature = "check")]
 mod check {
     use super::*;
 

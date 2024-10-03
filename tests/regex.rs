@@ -1,3 +1,5 @@
+#![cfg(feature = "regex")]
+
 pub mod common;
 use checkito::regex::Regex;
 use common::*;

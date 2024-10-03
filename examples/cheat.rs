@@ -1,3 +1,4 @@
+#![cfg(all(feature = "check", feature = "regex"))]
 use checkito::*;
 
 /// The `#[check]` attribute is designed to be as thin as possible and

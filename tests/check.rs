@@ -1,3 +1,5 @@
+#![cfg(feature = "check")]
+
 pub mod common;
 use common::*;
 use core::fmt;
@@ -62,12 +64,6 @@ fn compiles_with_discard_and_rest_arguments(
 ) {
 }
 
-#[check(regex!("[0-9]{5}"))]
-fn compiles_with_regex_input(value: String) {
-    assert!(value.len() >= 5);
-    assert!(value.chars().all(|value| value.is_numeric()));
-}
-
 #[check("a string")]
 fn compiles_with_constant_str(_: &str) {}
 
@@ -80,6 +76,13 @@ fn compiles_and_runs_once() {
 
 #[check(1u8, 'a')]
 fn compiles_with_constants_and_runs_once(_: u8, _: char) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), 0);
+}
+
+#[check((), generate.count = 1_000_000)]
+fn compiles_with_unit_and_runs_once_with_generate_count(_: ()) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static COUNT: AtomicUsize = AtomicUsize::new(0);
     assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), 0);
@@ -185,3 +188,14 @@ fn compiles_with_non_debug_parameter(_a: A, _b: B) {}
 #[check(Option::<usize>::generator().map(Option::unwrap))]
 #[should_panic]
 fn panics_with_option_unwrap(_: usize) {}
+
+#[cfg(feature = "regex")]
+mod regex {
+    use super::*;
+
+    #[check(regex!("[0-9]{5}"))]
+    fn compiles_with_regex_input(value: String) {
+        assert!(value.len() >= 5);
+        assert!(value.chars().all(|value| value.is_numeric()));
+    }
+}

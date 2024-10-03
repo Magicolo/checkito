@@ -1,3 +1,5 @@
+#![cfg(feature = "regex")]
+
 use crate::{
     collect,
     generate::{Generate, State},

@@ -98,6 +98,7 @@ macro_rules! collection {
                 );
             }
 
+            #[cfg(feature = "check")]
             #[allow(clippy::boxed_local)]
             mod check {
                 use super::*;
@@ -129,6 +130,7 @@ collection!(box_char, Box<[char]>, iter);
 collection!(rc_char, Rc<[char]>, iter);
 collection!(arc_char, Arc<[char]>, iter);
 
+#[cfg(feature = "check")]
 mod check {
     use super::*;
 

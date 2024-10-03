@@ -1,5 +1,5 @@
 use core::ops::RangeBounds;
-use fastrand::{Rng, u64};
+use fastrand::Rng;
 
 #[derive(Debug, Clone)]
 pub struct Random(Rng);
@@ -15,7 +15,7 @@ impl Random {
 }
 
 pub(crate) fn seed() -> u64 {
-    u64(..)
+    fastrand::u64(..)
 }
 
 macro_rules! bridge {

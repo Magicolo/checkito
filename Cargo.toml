@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "2.0.5"
+version = "2.1.0"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 readme = "README.md"
@@ -15,11 +15,16 @@ rust-version = "1.65.0"
 [badges]
 github = { repository = "Magicolo/checkito", workflow = "test" }
 
+[features]
+default = ["check", "regex"]
+check = ["checkito_macro/check"]
+regex = ["regex-syntax/unicode", "checkito_macro/regex"]
+
 [dependencies]
-checkito_macro = "0.2.4"
-fastrand = "2.1.1"
-regex-syntax = "0.8.5"
-orn = "0.4.3"
+orn = { version = "0.4.3" }
+fastrand = { version = "2.1.1" }
+checkito_macro = { version = "0.2.4", path = "checkito_macro", default-features = false, optional = true }
+regex-syntax = { version = "0.8.5", default-features = false, optional = true }
 
 [dev-dependencies]
 regex = "1.11.0"

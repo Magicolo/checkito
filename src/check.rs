@@ -6,15 +6,21 @@ use std::{any::Any, borrow::Cow, panic::catch_unwind, result};
 #[derive(Clone, Debug)]
 pub struct Generates {
     /// Seed for the random number generator used to generate random primitives.
+    ///
     /// Defaults to a random value.
     pub seed: u64,
     /// Range of sizes that will be gradually traversed while generating values.
+    ///
     /// Defaults to `0.0..1.0`.
     pub size: Range<f64>,
     /// Maximum number of items that will be generated.
+    ///
+    /// Setting this to `0` will cause the [`Checks`] to do nothing.
+    ///
     /// Defaults to `1000`.
     pub count: usize,
     /// Whether or not the [`Checks`] iterator will yield generation items.
+    ///
     /// Defaults to `true`.
     pub items: bool,
 }
@@ -23,12 +29,17 @@ pub struct Generates {
 #[derive(Clone, Debug)]
 pub struct Shrinks {
     /// Maximum number of attempts at shrinking an item that has failed a check.
+    ///
+    /// Setting this to `0` will disable shrinking.
+    ///
     /// Defaults to `usize::MAX`.
     pub count: usize,
     /// Whether or not the [`Checks`] iterator will yield shrinking items.
+    ///
     /// Defaults to `true`.
     pub items: bool,
     /// Whether or not the [`Checks`] iterator will yield shrinking errors.
+    ///
     /// Defaults to `true`.
     pub errors: bool,
 }
@@ -46,11 +57,31 @@ pub struct Checker<'a, G: ?Sized> {
     pub shrink: Shrinks,
 }
 
-/// A structure representing a series of checks to be performed on a generator.
+/// This structure is used to iterate over a sequence of check results.
+/// - The iterator initially starts in a generate phase where it generates items
+///   and it runs check against them.
+/// - If a check passes, a [`Result::Pass`] is produced.
+/// - If a check fails, the iterator enters the shrinking phase.
+/// - When shrinking, the iterator tries to repeatedly shrink the previous item
+///   and runs the check against it.
+/// - It the check passes, a [`Result::Shrink`] is produced and it means that
+///   the shrunk item has failed to reproduce the failing check.
+/// - If the check fails, a [`Result::Shrunk`] is produced and it means that the
+///   shrunk item has successfully reproduced the failing check and is now
+///   current item.
+/// - When the item is fully shrunk, the iterator produces a [`Result::Fail`]
+///   with the final shrunk item in it.
 ///
-/// This structure is used to iterate over a sequence of checks, where each
-/// check is performed on a generated item. It keeps track of the number of
-/// errors encountered and the number of checks remaining.
+/// This iterator guarantees to:
+/// - Yield no results if [`Generates::count`] is set to `0`.
+/// - Yield no results if [`Generates::items`] is set to `false` and all checks
+///   passed.
+/// - Yield only [`Result::Pass`] results if [`Generates::items`] is set to
+///   `true` and all checks passed.
+/// - Never yield a [`Result::Pass`] after a check has failed.
+/// - Always yield a single final result of [`Result::Fail`] if a check failed.
+/// - Yield at most a single [`Result::Pass`] result if [`Generate::constant`]
+///   returns `true`.
 pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     checker: Checker<'a, G>,
     machine: Machine<G::Shrink, E>,
@@ -99,9 +130,13 @@ pub trait Check: Generate {
 
 #[derive(Clone, Debug)]
 pub enum Result<T, P: Prove> {
+    /// An item was generated and passed the check.
     Pass(Pass<T, P::Proof>),
+    /// An item was shrunk and passed the check, thus the shrinking is rejected.
     Shrink(Pass<T, P::Proof>),
+    /// An item was shrunk and failed the check, thus the shrinking is accepted.
     Shrunk(Fail<T, P::Error>),
+    /// The last generated of shrunk item that failed the check.
     Fail(Fail<T, P::Error>),
 }
 
@@ -149,7 +184,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
             generator,
             generate: Generates {
                 items: true,
-                count: if generator.constant() { 1 } else { COUNT },
+                count: COUNT,
                 seed,
                 size: 0.0..1.0,
             },
@@ -202,7 +237,11 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     let result = handle(shrinker.item(), &mut self.check);
                     match result {
                         Ok(proof) => {
-                            self.machine = Machine::Generate { index: index + 1 };
+                            if self.checker.generator.constant() {
+                                self.machine = Machine::Done;
+                            } else {
+                                self.machine = Machine::Generate { index: index + 1 };
+                            }
                             if self.checker.generate.items {
                                 break Some(Result::Pass(Pass {
                                     item: shrinker.item(),
@@ -230,6 +269,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     cause,
                 } => {
                     if indices.1 >= self.checker.shrink.count {
+                        self.machine = Machine::Done;
                         break Some(Result::Fail(Fail {
                             item: shrinker.item(),
                             generates: indices.0,
@@ -242,6 +282,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     let new = match shrinker.shrink() {
                         Some(shrinker) => shrinker,
                         None => {
+                            self.machine = Machine::Done;
                             break Some(Result::Fail(Fail {
                                 item: shrinker.item(),
                                 generates: indices.0,

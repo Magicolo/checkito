@@ -1,7 +1,7 @@
 use crate::{
     generate::{FullGenerate, Generate, IntoGenerate, State},
+    nudge::Nudge,
     shrink::{FullShrink, IntoShrink, Shrink},
-    utility::Nudge,
 };
 use core::{
     convert::TryInto,

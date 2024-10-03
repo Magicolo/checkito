@@ -17,7 +17,7 @@ fn filtered_pair_preserves_inequality() {
 #[test]
 fn filtered_array_preserves_inequality() {
     assert!(
-        regex!("[a-z]+")
+        Generate::collect::<String>('a'..='z')
             .array::<3>()
             .filter(|[a, b, c]| a != b && b != c && a != c)
             .check(|array| match array {

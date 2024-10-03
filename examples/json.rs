@@ -1,3 +1,4 @@
+#![cfg(feature = "regex")]
 use checkito::*;
 use core::fmt;
 
