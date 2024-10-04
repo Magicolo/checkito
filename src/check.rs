@@ -1,4 +1,4 @@
-use crate::{Generate, generate::State, prove::Prove, random, shrink::Shrink};
+use crate::{Generator, generate::State, prove::Prove, random, shrink::Shrinker};
 use core::{fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
 
@@ -44,7 +44,7 @@ pub struct Shrinks {
     pub errors: bool,
 }
 
-/// The [`Checker`] structure holds a reference to a [`Generate`] instance and
+/// The [`Checker`] structure holds a reference to a [`Generator`] instance and
 /// some configuration options for the checking and shrinking processes.
 #[derive(Debug)]
 pub struct Checker<'a, G: ?Sized> {
@@ -82,7 +82,7 @@ pub struct Checker<'a, G: ?Sized> {
 /// - Always yield a single final result of [`Result::Fail`] if a check failed.
 /// - Yield at most a single [`Result::Pass`] result if [`Generate::constant`]
 ///   returns `true`.
-pub struct Checks<'a, G: Generate + ?Sized, E, F> {
+pub struct Checks<'a, G: Generator + ?Sized, E, F> {
     checker: Checker<'a, G>,
     machine: Machine<G::Shrink, E>,
     check: F,
@@ -101,7 +101,7 @@ enum Machine<S, E> {
     Done,
 }
 
-pub trait Check: Generate {
+pub trait Check: Generator {
     fn checker(&self) -> Checker<Self> {
         Checker::new(self, random::seed())
     }
@@ -176,9 +176,9 @@ pub enum Cause<E> {
 
 pub const COUNT: usize = 1000;
 
-impl<G: Generate + ?Sized> Check for G {}
+impl<G: Generator + ?Sized> Check for G {}
 
-impl<'a, G: Generate + ?Sized> Checker<'a, G> {
+impl<'a, G: Generator + ?Sized> Checker<'a, G> {
     pub(crate) fn new(generator: &'a G, seed: u64) -> Self {
         Self {
             generator,
@@ -207,7 +207,7 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
     }
 }
 
-impl<'a, G: Generate + ?Sized> Checker<'a, G> {
+impl<'a, G: Generator + ?Sized> Checker<'a, G> {
     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
         Checks {
             checker: self.clone(),
@@ -217,7 +217,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     }
 }
 
-impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
+impl<G: Generator + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
     for Checks<'_, G, P::Error, F>
 {
     type Item = Result<G::Item, P>;
@@ -470,7 +470,7 @@ impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 #[doc(hidden)]
 pub mod help {
     use super::{Check, Checker, Fail, Pass, Result, environment, hook};
-    use crate::{Generate, Prove};
+    use crate::{Generator, Prove};
     use core::{
         any::type_name,
         fmt::{self, Arguments},
@@ -520,7 +520,7 @@ pub mod help {
     }
 
     #[track_caller]
-    pub fn default<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
+    pub fn default<G: Generator, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
         generator: G,
         update: U,
         check: C,
@@ -558,7 +558,7 @@ pub mod help {
     }
 
     #[track_caller]
-    pub fn debug<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
+    pub fn debug<G: Generator, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
         generator: G,
         update: U,
         check: C,
@@ -581,7 +581,7 @@ pub mod help {
     }
 
     #[track_caller]
-    pub fn minimal<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
+    pub fn minimal<G: Generator, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
         generator: G,
         update: U,
         check: C,
@@ -615,7 +615,7 @@ pub mod help {
 
     #[track_caller]
     fn with<
-        G: Generate,
+        G: Generator,
         U: FnOnce(&mut Checker<G>),
         P: Prove,
         C: Fn(G::Item) -> P,

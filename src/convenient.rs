@@ -1,48 +1,48 @@
-use crate::{Generate, IntoGenerate, primitive::Range};
+use crate::{Generator, IntoGenerator, primitive::Range};
 use core::{
     fmt,
     ops::{RangeFrom, RangeFull, RangeToInclusive},
 };
 
-pub fn number<T>() -> impl Generate<Item = T>
+pub fn number<T>() -> impl Generator<Item = T>
 where
-    Range<T>: Generate<Item = T>,
+    Range<T>: Generator<Item = T>,
     RangeFull: TryInto<Range<T>>,
     <RangeFull as TryInto<Range<T>>>::Error: fmt::Debug,
 {
     (..).try_into().unwrap()
 }
 
-pub fn positive<T: Default>() -> impl Generate<Item = T>
+pub fn positive<T: Default>() -> impl Generator<Item = T>
 where
-    RangeFrom<T>: IntoGenerate<Item = T>,
+    RangeFrom<T>: IntoGenerator<Item = T>,
 {
-    (T::default()..).generator()
+    (T::default()..).into_gen()
 }
 
-pub fn negative<T: Default>() -> impl Generate<Item = T>
+pub fn negative<T: Default>() -> impl Generator<Item = T>
 where
-    RangeToInclusive<T>: IntoGenerate<Item = T>,
+    RangeToInclusive<T>: IntoGenerator<Item = T>,
 {
-    (..=T::default()).generator()
+    (..=T::default()).into_gen()
 }
 
-pub fn letter() -> impl Generate<Item = char> {
-    ('a'..='z', 'A'..='Z').generator().any().map(|or| or.into())
+pub fn letter() -> impl Generator<Item = char> {
+    ('a'..='z', 'A'..='Z').into_gen().any().map(|or| or.into())
 }
 
-pub fn digit() -> impl Generate<Item = char> {
-    ('0'..='9').generator()
+pub fn digit() -> impl Generator<Item = char> {
+    ('0'..='9').into_gen()
 }
 
-pub fn ascii() -> impl Generate<Item = char> {
-    (0 as char..127 as char).generator()
+pub fn ascii() -> impl Generator<Item = char> {
+    (0 as char..127 as char).into_gen()
 }
 
-pub fn with<T, F: Fn() -> T + Clone>(generate: F) -> impl Generate<Item = T> {
+pub fn with<T, F: Fn() -> T + Clone>(generate: F) -> impl Generator<Item = T> {
     ().map(move |_| generate())
 }
 
-pub fn lazy<G: Generate, F: Fn() -> G + Clone>(generate: F) -> impl Generate<Item = G::Item> {
+pub fn lazy<G: Generator, F: Fn() -> G + Clone>(generate: F) -> impl Generator<Item = G::Item> {
     ().flat_map(move |_| generate())
 }

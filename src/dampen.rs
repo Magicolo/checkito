@@ -1,13 +1,13 @@
-use crate::generate::{Generate, State};
+use crate::generate::{Generator, State};
 
 pub struct Dampen<T: ?Sized> {
     pub pressure: f64,
     pub deepest: usize,
     pub limit: usize,
-    pub inner: T,
+    pub generator: T,
 }
 
-impl<G: Generate + ?Sized> Generate for Dampen<G> {
+impl<G: Generator + ?Sized> Generator for Dampen<G> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
@@ -20,12 +20,12 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
         };
         assert!(new.is_finite());
         state.size.0 = new;
-        let shrink = self.inner.generate(state);
+        let shrinker = self.generator.generate(state);
         state.size.0 = old;
-        shrink
+        shrinker
     }
 
     fn constant(&self) -> bool {
-        self.inner.constant()
+        self.generator.constant()
     }
 }

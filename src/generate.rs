@@ -10,12 +10,15 @@ use crate::{
     keep::Keep,
     map::Map,
     primitive::Range,
-    random::Random,
-    shrink::{All, Shrink},
+    random::{self, Random},
+    shrink::{All, Shrinker},
     size::Size,
     utility::tuples,
 };
-use core::{iter::FromIterator, ops};
+use core::{
+    iter::{FromIterator, FusedIterator},
+    ops,
+};
 
 const COUNT: usize = 1024;
 
@@ -28,34 +31,42 @@ pub struct State {
     random: Random,
 }
 
+#[derive(Debug, Clone)]
+pub struct States {
+    indices: ops::Range<usize>,
+    count: usize,
+    size: ops::Range<f64>,
+    seed: u64,
+}
 /// When implemented for a type `T`, this allows to retrieve a generator for `T`
 /// that does not require any parameter. It should be implemented for any type
+
 /// that has a canonical way to be generated. To provide a generator with
-/// parameters, see [`IntoGenerate`].
+/// parameters, see [`IntoGenerator`].
 ///
 /// For example, this trait is implemented for all non-pointer primitive types
 /// and for some standard types (such as [`Option<T>`] and [`Result<T, E>`]).
-pub trait FullGenerate {
+pub trait FullGenerator {
     type Item;
-    type Generate: Generate<Item = Self::Item>;
-    fn generator() -> Self::Generate;
+    type FullGen: Generator<Item = Self::Item>;
+    fn full_gen() -> Self::FullGen;
 }
 
 /// When implemented for a type `T`, this allows to retrieve a generate using
 /// the values in `T`, similar to the [`Into<T>`] trait.
-pub trait IntoGenerate {
+pub trait IntoGenerator {
     type Item;
-    type Generate: Generate<Item = Self::Item>;
-    fn generator(self) -> Self::Generate;
+    type IntoGen: Generator<Item = Self::Item>;
+    fn into_gen(self) -> Self::IntoGen;
 }
 
 #[must_use = "generators do nothing until used"]
-pub trait Generate {
+pub trait Generator {
     type Item;
-    type Shrink: Shrink<Item = Self::Item>;
+    type Shrink: Shrinker<Item = Self::Item>;
 
     /// Primary method of this trait. It generates a [`Shrink`] instance that
-    /// will be able to produce values of type [`Generate::Item`] and shrink
+    /// will be able to produce values of type [`Generator::Item`] and shrink
     /// itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
@@ -65,8 +76,8 @@ pub trait Generate {
         false
     }
 
-    /// Wraps `self` in a boxed [`Generate`]. This is notably relevant for
-    /// recursive [`Generate`] implementations where the type would
+    /// Wraps `self` in a boxed [`Generator`]. This is notably relevant for
+    /// recursive [`Generator`] implementations where the type would
     /// otherwise be infinite.
     ///
     /// # Examples
@@ -78,82 +89,82 @@ pub trait Generate {
     ///     Branch(Vec<Node>),
     /// }
     ///
-    /// fn node() -> impl Generate<Item = Node> {
+    /// fn node() -> impl Generator<Item = Node> {
     ///     (
     ///         with(|| Node::Leaf),
-    ///         // Without [`Generate::boxed`], this type would be infinite.
-    ///         // Without [`Generate::lazy`], the stack would overflow.
-    ///         // Without [`Generate::dampen`], the tree would grow exponentially.
+    ///         // Without [`Generator::boxed`], this type would be infinite.
+    ///         // Without [`Generator::lazy`], the stack would overflow.
+    ///         // Without [`Generator::dampen`], the tree would grow exponentially.
     ///         lazy(node).collect().map(Node::Branch).dampen().boxed(),
     ///     )
     ///         .any()
     ///         .map(|or| or.into())
     /// }
     ///
-    /// fn choose(choose: bool) -> impl Generate<Item = char> {
+    /// fn choose(choose: bool) -> impl Generator<Item = char> {
     ///     if choose {
-    ///         // Without [`Generate::boxed`], the `if/else` branches would not have the same type.
+    ///         // Without [`Generator::boxed`], the `if/else` branches would not have the same type.
     ///         letter().boxed()
     ///     } else {
     ///         digit().boxed()
     ///     }
     /// }
     /// ```
-    fn boxed(self) -> boxed::Generator<Self::Item>
+    fn boxed(self) -> boxed::Gen<Self::Item>
     where
         Self: Sized + 'static,
-        boxed::Generator<Self::Item>: Generate,
+        boxed::Gen<Self::Item>: Generator,
     {
-        boxed::Generator::new(self)
+        boxed::Gen::new(self)
     }
 
-    /// Maps generated [`Generate::Item`] to an arbitrary type `T` using the
+    /// Maps generated [`Generator::Item`] to an arbitrary type `T` using the
     /// provided function `F`.
     fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
     where
         Self: Sized,
-        Map<Self, F>: Generate,
+        Map<Self, F>: Generator,
     {
         Map::new(self, map)
     }
 
-    /// Same as [`Generate::filter_with`] but with a predefined number of
+    /// Same as [`Generator::filter_with`] but with a predefined number of
     /// `retries`.
     fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generate,
+        Filter<Self, F>: Generator,
     {
         self.filter_with(COUNT, filter)
     }
 
-    /// Generates many [`Generate::Item`] with an increasingly large `size`
+    /// Generates many [`Generator::Item`] with an increasingly large `size`
     /// until the filter function `F` is satisfied, up to the maximum number
     /// of `retries`.
     ///
-    /// Since this [`Generate`] implementation is not guaranteed to succeed, the
-    /// item type is changed to a [`Option<Generate::Item>`]
+    /// Since this [`Generator`] implementation is not guaranteed to succeed,
+    /// the item type is changed to a [`Option<Generator::Item>`]
     /// where a [`None`] represents the failure to satisfy the filter.
     fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generate,
+        Filter<Self, F>: Generator,
     {
         Filter::new(self, filter, retries)
     }
 
-    /// Same as [`Generate::filter_map_with`] but with a predefined number of
+    /// Same as [`Generator::filter_map_with`] but with a predefined number of
     /// `retries`.
     fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generate,
+        FilterMap<Self, F>: Generator,
     {
         self.filter_map_with(COUNT, map)
     }
 
-    /// Combines [`Generate::map`] and [`Generate::filter`] in a single
-    /// [`Generate`] implementation where the map function is considered to
+    /// Combines [`Generator::map`] and [`Generator::filter`] in a single
+    /// [`Generator`] implementation where the map function is considered to
     /// satisfy the filter when a [`Some(T)`] is produced.
     fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
         self,
@@ -162,34 +173,34 @@ pub trait Generate {
     ) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generate,
+        FilterMap<Self, F>: Generator,
     {
         FilterMap::new(self, map, retries)
     }
 
-    /// Combines [`Generate::map`] and [`Generate::flatten`] in a single
-    /// [`Generate`] implementation.
-    fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
+    /// Combines [`Generator::map`] and [`Generator::flatten`] in a single
+    /// [`Generator`] implementation.
+    fn flat_map<G: Generator, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
-        Map<Self, F>: Generate<Item = G>,
-        Flatten<Map<Self, F>>: Generate,
+        Map<Self, F>: Generator<Item = G>,
+        Flatten<Map<Self, F>>: Generator,
     {
         self.map(map).flatten()
     }
 
-    /// Flattens the [`Generate::Item`], assuming that it implements
-    /// [`Generate`]. The resulting item type is `<Generate::Item as
-    /// Generate>::Item`.
+    /// Flattens the [`Generator::Item`], assuming that it implements
+    /// [`Generator`]. The resulting item type is `<Generator::Item as
+    /// Generator>::Item`.
     ///
-    /// Additionally, the call to [`Generate::generate`] to the inner
-    /// [`Generate`] implementation will have its `depth` increased by `1`.
-    /// The `depth` is a value used by other [`Generate`] implementations (such
-    /// as [`Generate::size`] and [`Generate::dampen`]) to alter the `size`
+    /// Additionally, the call to [`Generator::generate`] to the inner
+    /// [`Generator`] implementation will have its `depth` increased by `1`.
+    /// The `depth` is a value used by other [`Generator`] implementations (such
+    /// as [`Generator::size`] and [`Generator::dampen`]) to alter the `size`
     /// of generated items. It tries to represent the recursion depth since it
-    /// is expected that recursive [`Generate`] instances will need to go
+    /// is expected that recursive [`Generator`] instances will need to go
     /// through it. Implementations such as [`lazy`](crate::lazy)
-    /// and [`Generate::flat_map`] use it.
+    /// and [`Generator::flat_map`] use it.
     ///
     /// The `depth` is particularly useful to limit the amount of recursion that
     /// happens for structures that potentially explode exponentially as the
@@ -197,25 +208,25 @@ pub trait Generate {
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
-        Self::Item: Generate,
-        Flatten<Self>: Generate,
+        Self::Item: Generator,
+        Flatten<Self>: Generator,
     {
         Flatten(self)
     }
 
-    /// For a type `T` where [`Any<T>`] implements [`Generate`], the behavior of
-    /// the generation changes from *generate all* of my components to
+    /// For a type `T` where [`Any<T>`] implements [`Generator`], the behavior
+    /// of the generation changes from *generate all* of my components to
     /// *generate one* of my components chosen randomly. It is implemented
     /// for tuples, slices, arrays, [`Vec<T>`] and a few other collections.
     ///
     /// The random selection can be controlled by wrapping each element of a
     /// supported collection in a [`any::Weight`](crate::any::Weight), which
-    /// will inform the [`Generate`] implementation to perform a weighted random
-    /// between elements of the collection.
+    /// will inform the [`Generator`] implementation to perform a weighted
+    /// random between elements of the collection.
     fn any(self) -> Any<Self>
     where
         Self: Sized,
-        Any<Self>: Generate,
+        Any<Self>: Generator,
     {
         Any(self)
     }
@@ -224,30 +235,30 @@ pub trait Generate {
     fn array<const N: usize>(self) -> Array<Self, N>
     where
         Self: Sized,
-        Array<Self, N>: Generate,
+        Array<Self, N>: Generator,
     {
         Array(self)
     }
 
-    /// Same as [`Generate::collect_with`] but with a predefined `count`.
+    /// Same as [`Generator::collect_with`] but with a predefined `count`.
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Range<usize>, F>
     where
         Self: Sized,
-        Collect<Self, Range<usize>, F>: Generate,
+        Collect<Self, Range<usize>, F>: Generator,
     {
-        self.collect_with((..COUNT).generator())
+        self.collect_with((..COUNT).into_gen())
     }
 
     /// Generates a variable number of items based on the provided `count`
-    /// [`Generate`] and then builds a value of type `F` based on its
+    /// [`Generator`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
-    fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
+    fn collect_with<C: Generator<Item = usize>, F: FromIterator<Self::Item>>(
         self,
         count: C,
     ) -> Collect<Self, C, F>
     where
         Self: Sized,
-        Collect<Self, C, F>: Generate,
+        Collect<Self, C, F>: Generator,
     {
         Collect::new(self, count)
     }
@@ -257,7 +268,7 @@ pub trait Generate {
     /// big* the generated items are based on the generator's constraints. The
     /// generation process will initially try to produce *small* items and
     /// then move on to *bigger* ones. Note that the `size` does not
-    /// guarantee a *small* or *big* generated item since [`Generate`]
+    /// guarantee a *small* or *big* generated item since [`Generator`]
     /// implementations are free to interpret it as they wish, although that
     /// is its intention.
     ///
@@ -275,38 +286,38 @@ pub trait Generate {
     fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
-        Size<Self, F>: Generate,
+        Size<Self, F>: Generator,
     {
         Size(self, map)
     }
 
-    /// Same as [`Generate::dampen_with`] but with predefined arguments.
+    /// Same as [`Generator::dampen_with`] but with predefined arguments.
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
-        Size<Self>: Generate,
+        Size<Self>: Generator,
     {
         self.dampen_with(1.0, 8, 8192)
     }
 
-    /// Dampens the `size` (see [`Generate::size`] for more information about
+    /// Dampens the `size` (see [`Generator::size`] for more information about
     /// `size`) as items are generated.
     /// - The `pressure` can be thought of as *how fast* will the `size` be
-    ///   reduced as the `depth` increases (see [`Generate::flatten`] for more
+    ///   reduced as the `depth` increases (see [`Generator::flatten`] for more
     ///   information about `depth`).
     /// - The `deepest` will set the `size` to `0` when the `depth` is `>=` than
     ///   it.
     /// - The `limit` will set the `size` to `0` after the number of times that
     ///   the `depth` increased is `>=` than it.
     ///
-    /// This [`Generate`] implementation is particularly useful to limit the
+    /// This [`Generator`] implementation is particularly useful to limit the
     /// amount of recursion that happens for structures that are infinite
     /// and potentially explode exponentially as the recursion depth increases
     /// (think of a tree structure).
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
-        Dampen<Self>: Generate,
+        Dampen<Self>: Generator,
     {
         assert!(pressure.is_finite());
         assert!(pressure >= 0.0);
@@ -314,7 +325,7 @@ pub trait Generate {
             pressure,
             deepest,
             limit,
-            inner: self,
+            generator: self,
         }
     }
 
@@ -323,7 +334,7 @@ pub trait Generate {
     fn keep(self) -> Keep<Self>
     where
         Self: Sized,
-        Keep<Self>: Generate,
+        Keep<Self>: Generator,
     {
         Keep(self)
     }
@@ -353,6 +364,92 @@ impl State {
     }
 }
 
+impl States {
+    pub fn new(count: usize, size: ops::Range<f64>, seed: Option<u64>) -> Self {
+        Self {
+            indices: 0..count,
+            count,
+            size,
+            seed: seed.unwrap_or_else(random::seed),
+        }
+    }
+}
+
+impl Iterator for States {
+    type Item = State;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(State::new(
+            self.indices.next()?,
+            self.count,
+            self.size.clone(),
+            self.seed,
+        ))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.indices.size_hint()
+    }
+
+    fn count(self) -> usize {
+        self.indices.count()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        Some(State::new(
+            self.indices.nth(n)?,
+            self.count,
+            self.size.clone(),
+            self.seed,
+        ))
+    }
+
+    fn last(mut self) -> Option<Self::Item> {
+        Some(State::new(
+            self.indices.next()?,
+            self.count,
+            self.size.clone(),
+            self.seed,
+        ))
+    }
+}
+
+impl ExactSizeIterator for States {
+    fn len(&self) -> usize {
+        self.indices.len()
+    }
+}
+
+impl DoubleEndedIterator for States {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        Some(State::new(
+            self.indices.next_back()?,
+            self.count,
+            self.size.clone(),
+            self.seed,
+        ))
+    }
+
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        Some(State::new(
+            self.indices.nth_back(n)?,
+            self.count,
+            self.size.clone(),
+            self.seed,
+        ))
+    }
+}
+
+impl FusedIterator for States {}
+
+// pub fn states(count: usize) -> impl ExactSizeIterator<Item = State>
+
+// pub fn states_with(count: usize, size: ops::Range<f64>, seed: u64) -> impl
+// Iterator<Item = State> {     Iterator::map(0..count, move |index| {
+//         State::new(index, count, size.clone(), seed)
+//     })
+// }
+
 pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f64, f64) {
     size.start = size.start.clamp(0.0, 1.0);
     size.end = size.end.clamp(0.0, 1.0);
@@ -369,43 +466,43 @@ pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f6
     }
 }
 
-impl<G: FullGenerate + ?Sized> FullGenerate for &G {
-    type Generate = G::Generate;
+impl<G: FullGenerator + ?Sized> FullGenerator for &G {
+    type FullGen = G::FullGen;
     type Item = G::Item;
 
-    fn generator() -> Self::Generate {
-        G::generator()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen()
     }
 }
 
-impl<G: FullGenerate + ?Sized> FullGenerate for &mut G {
-    type Generate = G::Generate;
+impl<G: FullGenerator + ?Sized> FullGenerator for &mut G {
+    type FullGen = G::FullGen;
     type Item = G::Item;
 
-    fn generator() -> Self::Generate {
-        G::generator()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen()
     }
 }
 
-impl<G: IntoGenerate + Clone> IntoGenerate for &G {
-    type Generate = G::Generate;
+impl<G: IntoGenerator + Clone> IntoGenerator for &G {
+    type IntoGen = G::IntoGen;
     type Item = G::Item;
 
-    fn generator(self) -> Self::Generate {
-        self.clone().generator()
+    fn into_gen(self) -> Self::IntoGen {
+        self.clone().into_gen()
     }
 }
 
-impl<G: IntoGenerate + Clone> IntoGenerate for &mut G {
-    type Generate = G::Generate;
+impl<G: IntoGenerator + Clone> IntoGenerator for &mut G {
+    type IntoGen = G::IntoGen;
     type Item = G::Item;
 
-    fn generator(self) -> Self::Generate {
-        self.clone().generator()
+    fn into_gen(self) -> Self::IntoGen {
+        self.clone().into_gen()
     }
 }
 
-impl<G: Generate + ?Sized> Generate for &G {
+impl<G: Generator + ?Sized> Generator for &G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
@@ -418,7 +515,7 @@ impl<G: Generate + ?Sized> Generate for &G {
     }
 }
 
-impl<G: Generate + ?Sized> Generate for &mut G {
+impl<G: Generator + ?Sized> Generator for &mut G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
@@ -433,27 +530,27 @@ impl<G: Generate + ?Sized> Generate for &mut G {
 
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: FullGenerate,)*> FullGenerate for ($($t,)*) {
+        impl<$($t: FullGenerator,)*> FullGenerator for ($($t,)*) {
             type Item = ($($t::Item,)*);
-            type Generate = ($($t::Generate,)*);
+            type FullGen = ($($t::FullGen,)*);
 
             #[allow(clippy::unused_unit)]
-            fn generator() -> Self::Generate {
-                ($($t::generator(),)*)
+            fn full_gen() -> Self::FullGen {
+                ($($t::full_gen(),)*)
             }
         }
 
-        impl<$($t: IntoGenerate,)*> IntoGenerate for ($($t,)*) {
+        impl<$($t: IntoGenerator,)*> IntoGenerator for ($($t,)*) {
             type Item = ($($t::Item,)*);
-            type Generate = ($($t::Generate,)*);
+            type IntoGen = ($($t::IntoGen,)*);
 
             #[allow(clippy::unused_unit)]
-            fn generator(self) -> Self::Generate {
-                ($(self.$i.generator(),)*)
+            fn into_gen(self) -> Self::IntoGen {
+                ($(self.$i.into_gen(),)*)
             }
         }
 
-        impl<$($t: Generate,)*> Generate for ($($t,)*) {
+        impl<$($t: Generator,)*> Generator for ($($t,)*) {
             type Item = ($($t::Item,)*);
             type Shrink = All<($($t::Shrink,)*)>;
 

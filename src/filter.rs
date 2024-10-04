@@ -1,42 +1,41 @@
 use crate::{
-    IntoShrink,
-    generate::{self, Generate, State},
-    shrink::Shrink,
+    generate::{self, Generator, State},
+    shrink::Shrinker,
 };
 
 #[derive(Clone, Debug, Default)]
-pub struct Filter<I: ?Sized, F> {
+pub struct Filter<G: ?Sized, F> {
     filter: F,
     retries: usize,
-    inner: I,
+    generator: G,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Shrinker<I, F> {
-    inner: Option<I>,
+pub struct Shrink<S, F> {
+    shrinker: Option<S>,
     filter: F,
 }
 
-impl<G: Generate, F: Fn(&G::Item) -> bool> Filter<G, F> {
-    pub const fn new(generate: G, filter: F, retries: usize) -> Self {
+impl<G: Generator, F: Fn(&G::Item) -> bool> Filter<G, F> {
+    pub const fn new(generator: G, filter: F, retries: usize) -> Self {
         Self {
-            inner: generate,
+            generator,
             filter,
             retries,
         }
     }
 }
 
-impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<G, F> {
+impl<G: Generator + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generator for Filter<G, F> {
     type Item = Option<G::Item>;
-    type Shrink = Shrinker<G::Shrink, F>;
+    type Shrink = Shrink<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
         let size = state.size;
         for i in 0..self.retries {
             state.size = generate::size(i, self.retries, size.0..size.1);
-            let inner = self.inner.generate(state);
+            let inner = self.generator.generate(state);
             let item = inner.item();
             if self.constant() || (self.filter)(&item) {
                 outer = Some(inner);
@@ -44,40 +43,28 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
             }
         }
         state.size = size;
-        Shrinker {
-            inner: outer,
+        Shrink {
+            shrinker: outer,
             filter: self.filter.clone(),
         }
     }
 
     fn constant(&self) -> bool {
-        self.inner.constant()
+        self.retries == 0 || self.generator.constant()
     }
 }
 
-impl<S: IntoShrink, F: Fn(&S::Item) -> bool + Clone> IntoShrink for Filter<S, F> {
-    type Item = Option<S::Item>;
-    type Shrink = Shrinker<S::Shrink, F>;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        Some(Shrinker {
-            filter: self.filter.clone(),
-            inner: self.inner.shrinker(item?),
-        })
-    }
-}
-
-impl<S: Shrink, F: Fn(&S::Item) -> bool + Clone> Shrink for Shrinker<S, F> {
+impl<S: Shrinker, F: Fn(&S::Item) -> bool + Clone> Shrinker for Shrink<S, F> {
     type Item = Option<S::Item>;
 
     fn item(&self) -> Self::Item {
-        self.inner.item().filter(&self.filter)
+        self.shrinker.item().filter(&self.filter)
     }
 
     fn shrink(&mut self) -> Option<Self> {
-        Some(Shrinker {
+        Some(Shrink {
             filter: self.filter.clone(),
-            inner: self.inner.shrink()?,
+            shrinker: self.shrinker.shrink()?,
         })
     }
 }

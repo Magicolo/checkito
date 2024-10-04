@@ -1,9 +1,9 @@
 use crate::{
-    generate::{FullGenerate, Generate, IntoGenerate, State},
+    generate::{FullGenerator, Generator, IntoGenerator, State},
     primitive::{self, Range},
     same::Same,
     sample::Sample,
-    shrink::{All, Shrink},
+    shrink::{All, Shrinker},
 };
 use core::{
     hash::{BuildHasher, Hash},
@@ -21,18 +21,18 @@ pub struct Collect<I: ?Sized, C, F: ?Sized> {
     _marker: PhantomData<F>,
     count: C,
     minimum: usize,
-    inner: I,
+    generator: I,
 }
 
 #[derive(Debug, Default)]
-pub struct Generator<I, F: ?Sized> {
-    items: Vec<I>,
+pub struct Gen<I, F: ?Sized> {
+    generators: Vec<I>,
     _marker: PhantomData<F>,
 }
 
 #[derive(Debug)]
-pub struct Shrinker<I, F: ?Sized> {
-    items: Vec<I>,
+pub struct Shrink<I, F: ?Sized> {
+    shrinkers: Vec<I>,
     machine: Machine,
     minimum: usize,
     _marker: PhantomData<F>,
@@ -40,17 +40,17 @@ pub struct Shrinker<I, F: ?Sized> {
 
 #[derive(Debug, Clone)]
 enum Machine {
-    Truncate(primitive::Shrinker<usize>),
+    Truncate(primitive::Shrink<usize>),
     Remove(usize),
     Shrink(usize),
     Done,
 }
 
-impl<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>> Collect<G, C, F> {
-    pub fn new(generate: G, count: C) -> Self {
+impl<G: Generator, C: Generator<Item = usize>, F: FromIterator<G::Item>> Collect<G, C, F> {
+    pub fn new(generator: G, count: C) -> Self {
         let minimum = count.sample(0.0);
         Self {
-            inner: generate,
+            generator,
             count,
             minimum,
             _marker: PhantomData,
@@ -58,21 +58,23 @@ impl<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>> Collect<G
     }
 }
 
-impl<G: Generate, F: FromIterator<G::Item>> Generator<G, F> {
-    pub fn new(generates: impl IntoIterator<Item = G>) -> Self {
+impl<G: Generator, F: FromIterator<G::Item>> Gen<G, F> {
+    pub(crate) fn new(generators: impl IntoIterator<Item = G>) -> Self {
         Self {
-            items: generates.into_iter().collect(),
+            generators: generators.into_iter().collect(),
             _marker: PhantomData,
         }
     }
 }
 
-impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
-    pub fn new(shrinks: Vec<S>, minimum: usize) -> Self {
-        let maximum = shrinks.len();
+impl<S: Shrinker, F: FromIterator<S::Item>> Shrink<S, F> {
+    pub(crate) fn new(shrinkers: impl IntoIterator<Item = S>, minimum: Option<usize>) -> Self {
+        let shrinkers = shrinkers.into_iter().collect::<Vec<_>>();
+        let minimum = minimum.unwrap_or(shrinkers.len());
+        let maximum = shrinkers.len();
         Self {
-            items: shrinks,
-            machine: Machine::Truncate(primitive::Shrinker::new(
+            shrinkers,
+            machine: Machine::Truncate(primitive::Shrink::new(
                 Range::usize(minimum..=maximum).unwrap(),
                 maximum,
             )),
@@ -81,15 +83,15 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
         }
     }
 
-    pub fn shrinks(&self) -> &[S] {
-        &self.items
+    pub fn shrinkers(&self) -> &[S] {
+        &self.shrinkers
     }
 }
 
 impl<I: Clone, C: Clone, F> Clone for Collect<I, C, F> {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone(),
+            generator: self.generator.clone(),
             count: self.count.clone(),
             minimum: self.minimum,
             _marker: PhantomData,
@@ -97,10 +99,10 @@ impl<I: Clone, C: Clone, F> Clone for Collect<I, C, F> {
     }
 }
 
-impl<I: Clone, F> Clone for Shrinker<I, F> {
+impl<I: Clone, F> Clone for Shrink<I, F> {
     fn clone(&self) -> Self {
         Self {
-            items: self.items.clone(),
+            shrinkers: self.shrinkers.clone(),
             machine: self.machine.clone(),
             minimum: self.minimum,
             _marker: PhantomData,
@@ -108,44 +110,45 @@ impl<I: Clone, F> Clone for Shrinker<I, F> {
     }
 }
 
-impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> Generate
+impl<G: Generator + ?Sized, C: Generator<Item = usize>, F: FromIterator<G::Item>> Generator
     for Collect<G, C, F>
 {
     type Item = F;
-    type Shrink = Shrinker<G::Shrink, F>;
+    type Shrink = Shrink<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let count = self.count.generate(state).item();
-        let shrinks = Iterator::map(0..count, |_| self.inner.generate(state));
-        Shrinker::new(shrinks.collect(), self.minimum)
+        let shrinkers = Iterator::map(0..count, |_| self.generator.generate(state));
+        Shrink::new(shrinkers, Some(self.minimum))
     }
 
     fn constant(&self) -> bool {
-        self.count.constant() && self.inner.constant()
+        self.count.constant() && self.generator.constant()
     }
 }
 
-impl<G: Generate, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generate
-    for Generator<G, F>
-{
+impl<G: Generator, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generator for Gen<G, F> {
     type Item = F;
-    type Shrink = Shrinker<G::Shrink, F>;
+    type Shrink = Shrink<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let shrinks = self.items.iter().map(|generate| generate.generate(state));
-        Shrinker::new(shrinks.collect(), 0)
+        let shrinkers = self
+            .generators
+            .iter()
+            .map(|generator| generator.generate(state));
+        Shrink::new(shrinkers, Some(0))
     }
 
     fn constant(&self) -> bool {
-        self.items.iter().all(G::constant)
+        self.generators.iter().all(G::constant)
     }
 }
 
-impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
+impl<S: Shrinker, F: FromIterator<S::Item>> Shrinker for Shrink<S, F> {
     type Item = F;
 
     fn item(&self) -> Self::Item {
-        self.items.iter().map(S::item).collect()
+        self.shrinkers.iter().map(S::item).collect()
     }
 
     fn shrink(&mut self) -> Option<Self> {
@@ -154,11 +157,11 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                 // Try to truncate irrelevant generators aggressively.
                 Machine::Truncate(mut outer) => match outer.shrink() {
                     Some(inner) => {
-                        let mut items = self.items.clone();
-                        items.truncate(inner.item());
+                        let mut shrinkers = self.shrinkers.clone();
+                        shrinkers.truncate(inner.item());
                         self.machine = Machine::Truncate(outer);
                         break Some(Self {
-                            items,
+                            shrinkers,
                             machine: Machine::Truncate(inner),
                             minimum: self.minimum,
                             _marker: PhantomData,
@@ -168,12 +171,12 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                 },
                 // Try to remove irrelevant generators one by one.
                 Machine::Remove(index) => {
-                    if index < self.items.len() && self.minimum < self.items.len() {
-                        let mut items = self.items.clone();
-                        items.remove(index);
+                    if index < self.shrinkers.len() && self.minimum < self.shrinkers.len() {
+                        let mut shrinkers = self.shrinkers.clone();
+                        shrinkers.remove(index);
                         self.machine = Machine::Remove(index + 1);
                         break Some(Self {
-                            items,
+                            shrinkers,
                             machine: Machine::Remove(index),
                             minimum: self.minimum,
                             _marker: PhantomData,
@@ -184,13 +187,13 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                 }
                 // Try to shrink each generator and succeed if any generator is shrunk.
                 Machine::Shrink(index) => {
-                    if let Some(old) = self.items.get_mut(index) {
+                    if let Some(old) = self.shrinkers.get_mut(index) {
                         if let Some(new) = old.shrink() {
-                            let mut items = self.items.clone();
-                            items[index] = new;
+                            let mut shrinkers = self.shrinkers.clone();
+                            shrinkers[index] = new;
                             self.machine = Machine::Shrink(index);
                             return Some(Self {
-                                items,
+                                shrinkers,
                                 machine: Machine::Shrink(index),
                                 minimum: self.minimum,
                                 _marker: PhantomData,
@@ -210,12 +213,12 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
 
 macro_rules! full {
     ($t:ty, $f:ty) => {
-        impl<G: FullGenerate> FullGenerate for $t {
-            type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+        impl<G: FullGenerator> FullGenerator for $t {
+            type FullGen = Collect<G::FullGen, Range<usize>, Self::Item>;
             type Item = $f;
 
-            fn generator() -> Self::Generate {
-                G::generator().collect()
+            fn full_gen() -> Self::FullGen {
+                G::full_gen().collect()
             }
         }
     };
@@ -223,12 +226,12 @@ macro_rules! full {
 
 macro_rules! into {
     ($t:ty, $g:ty, $f:ty) => {
-        impl<G: IntoGenerate> IntoGenerate for $t {
-            type Generate = $g;
+        impl<G: IntoGenerator> IntoGenerator for $t {
+            type IntoGen = $g;
             type Item = $f;
 
-            fn generator(self) -> Self::Generate {
-                self.into_iter().map(G::generator).collect()
+            fn into_gen(self) -> Self::IntoGen {
+                self.into_iter().map(G::into_gen).collect()
             }
         }
     };
@@ -238,17 +241,12 @@ macro_rules! slice {
     ($t:ty, $f:ty) => {
         full!($t, $f);
 
-        impl<G: Generate> Generate for $t {
+        impl<G: Generator> Generator for $t {
             type Item = $f;
-            type Shrink = Shrinker<G::Shrink, Self::Item>;
+            type Shrink = Shrink<G::Shrink, Self::Item>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let shrinks = self
-                    .iter()
-                    .map(|generate| generate.generate(state))
-                    .collect::<Vec<_>>();
-                let minimum = shrinks.len();
-                Shrinker::new(shrinks, minimum)
+                Shrink::new(self.iter().map(|generator| generator.generate(state)), None)
             }
 
             fn constant(&self) -> bool {
@@ -263,16 +261,15 @@ macro_rules! collection {
         full!($t, $f);
         into!($t, $g, $f);
 
-        impl<G: Generate> Generate for $t {
+        impl<G: Generator> Generator for $t {
             type Item = $f;
-            type Shrink = Shrinker<G::Shrink, Self::Item>;
+            type Shrink = Shrink<G::Shrink, Self::Item>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let shrinks = self
-                    .iter()
-                    .map(|generate| generate.generate(state))
-                    .collect();
-                Shrinker::new(shrinks, 0)
+                Shrink::new(
+                    self.iter().map(|generator| generator.generate(state)),
+                    Some(0),
+                )
             }
 
             fn constant(&self) -> bool {
@@ -282,38 +279,38 @@ macro_rules! collection {
     };
 }
 
-collection!(Vec<G>, Vec<G::Generate>, Vec<G::Item>);
-collection!(VecDeque<G>, VecDeque<G::Generate>, VecDeque<G::Item>);
-collection!(LinkedList<G>, LinkedList<G::Generate>, LinkedList<G::Item>);
+collection!(Vec<G>, Vec<G::IntoGen>, Vec<G::Item>);
+collection!(VecDeque<G>, VecDeque<G::IntoGen>, VecDeque<G::Item>);
+collection!(LinkedList<G>, LinkedList<G::IntoGen>, LinkedList<G::Item>);
 slice!([G], Box<[G::Item]>);
 slice!(Box<[G]>, Box<[G::Item]>);
 slice!(Rc<[G]>, Rc<[G::Item]>);
 slice!(Arc<[G]>, Arc<[G::Item]>);
 
-impl<G: IntoGenerate> IntoGenerate for Box<[G]> {
-    type Generate = Box<[G::Generate]>;
+impl<G: IntoGenerator> IntoGenerator for Box<[G]> {
+    type IntoGen = Box<[G::IntoGen]>;
     type Item = Box<[G::Item]>;
 
-    fn generator(self) -> Self::Generate {
-        self.into_vec().into_iter().map(G::generator).collect()
+    fn into_gen(self) -> Self::IntoGen {
+        self.into_vec().into_iter().map(G::into_gen).collect()
     }
 }
 
-impl FullGenerate for String {
-    type Generate = Collect<<char as FullGenerate>::Generate, Range<usize>, Self::Item>;
+impl FullGenerator for String {
+    type FullGen = Collect<<char as FullGenerator>::FullGen, Range<usize>, Self::Item>;
     type Item = Self;
 
-    fn generator() -> Self::Generate {
-        char::generator().collect()
+    fn full_gen() -> Self::FullGen {
+        char::full_gen().collect()
     }
 }
 
-impl Generate for String {
+impl Generator for String {
     type Item = Self;
-    type Shrink = Shrinker<char, Self::Item>;
+    type Shrink = Shrink<char, Self::Item>;
 
     fn generate(&self, _: &mut State) -> Self::Shrink {
-        Shrinker::new(self.chars().collect(), 0)
+        Shrink::new(self.chars(), Some(0))
     }
 
     fn constant(&self) -> bool {
@@ -321,33 +318,33 @@ impl Generate for String {
     }
 }
 
-impl<K: FullGenerate<Item = impl Ord>, V: FullGenerate> FullGenerate for BTreeMap<K, V> {
-    type Generate = Collect<<(K, V) as FullGenerate>::Generate, Range<usize>, Self::Item>;
+impl<K: FullGenerator<Item = impl Ord>, V: FullGenerator> FullGenerator for BTreeMap<K, V> {
+    type FullGen = Collect<<(K, V) as FullGenerator>::FullGen, Range<usize>, Self::Item>;
     type Item = BTreeMap<K::Item, V::Item>;
 
-    fn generator() -> Self::Generate {
-        <(K, V)>::generator().collect()
+    fn full_gen() -> Self::FullGen {
+        <(K, V)>::full_gen().collect()
     }
 }
 
-impl<K: Ord + Clone, V: IntoGenerate> IntoGenerate for BTreeMap<K, V> {
-    type Generate = Generator<(Same<K>, V::Generate), Self::Item>;
+impl<K: Ord + Clone, V: IntoGenerator> IntoGenerator for BTreeMap<K, V> {
+    type IntoGen = Gen<(Same<K>, V::IntoGen), Self::Item>;
     type Item = BTreeMap<K, V::Item>;
 
-    fn generator(self) -> Self::Generate {
-        Generator::new(
+    fn into_gen(self) -> Self::IntoGen {
+        Gen::new(
             self.into_iter()
-                .map(|(key, value)| (Same(key), value.generator())),
+                .map(|(key, value)| (Same(key), value.into_gen())),
         )
     }
 }
 
-impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
+impl<K: Ord + Clone, V: Generator> Generator for BTreeMap<K, V> {
     type Item = BTreeMap<K, V::Item>;
-    type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
+    type Shrink = Shrink<All<(Same<K>, V::Shrink)>, Self::Item>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
+        Gen::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
 
     fn constant(&self) -> bool {
@@ -355,30 +352,30 @@ impl<K: Ord + Clone, V: Generate> Generate for BTreeMap<K, V> {
     }
 }
 
-impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BTreeSet<G> {
-    type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+impl<G: FullGenerator<Item = impl Ord>> FullGenerator for BTreeSet<G> {
+    type FullGen = Collect<G::FullGen, Range<usize>, Self::Item>;
     type Item = BTreeSet<G::Item>;
 
-    fn generator() -> Self::Generate {
-        G::generator().collect()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen().collect()
     }
 }
 
-impl<G: IntoGenerate<Item = impl Ord>> IntoGenerate for BTreeSet<G> {
-    type Generate = Generator<G::Generate, Self::Item>;
+impl<G: IntoGenerator<Item = impl Ord>> IntoGenerator for BTreeSet<G> {
+    type IntoGen = Gen<G::IntoGen, Self::Item>;
     type Item = BTreeSet<G::Item>;
 
-    fn generator(self) -> Self::Generate {
-        Generator::new(self.into_iter().map(G::generator))
+    fn into_gen(self) -> Self::IntoGen {
+        Gen::new(self.into_iter().map(G::into_gen))
     }
 }
 
-impl<G: Generate<Item = impl Ord>> Generate for BTreeSet<G> {
+impl<G: Generator<Item = impl Ord>> Generator for BTreeSet<G> {
     type Item = BTreeSet<G::Item>;
-    type Shrink = Shrinker<G::Shrink, Self::Item>;
+    type Shrink = Shrink<G::Shrink, Self::Item>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(self).generate(state)
+        Gen::new(self).generate(state)
     }
 
     fn constant(&self) -> bool {
@@ -386,37 +383,37 @@ impl<G: Generate<Item = impl Ord>> Generate for BTreeSet<G> {
     }
 }
 
-impl<K: FullGenerate<Item = impl Eq + Hash>, V: FullGenerate, S: BuildHasher + Default> FullGenerate
-    for HashMap<K, V, S>
+impl<K: FullGenerator<Item = impl Eq + Hash>, V: FullGenerator, S: BuildHasher + Default>
+    FullGenerator for HashMap<K, V, S>
 {
-    type Generate = Collect<<(K, V) as FullGenerate>::Generate, Range<usize>, Self::Item>;
+    type FullGen = Collect<<(K, V) as FullGenerator>::FullGen, Range<usize>, Self::Item>;
     type Item = HashMap<K::Item, V::Item, S>;
 
-    fn generator() -> Self::Generate {
-        <(K, V)>::generator().collect()
+    fn full_gen() -> Self::FullGen {
+        <(K, V)>::full_gen().collect()
     }
 }
 
-impl<K: Eq + Hash + Clone, V: IntoGenerate, S: BuildHasher + Default> IntoGenerate
+impl<K: Eq + Hash + Clone, V: IntoGenerator, S: BuildHasher + Default> IntoGenerator
     for HashMap<K, V, S>
 {
-    type Generate = Generator<(Same<K>, V::Generate), Self::Item>;
+    type IntoGen = Gen<(Same<K>, V::IntoGen), Self::Item>;
     type Item = HashMap<K, V::Item, S>;
 
-    fn generator(self) -> Self::Generate {
-        Generator::new(
+    fn into_gen(self) -> Self::IntoGen {
+        Gen::new(
             self.into_iter()
-                .map(|(key, value)| (Same(key), value.generator())),
+                .map(|(key, value)| (Same(key), value.into_gen())),
         )
     }
 }
 
-impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for HashMap<K, V, S> {
+impl<K: Eq + Hash + Clone, V: Generator, S: BuildHasher + Default> Generator for HashMap<K, V, S> {
     type Item = HashMap<K, V::Item, S>;
-    type Shrink = Shrinker<All<(Same<K>, V::Shrink)>, Self::Item>;
+    type Shrink = Shrink<All<(Same<K>, V::Shrink)>, Self::Item>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
+        Gen::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
     }
 
     fn constant(&self) -> bool {
@@ -424,32 +421,32 @@ impl<K: Eq + Hash + Clone, V: Generate, S: BuildHasher + Default> Generate for H
     }
 }
 
-impl<G: FullGenerate<Item = impl Eq + Hash>, S: BuildHasher + Default> FullGenerate
+impl<G: FullGenerator<Item = impl Eq + Hash>, S: BuildHasher + Default> FullGenerator
     for HashSet<G, S>
 {
-    type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+    type FullGen = Collect<G::FullGen, Range<usize>, Self::Item>;
     type Item = HashSet<G::Item, S>;
 
-    fn generator() -> Self::Generate {
-        G::generator().collect()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen().collect()
     }
 }
 
-impl<G: IntoGenerate<Item = impl Eq + Hash>> IntoGenerate for HashSet<G> {
-    type Generate = Generator<G::Generate, Self::Item>;
+impl<G: IntoGenerator<Item = impl Eq + Hash>> IntoGenerator for HashSet<G> {
+    type IntoGen = Gen<G::IntoGen, Self::Item>;
     type Item = HashSet<G::Item>;
 
-    fn generator(self) -> Self::Generate {
-        Generator::new(self.into_iter().map(G::generator))
+    fn into_gen(self) -> Self::IntoGen {
+        Gen::new(self.into_iter().map(G::into_gen))
     }
 }
 
-impl<G: Generate<Item = impl Eq + Hash>> Generate for HashSet<G> {
+impl<G: Generator<Item = impl Eq + Hash>> Generator for HashSet<G> {
     type Item = HashSet<G::Item>;
-    type Shrink = Shrinker<G::Shrink, Self::Item>;
+    type Shrink = Shrink<G::Shrink, Self::Item>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(self).generate(state)
+        Gen::new(self).generate(state)
     }
 
     fn constant(&self) -> bool {
@@ -457,30 +454,30 @@ impl<G: Generate<Item = impl Eq + Hash>> Generate for HashSet<G> {
     }
 }
 
-impl<G: FullGenerate<Item = impl Ord>> FullGenerate for BinaryHeap<G> {
-    type Generate = Collect<G::Generate, Range<usize>, Self::Item>;
+impl<G: FullGenerator<Item = impl Ord>> FullGenerator for BinaryHeap<G> {
+    type FullGen = Collect<G::FullGen, Range<usize>, Self::Item>;
     type Item = BinaryHeap<G::Item>;
 
-    fn generator() -> Self::Generate {
-        G::generator().collect()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen().collect()
     }
 }
 
-impl<G: IntoGenerate<Item = impl Ord>> IntoGenerate for BinaryHeap<G> {
-    type Generate = Generator<G::Generate, Self::Item>;
+impl<G: IntoGenerator<Item = impl Ord>> IntoGenerator for BinaryHeap<G> {
+    type IntoGen = Gen<G::IntoGen, Self::Item>;
     type Item = BinaryHeap<G::Item>;
 
-    fn generator(self) -> Self::Generate {
-        Generator::new(self.into_iter().map(G::generator))
+    fn into_gen(self) -> Self::IntoGen {
+        Gen::new(self.into_iter().map(G::into_gen))
     }
 }
 
-impl<G: Generate<Item = impl Ord>> Generate for BinaryHeap<G> {
+impl<G: Generator<Item = impl Ord>> Generator for BinaryHeap<G> {
     type Item = BinaryHeap<G::Item>;
-    type Shrink = Shrinker<G::Shrink, Self::Item>;
+    type Shrink = Shrink<G::Shrink, Self::Item>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Generator::new(self).generate(state)
+        Gen::new(self).generate(state)
     }
 
     fn constant(&self) -> bool {

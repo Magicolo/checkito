@@ -1,31 +1,31 @@
 use crate::{
-    FullGenerate, FullShrink, IntoGenerate, IntoShrink,
-    generate::{Generate, State},
-    shrink::{All, Shrink},
+    FullGenerator, IntoGenerator,
+    generate::{Generator, State},
+    shrink::{All, Shrinker},
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Array<T: ?Sized, const N: usize>(pub T);
 
-impl<G: FullGenerate, const N: usize> FullGenerate for Array<G, N> {
-    type Generate = Array<G::Generate, N>;
+impl<G: FullGenerator, const N: usize> FullGenerator for Array<G, N> {
+    type FullGen = Array<G::FullGen, N>;
     type Item = [G::Item; N];
 
-    fn generator() -> Self::Generate {
-        Array(G::generator())
+    fn full_gen() -> Self::FullGen {
+        Array(G::full_gen())
     }
 }
 
-impl<G: IntoGenerate, const N: usize> IntoGenerate for Array<G, N> {
-    type Generate = Array<G::Generate, N>;
+impl<G: IntoGenerator, const N: usize> IntoGenerator for Array<G, N> {
+    type IntoGen = Array<G::IntoGen, N>;
     type Item = [G::Item; N];
 
-    fn generator(self) -> Self::Generate {
-        Array(self.0.generator())
+    fn into_gen(self) -> Self::IntoGen {
+        Array(self.0.into_gen())
     }
 }
 
-impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
+impl<G: Generator + ?Sized, const N: usize> Generator for Array<G, N> {
     type Item = [G::Item; N];
     type Shrink = All<[G::Shrink; N]>;
 
@@ -38,95 +38,43 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     }
 }
 
-impl<S: FullShrink, const N: usize> FullShrink for Array<S, N> {
-    type Item = [S::Item; N];
-    type Shrink = All<[S::Shrink; N]>;
-
-    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        let mut shrinks = [(); N].map(|_| None);
-        for (i, item) in item.into_iter().enumerate() {
-            shrinks[i] = Some(S::shrinker(item)?);
-        }
-        Some(All::new(shrinks.map(Option::unwrap)))
-    }
-}
-
-impl<S: IntoShrink, const N: usize> IntoShrink for Array<S, N> {
-    type Item = [S::Item; N];
-    type Shrink = All<[S::Shrink; N]>;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        let mut shrinks = [(); N].map(|_| None);
-        for (i, item) in item.into_iter().enumerate() {
-            shrinks[i] = Some(self.0.shrinker(item)?);
-        }
-        Some(All::new(shrinks.map(Option::unwrap)))
-    }
-}
-
-impl<G: FullGenerate, const N: usize> FullGenerate for [G; N] {
-    type Generate = [G::Generate; N];
+impl<G: FullGenerator, const N: usize> FullGenerator for [G; N] {
+    type FullGen = [G::FullGen; N];
     type Item = [G::Item; N];
 
-    fn generator() -> Self::Generate {
-        [(); N].map(|_| G::generator())
+    fn full_gen() -> Self::FullGen {
+        [(); N].map(|_| G::full_gen())
     }
 }
 
-impl<G: IntoGenerate, const N: usize> IntoGenerate for [G; N] {
-    type Generate = [G::Generate; N];
+impl<G: IntoGenerator, const N: usize> IntoGenerator for [G; N] {
+    type IntoGen = [G::IntoGen; N];
     type Item = [G::Item; N];
 
-    fn generator(self) -> Self::Generate {
-        self.map(|generate| generate.generator())
+    fn into_gen(self) -> Self::IntoGen {
+        self.map(|generator| generator.into_gen())
     }
 }
 
-impl<G: Generate, const N: usize> Generate for [G; N] {
+impl<G: Generator, const N: usize> Generator for [G; N] {
     type Item = [G::Item; N];
     type Shrink = All<[G::Shrink; N]>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut index = 0;
         All::new([(); N].map(|_| {
-            let shrink = self[index].generate(state);
+            let shrinker = self[index].generate(state);
             index += 1;
-            shrink
+            shrinker
         }))
     }
 
     fn constant(&self) -> bool {
-        self.iter().all(Generate::constant)
+        self.iter().all(Generator::constant)
     }
 }
 
-impl<S: FullShrink, const N: usize> FullShrink for [S; N] {
-    type Item = [S::Item; N];
-    type Shrink = All<[S::Shrink; N]>;
-
-    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        let mut shrinks = [(); N].map(|_| None);
-        for (i, item) in item.into_iter().enumerate() {
-            shrinks[i] = Some(S::shrinker(item)?);
-        }
-        Some(All::new(shrinks.map(Option::unwrap)))
-    }
-}
-
-impl<S: IntoShrink, const N: usize> IntoShrink for [S; N] {
-    type Item = [S::Item; N];
-    type Shrink = All<[S::Shrink; N]>;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        let mut shrinks = [(); N].map(|_| None);
-        for (i, item) in item.into_iter().enumerate() {
-            shrinks[i] = Some(self[i].shrinker(item)?);
-        }
-        Some(All::new(shrinks.map(Option::unwrap)))
-    }
-}
-
-impl<S: Shrink, const N: usize> Shrink for All<[S; N]> {
+impl<S: Shrinker, const N: usize> Shrinker for All<[S; N]> {
     type Item = [S::Item; N];
 
     fn item(&self) -> Self::Item {

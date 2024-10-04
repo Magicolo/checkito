@@ -1,31 +1,31 @@
 use crate::{
-    Shrink,
-    generate::{Generate, State},
+    generate::{Generator, State},
+    shrink::Shrinker,
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Flatten<T: ?Sized>(pub T);
 
 #[derive(Clone, Debug)]
-pub struct Shrinker<I, O> {
+pub struct Shrink<I, O> {
     state: State,
     inner: I,
     outer: O,
 }
 
-impl<G: Generate<Item = impl Generate> + ?Sized> Generate for Flatten<G> {
-    type Item = <G::Item as Generate>::Item;
-    type Shrink = Shrinker<<G::Item as Generate>::Shrink, G::Shrink>;
+impl<G: Generator<Item = impl Generator> + ?Sized> Generator for Flatten<G> {
+    type Item = <G::Item as Generator>::Item;
+    type Shrink = Shrink<<G::Item as Generator>::Shrink, G::Shrink>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.clone();
         let outer = self.0.generate(state);
-        let item = outer.item();
+        let generator = outer.item();
         state.limit += 1;
         state.depth += 1;
-        let inner = item.generate(state);
+        let inner = generator.generate(state);
         state.depth -= 1;
-        Shrinker {
+        Shrink {
             state: old,
             inner,
             outer,
@@ -37,7 +37,7 @@ impl<G: Generate<Item = impl Generate> + ?Sized> Generate for Flatten<G> {
     }
 }
 
-impl<I: Shrink, O: Shrink<Item = impl Generate<Shrink = I>>> Shrink for Shrinker<I, O> {
+impl<I: Shrinker, O: Shrinker<Item = impl Generator<Shrink = I>>> Shrinker for Shrink<I, O> {
     type Item = I::Item;
 
     fn item(&self) -> Self::Item {

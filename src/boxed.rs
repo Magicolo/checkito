@@ -1,54 +1,60 @@
 use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
+    generate::{Generator, State},
+    shrink::Shrinker,
 };
 use core::any::Any;
 
-pub struct Generator<I> {
-    inner: Box<dyn Any>,
-    generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
+pub struct Gen<I> {
+    generator: Box<dyn Any>,
+    generate: fn(&dyn Any, &mut State) -> Shrink<I>,
     constant: fn(&dyn Any) -> bool,
 }
 
-pub struct Shrinker<I> {
-    inner: Box<dyn Any>,
+pub struct Shrink<I> {
+    shrinker: Box<dyn Any>,
     clone: fn(&dyn Any) -> Box<dyn Any>,
     item: fn(&dyn Any) -> I,
     shrink: fn(&mut dyn Any) -> Option<Box<dyn Any>>,
 }
 
-impl<I> Generate for Generator<I> {
+impl<I> Generator for Gen<I> {
     type Item = I;
-    type Shrink = Shrinker<I>;
+    type Shrink = Shrink<I>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        (self.generate)(self.inner.as_ref(), state)
+        (self.generate)(self.generator.as_ref(), state)
     }
 
     fn constant(&self) -> bool {
-        (self.constant)(self.inner.as_ref())
+        (self.constant)(self.generator.as_ref())
     }
 }
 
-impl<I> Generator<I> {
-    pub(crate) fn new<G: Generate<Item = I> + 'static>(generate: G) -> Self
+impl<I> Gen<I> {
+    pub(crate) fn new<G: Generator<Item = I> + 'static>(generator: G) -> Self
     where
         G::Shrink: 'static,
     {
         Self {
-            inner: Box::new(generate),
-            generate: |inner, state| inner.downcast_ref::<G>().unwrap().generate(state).boxed(),
-            constant: |inner| inner.downcast_ref::<G>().unwrap().constant(),
+            generator: Box::new(generator),
+            generate: |generator, state| {
+                generator
+                    .downcast_ref::<G>()
+                    .unwrap()
+                    .generate(state)
+                    .boxed()
+            },
+            constant: |generator| generator.downcast_ref::<G>().unwrap().constant(),
         }
     }
 }
 
-impl<I> Generator<I> {
-    pub fn downcast<G: Generate + 'static>(self) -> Result<G, Self> {
-        match self.inner.downcast::<G>() {
-            Ok(inner) => Ok(*inner),
-            Err(inner) => Err(Self {
-                inner,
+impl<I> Gen<I> {
+    pub fn downcast<G: Generator + 'static>(self) -> Result<G, Self> {
+        match self.generator.downcast::<G>() {
+            Ok(generator) => Ok(*generator),
+            Err(generator) => Err(Self {
+                generator,
                 generate: self.generate,
                 constant: self.constant,
             }),
@@ -56,21 +62,21 @@ impl<I> Generator<I> {
     }
 }
 
-impl Shrinker<()> {
-    pub(crate) fn new<S: Shrink + 'static>(shrink: S) -> Shrinker<S::Item> {
-        Shrinker {
-            inner: Box::new(shrink),
+impl Shrink<()> {
+    pub(crate) fn new<S: Shrinker + 'static>(shrinker: S) -> Shrink<S::Item> {
+        Shrink {
+            shrinker: Box::new(shrinker),
             clone: |inner| Box::new(inner.downcast_ref::<S>().unwrap().clone()),
             item: |inner| inner.downcast_ref::<S>().unwrap().item(),
             shrink: |inner| Some(Box::new(inner.downcast_mut::<S>().unwrap().shrink()?)),
         }
     }
 
-    pub fn downcast<G: Shrink + 'static>(self) -> Result<G, Self> {
-        match self.inner.downcast::<G>() {
-            Ok(inner) => Ok(*inner),
-            Err(inner) => Err(Self {
-                inner,
+    pub fn downcast<S: Shrinker + 'static>(self) -> Result<S, Self> {
+        match self.shrinker.downcast::<S>() {
+            Ok(shrinker) => Ok(*shrinker),
+            Err(shrinker) => Err(Self {
+                shrinker,
                 clone: self.clone,
                 item: self.item,
                 shrink: self.shrink,
@@ -79,10 +85,10 @@ impl Shrinker<()> {
     }
 }
 
-impl<I> Clone for Shrinker<I> {
+impl<I> Clone for Shrink<I> {
     fn clone(&self) -> Self {
         Self {
-            inner: (self.clone)(self.inner.as_ref()),
+            shrinker: (self.clone)(self.shrinker.as_ref()),
             clone: self.clone,
             item: self.item,
             shrink: self.shrink,
@@ -90,16 +96,16 @@ impl<I> Clone for Shrinker<I> {
     }
 }
 
-impl<I> Shrink for Shrinker<I> {
+impl<I> Shrinker for Shrink<I> {
     type Item = I;
 
     fn item(&self) -> Self::Item {
-        (self.item)(self.inner.as_ref())
+        (self.item)(self.shrinker.as_ref())
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Self {
-            inner: (self.shrink)(self.inner.as_mut())?,
+            shrinker: (self.shrink)(self.shrinker.as_mut())?,
             clone: self.clone,
             item: self.item,
             shrink: self.shrink,

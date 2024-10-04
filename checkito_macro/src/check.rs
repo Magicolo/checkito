@@ -188,11 +188,11 @@ impl Check {
             };
 
             let generator = if index >= rest.0 && index < rest.1 {
-                quote_spanned!(rest.2 => <#ty as ::checkito::FullGenerate>::generator())
+                quote_spanned!(rest.2 => <#ty as ::checkito::FullGenerator>::full_gen())
             } else {
                 match expressions.next() {
                     Some(Expr::Infer(infer)) => {
-                        quote_spanned!(infer.span() => <#ty as ::checkito::FullGenerate>::generator())
+                        quote_spanned!(infer.span() => <#ty as ::checkito::FullGenerator>::full_gen())
                     }
                     Some(expression) => quote_spanned!(expression.span() => #expression),
                     None => {

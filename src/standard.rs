@@ -1,27 +1,27 @@
 use crate::{
-    FullGenerate, IntoGenerate,
+    FullGenerator, IntoGenerator,
     any::Any,
-    generate::{Generate, State},
+    generate::{Generator, State},
     map::Map,
-    shrink::{FullShrink, IntoShrink, Shrink},
+    shrink::Shrinker,
 };
 use orn::Or2;
 use std::{rc::Rc, sync::Arc};
 
-impl<G: FullGenerate> FullGenerate for Option<G> {
-    type Generate =
-        Map<Any<(G::Generate, ())>, fn(<Any<(G::Generate, ())> as Generate>::Item) -> Self::Item>;
+impl<G: FullGenerator> FullGenerator for Option<G> {
+    type FullGen =
+        Map<Any<(G::FullGen, ())>, fn(<Any<(G::FullGen, ())> as Generator>::Item) -> Self::Item>;
     type Item = Option<G::Item>;
 
-    fn generator() -> Self::Generate {
-        Any((G::generator(), ())).map(|item| match item {
+    fn full_gen() -> Self::FullGen {
+        Any((G::full_gen(), ())).map(|item| match item {
             Or2::T0(item) => Some(item),
             Or2::T1(_) => None,
         })
     }
 }
 
-impl<G: Generate> Generate for Option<G> {
+impl<G: Generator> Generator for Option<G> {
     type Item = Option<G::Item>;
     type Shrink = Option<G::Shrink>;
 
@@ -34,25 +34,7 @@ impl<G: Generate> Generate for Option<G> {
     }
 }
 
-impl<S: FullShrink> FullShrink for Option<S> {
-    type Item = Option<S::Item>;
-    type Shrink = Option<S::Shrink>;
-
-    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        Some(S::shrinker(item?))
-    }
-}
-
-impl<S: IntoShrink> IntoShrink for Option<S> {
-    type Item = Option<S::Item>;
-    type Shrink = Option<S::Shrink>;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        Some(self.as_ref()?.shrinker(item?))
-    }
-}
-
-impl<S: Shrink> Shrink for Option<S> {
+impl<S: Shrinker> Shrinker for Option<S> {
     type Item = Option<S::Item>;
 
     fn item(&self) -> Self::Item {
@@ -64,124 +46,77 @@ impl<S: Shrink> Shrink for Option<S> {
     }
 }
 
-impl<G: FullGenerate, E: FullGenerate> FullGenerate for Result<G, E> {
-    type Generate = Map<
-        Any<(G::Generate, E::Generate)>,
-        fn(<Any<(G::Generate, E::Generate)> as Generate>::Item) -> Self::Item,
+impl<G: FullGenerator, E: FullGenerator> FullGenerator for Result<G, E> {
+    type FullGen = Map<
+        Any<(G::FullGen, E::FullGen)>,
+        fn(<Any<(G::FullGen, E::FullGen)> as Generator>::Item) -> Self::Item,
     >;
     type Item = Result<G::Item, E::Item>;
 
-    fn generator() -> Self::Generate {
-        Any((G::generator(), E::generator())).map(|item| match item {
+    fn full_gen() -> Self::FullGen {
+        Any((G::full_gen(), E::full_gen())).map(|item| match item {
             Or2::T0(item) => Result::Ok(item),
             Or2::T1(item) => Result::Err(item),
         })
     }
 }
 
-impl<G: Generate, E: Generate> Generate for Result<G, E> {
+impl<G: Generator, E: Generator> Generator for Result<G, E> {
     type Item = Result<G::Item, E::Item>;
     type Shrink = Result<G::Shrink, E::Shrink>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         match self {
-            Ok(generate) => Ok(generate.generate(state)),
-            Err(generate) => Err(generate.generate(state)),
+            Ok(generator) => Ok(generator.generate(state)),
+            Err(generator) => Err(generator.generate(state)),
         }
     }
 
     fn constant(&self) -> bool {
         match self {
-            Ok(generate) => generate.constant(),
-            Err(generate) => generate.constant(),
+            Ok(generator) => generator.constant(),
+            Err(generator) => generator.constant(),
         }
     }
 }
 
-impl<S: FullShrink, E: FullShrink> FullShrink for Result<S, E> {
-    type Item = Result<S::Item, E::Item>;
-    type Shrink = Result<S::Shrink, E::Shrink>;
-
-    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        match item {
-            Ok(item) => Some(Ok(S::shrinker(item)?)),
-            Err(item) => Some(Err(E::shrinker(item)?)),
-        }
-    }
-}
-
-impl<S: IntoShrink, E: IntoShrink> IntoShrink for Result<S, E> {
-    type Item = Result<S::Item, E::Item>;
-    type Shrink = Result<S::Shrink, E::Shrink>;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        match (self, item) {
-            (Ok(shrink), Ok(item)) => Some(Ok(shrink.shrinker(item)?)),
-            (Err(shrink), Err(item)) => Some(Err(shrink.shrinker(item)?)),
-            _ => None,
-        }
-    }
-}
-
-impl<S: Shrink, E: Shrink> Shrink for Result<S, E> {
+impl<S: Shrinker, E: Shrinker> Shrinker for Result<S, E> {
     type Item = Result<S::Item, E::Item>;
 
     fn item(&self) -> Self::Item {
         match self {
-            Ok(shrink) => Ok(shrink.item()),
-            Err(shrink) => Err(shrink.item()),
+            Ok(shrinker) => Ok(shrinker.item()),
+            Err(shrinker) => Err(shrinker.item()),
         }
     }
 
     fn shrink(&mut self) -> Option<Self> {
         match self {
-            Ok(shrink) => Some(Ok(shrink.shrink()?)),
-            Err(shrink) => Some(Err(shrink.shrink()?)),
+            Ok(shrinker) => Some(Ok(shrinker.shrink()?)),
+            Err(shrinker) => Some(Err(shrinker.shrink()?)),
         }
     }
 }
 
-impl<G: FullGenerate> FullGenerate for Box<G> {
-    type Generate = G::Generate;
+impl<G: FullGenerator> FullGenerator for Box<G> {
+    type FullGen = G::FullGen;
     type Item = G::Item;
 
-    fn generator() -> Self::Generate {
-        G::generator()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen()
     }
 }
 
-impl<G: IntoGenerate> IntoGenerate for Box<G> {
-    type Generate = G::Generate;
+impl<G: IntoGenerator> IntoGenerator for Box<G> {
+    type IntoGen = G::IntoGen;
     type Item = G::Item;
 
-    fn generator(self) -> Self::Generate {
-        G::generator(*self)
+    fn into_gen(self) -> Self::IntoGen {
+        G::into_gen(*self)
     }
 }
 
-impl<G: Generate> Generate for Box<G> {
-    type Item = G::Item;
-    type Shrink = G::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        G::generate(self, state)
-    }
-
-    fn constant(&self) -> bool {
-        G::constant(self)
-    }
-}
-
-impl<G: FullGenerate> FullGenerate for Rc<G> {
-    type Generate = G::Generate;
-    type Item = G::Item;
-
-    fn generator() -> Self::Generate {
-        G::generator()
-    }
-}
-
-impl<G: Generate> Generate for Rc<G> {
+impl<G: Generator> Generator for Box<G> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
@@ -194,16 +129,38 @@ impl<G: Generate> Generate for Rc<G> {
     }
 }
 
-impl<G: FullGenerate> FullGenerate for Arc<G> {
-    type Generate = G::Generate;
+impl<G: FullGenerator> FullGenerator for Rc<G> {
+    type FullGen = G::FullGen;
     type Item = G::Item;
 
-    fn generator() -> Self::Generate {
-        G::generator()
+    fn full_gen() -> Self::FullGen {
+        G::full_gen()
     }
 }
 
-impl<G: Generate> Generate for Arc<G> {
+impl<G: Generator> Generator for Rc<G> {
+    type Item = G::Item;
+    type Shrink = G::Shrink;
+
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        G::generate(self, state)
+    }
+
+    fn constant(&self) -> bool {
+        G::constant(self)
+    }
+}
+
+impl<G: FullGenerator> FullGenerator for Arc<G> {
+    type FullGen = G::FullGen;
+    type Item = G::Item;
+
+    fn full_gen() -> Self::FullGen {
+        G::full_gen()
+    }
+}
+
+impl<G: Generator> Generator for Arc<G> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 

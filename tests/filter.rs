@@ -4,7 +4,7 @@ use common::*;
 #[test]
 fn filtered_pair_preserves_inequality() {
     assert!(
-        <(String, String)>::generator()
+        <(String, String)>::full_gen()
             .filter(|(left, right)| left != right)
             .check(|pair| match pair {
                 Some((left, right)) => left != right,
@@ -17,7 +17,7 @@ fn filtered_pair_preserves_inequality() {
 #[test]
 fn filtered_array_preserves_inequality() {
     assert!(
-        Generate::collect::<String>('a'..='z')
+        Generator::collect::<String>('a'..='z')
             .array::<3>()
             .filter(|[a, b, c]| a != b && b != c && a != c)
             .check(|array| match array {
@@ -31,8 +31,8 @@ fn filtered_array_preserves_inequality() {
 #[test]
 fn shrinked_filter_preserves_inequality() {
     let fail = (
-        <(String, String)>::generator().filter(|(left, right)| left != right),
-        usize::generator(),
+        <(String, String)>::full_gen().filter(|(left, right)| left != right),
+        usize::full_gen(),
     )
         .check(|(pair, value)| {
             let Some((left, right)) = pair else {

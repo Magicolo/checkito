@@ -1,41 +1,41 @@
 use crate::{
-    generate::{self, Generate, State},
-    shrink::Shrink,
+    generate::{self, Generator, State},
+    shrink::Shrinker,
 };
 
 #[derive(Debug, Default, Clone)]
-pub struct FilterMap<I: ?Sized, F> {
+pub struct FilterMap<G: ?Sized, F> {
     map: F,
     retries: usize,
-    inner: I,
+    generator: G,
 }
 
 #[derive(Debug, Clone)]
-pub struct Shrinker<I, F> {
-    inner: Option<I>,
+pub struct Shrink<S, F> {
+    shrinker: Option<S>,
     map: F,
 }
 
-impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
-    pub const fn new(generate: G, map: F, retries: usize) -> Self {
+impl<G: Generator, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
+    pub const fn new(generator: G, map: F, retries: usize) -> Self {
         Self {
-            inner: generate,
+            generator,
             map,
             retries,
         }
     }
 }
 
-impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for FilterMap<G, F> {
+impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generator for FilterMap<G, F> {
     type Item = Option<T>;
-    type Shrink = Shrinker<G::Shrink, F>;
+    type Shrink = Shrink<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
         let size = state.size;
         for i in 0..self.retries {
             state.size = generate::size(i, self.retries, size.0..size.1);
-            let inner = self.inner.generate(state);
+            let inner = self.generator.generate(state);
             let item = inner.item();
             if self.constant() || (self.map)(item).is_some() {
                 outer = Some(inner);
@@ -43,27 +43,27 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             }
         }
         state.size = size;
-        Shrinker {
-            inner: outer,
+        Shrink {
+            shrinker: outer,
             map: self.map.clone(),
         }
     }
 
     fn constant(&self) -> bool {
-        self.inner.constant()
+        self.retries == 0 || self.generator.constant()
     }
 }
 
-impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, F> {
+impl<S: Shrinker, T, F: Fn(S::Item) -> Option<T> + Clone> Shrinker for Shrink<S, F> {
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {
-        self.inner.item().and_then(&self.map)
+        self.shrinker.item().and_then(&self.map)
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Self {
-            inner: self.inner.shrink()?,
+            shrinker: self.shrinker.shrink()?,
             map: self.map.clone(),
         })
     }

@@ -1,6 +1,6 @@
 use crate::{
-    generate::{FullGenerate, Generate, IntoGenerate, State},
-    shrink::Shrink,
+    generate::{FullGenerator, Generator, IntoGenerator, State},
+    shrink::Shrinker,
     utility::tuples,
 };
 use core::f64;
@@ -71,27 +71,27 @@ impl<T: ?Sized> AsRef<T> for Any<T> {
     }
 }
 
-impl<G: FullGenerate + ?Sized> FullGenerate for Any<G>
+impl<G: FullGenerator + ?Sized> FullGenerator for Any<G>
 where
-    Any<G::Generate>: Generate,
+    Any<G::FullGen>: Generator,
 {
-    type Generate = Any<G::Generate>;
-    type Item = <Any<G::Generate> as Generate>::Item;
+    type FullGen = Any<G::FullGen>;
+    type Item = <Any<G::FullGen> as Generator>::Item;
 
-    fn generator() -> Self::Generate {
-        Any(G::generator())
+    fn full_gen() -> Self::FullGen {
+        Any(G::full_gen())
     }
 }
 
-impl<G: IntoGenerate> IntoGenerate for Any<G>
+impl<G: IntoGenerator> IntoGenerator for Any<G>
 where
-    Any<G::Generate>: Generate,
+    Any<G::IntoGen>: Generator,
 {
-    type Generate = Any<G::Generate>;
-    type Item = <Any<G::Generate> as Generate>::Item;
+    type IntoGen = Any<G::IntoGen>;
+    type Item = <Any<G::IntoGen> as Generator>::Item;
 
-    fn generator(self) -> Self::Generate {
-        Any(self.0.generator())
+    fn into_gen(self) -> Self::IntoGen {
+        Any(self.0.into_gen())
     }
 }
 
@@ -101,7 +101,7 @@ const fn as_slice<T>(slice: &[T]) -> &[T] {
 
 macro_rules! collection {
     ($t:ty, $i:ident, [$($n:ident)?]) => {
-        impl<T: Generate $(,const $n: usize)?> Generate for $t {
+        impl<T: Generator $(,const $n: usize)?> Generator for $t {
             type Item = Option<T::Item>;
             type Shrink = Option<T::Shrink>;
 
@@ -130,40 +130,40 @@ collection!(Vec<Weight<T>>, weighted, []);
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
     ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
-        impl<$($ts: Generate,)*> Generate for orn::$n::Or<$($ts,)*> {
+        impl<$($ts: Generator,)*> Generator for orn::$n::Or<$($ts,)*> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 match self {
-                    $(Self::$ts(generate) => orn::$n::Or::$ts(generate.generate(state)),)*
+                    $(Self::$ts(generator) => orn::$n::Or::$ts(generator.generate(state)),)*
                 }
             }
 
             fn constant(&self) -> bool {
                 match self {
-                    $(Self::$ts(generate) => generate.constant(),)*
+                    $(Self::$ts(generator) => generator.constant(),)*
                 }
             }
         }
 
-        impl<$($ts: Shrink,)*> Shrink for orn::$n::Or<$($ts,)*> {
+        impl<$($ts: Shrinker,)*> Shrinker for orn::$n::Or<$($ts,)*> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
 
             fn item(&self) -> Self::Item {
                 match self {
-                    $(orn::$n::Or::$ts(shrink) => orn::$n::Or::$ts(shrink.item()),)*
+                    $(orn::$n::Or::$ts(shrinker) => orn::$n::Or::$ts(shrinker.item()),)*
                 }
             }
 
             fn shrink(&mut self) -> Option<Self> {
                 match self {
-                    $(Self::$ts(shrink) => Some(Self::$ts(shrink.shrink()?)),)*
+                    $(Self::$ts(shrinker) => Some(Self::$ts(shrinker.shrink()?)),)*
                 }
             }
         }
 
-        impl<$($ts: Generate,)*> Generate for Any<($($ts,)*)> {
+        impl<$($ts: Generator,)*> Generator for Any<($($ts,)*)> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
@@ -179,7 +179,7 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ts: Generate,)*> Generate for ($(Weight<$ts>,)*) {
+        impl<$($ts: Generator,)*> Generator for ($(Weight<$ts>,)*) {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 

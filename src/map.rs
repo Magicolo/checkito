@@ -1,56 +1,53 @@
 use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
+    generate::{Generator, State},
+    shrink::Shrinker,
 };
 
 #[derive(Debug, Default, Clone)]
 pub struct Map<I: ?Sized, F> {
     map: F,
-    inner: I,
+    generator: I,
 }
 
 #[derive(Debug, Clone)]
-pub struct Shrinker<I: ?Sized, F> {
+pub struct Shrink<I: ?Sized, F> {
     map: F,
-    inner: I,
+    shrinker: I,
 }
 
-impl<G: Generate, T, F: Fn(G::Item) -> T> Map<G, F> {
-    pub const fn new(generate: G, map: F) -> Self {
-        Self {
-            inner: generate,
-            map,
-        }
+impl<G: Generator, T, F: Fn(G::Item) -> T> Map<G, F> {
+    pub const fn new(generator: G, map: F) -> Self {
+        Self { generator, map }
     }
 }
 
-impl<S: Shrink, T, F: Fn(S::Item) -> T> Shrinker<S, F> {
-    pub const fn new(shrink: S, map: F) -> Self {
-        Self { inner: shrink, map }
+impl<S: Shrinker, T, F: Fn(S::Item) -> T> Shrink<S, F> {
+    pub const fn new(shrinker: S, map: F) -> Self {
+        Self { shrinker, map }
     }
 }
 
-impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generate for Map<G, F> {
+impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generator for Map<G, F> {
     type Item = T;
-    type Shrink = Shrinker<G::Shrink, F>;
+    type Shrink = Shrink<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Shrinker::new(self.inner.generate(state), self.map.clone())
+        Shrink::new(self.generator.generate(state), self.map.clone())
     }
 
     fn constant(&self) -> bool {
-        self.inner.constant()
+        self.generator.constant()
     }
 }
 
-impl<S: Shrink, T, F: Fn(S::Item) -> T + Clone> Shrink for Shrinker<S, F> {
+impl<S: Shrinker, T, F: Fn(S::Item) -> T + Clone> Shrinker for Shrink<S, F> {
     type Item = T;
 
     fn item(&self) -> Self::Item {
-        (self.map)(self.inner.item())
+        (self.map)(self.shrinker.item())
     }
 
     fn shrink(&mut self) -> Option<Self> {
-        Some(Self::new(self.inner.shrink()?, self.map.clone()))
+        Some(Self::new(self.shrinker.shrink()?, self.map.clone()))
     }
 }

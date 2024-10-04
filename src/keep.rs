@@ -1,13 +1,12 @@
 use crate::{
-    IntoShrink,
-    generate::{Generate, State},
-    shrink::Shrink,
+    generate::{Generator, State},
+    shrink::Shrinker,
 };
 
 #[derive(Clone, Debug)]
 pub struct Keep<T: ?Sized>(pub T);
 
-impl<G: Generate + ?Sized> Generate for Keep<G> {
+impl<G: Generator + ?Sized> Generator for Keep<G> {
     type Item = G::Item;
     type Shrink = Keep<G::Shrink>;
 
@@ -20,16 +19,7 @@ impl<G: Generate + ?Sized> Generate for Keep<G> {
     }
 }
 
-impl<S: IntoShrink> IntoShrink for Keep<S> {
-    type Item = S::Item;
-    type Shrink = Keep<S::Shrink>;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        Some(Keep(self.0.shrinker(item)?))
-    }
-}
-
-impl<S: Shrink> Shrink for Keep<S> {
+impl<S: Shrinker> Shrinker for Keep<S> {
     type Item = S::Item;
 
     fn item(&self) -> Self::Item {

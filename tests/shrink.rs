@@ -3,7 +3,7 @@ use common::*;
 
 #[test]
 fn finds_minimum() {
-    let fail = <(usize, usize)>::generator()
+    let fail = <(usize, usize)>::full_gen()
         .check(|(left, right)| left >= right)
         .unwrap();
     assert_eq!(fail.item, (0, 1));
@@ -13,7 +13,7 @@ fn finds_minimum() {
 fn integer_shrink_to_minimum() {
     for high in (1usize..1_000_000_000).samples(1_000) {
         println!("{high}");
-        let fail = usize::generator().check(|item| item < high).unwrap();
+        let fail = usize::full_gen().check(|item| item < high).unwrap();
         assert_eq!(fail.item, high);
     }
 }

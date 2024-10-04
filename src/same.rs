@@ -1,22 +1,22 @@
 use crate::{
-    FullGenerate,
-    generate::{Generate, State},
-    shrink::{FullShrink, IntoShrink, Shrink},
+    FullGenerator,
+    generate::{Generator, State},
+    shrink::Shrinker,
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Same<T: ?Sized>(pub T);
 
-impl<T: Default + Clone> FullGenerate for Same<T> {
-    type Generate = Same<T>;
+impl<T: Default + Clone> FullGenerator for Same<T> {
+    type FullGen = Same<T>;
     type Item = T;
 
-    fn generator() -> Self::Generate {
+    fn full_gen() -> Self::FullGen {
         Same(T::default())
     }
 }
 
-impl<T: Clone> Generate for Same<T> {
+impl<T: Clone> Generator for Same<T> {
     type Item = T;
     type Shrink = Self;
 
@@ -29,25 +29,7 @@ impl<T: Clone> Generate for Same<T> {
     }
 }
 
-impl<T: Clone> FullShrink for Same<T> {
-    type Item = T;
-    type Shrink = Self;
-
-    fn shrinker(item: Self::Item) -> Option<Self::Shrink> {
-        Some(Self(item))
-    }
-}
-
-impl<T: Clone> IntoShrink for Same<T> {
-    type Item = T;
-    type Shrink = Self;
-
-    fn shrinker(&self, item: Self::Item) -> Option<Self::Shrink> {
-        Some(Self(item))
-    }
-}
-
-impl<T: Clone> Shrink for Same<T> {
+impl<T: Clone> Shrinker for Same<T> {
     type Item = T;
 
     fn item(&self) -> Self::Item {

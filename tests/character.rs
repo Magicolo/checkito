@@ -11,7 +11,7 @@ use std::{
 #[should_panic]
 fn empty_range() {
     assert!(
-        char::generator()
+        char::full_gen()
             .flat_map(|value| value..value)
             .check(|_| true)
             .is_none()
@@ -21,7 +21,7 @@ fn empty_range() {
 #[test]
 fn is_same() {
     assert!(
-        char::generator()
+        char::full_gen()
             .flat_map(|value| (value, Same(value)))
             .check(|(left, right)| left == right)
             .is_none()
@@ -49,7 +49,7 @@ fn is_alphabetic() {
 
 #[test]
 fn full_does_not_panic() {
-    assert!(char::generator().check(|_| true).is_none());
+    assert!(char::full_gen().check(|_| true).is_none());
 }
 
 macro_rules! collection {
@@ -61,8 +61,8 @@ macro_rules! collection {
             fn has_same_count() {
                 assert!(
                     (0..100usize)
-                        .generator()
-                        .flat_map(|count| (count, char::generator().collect_with::<_, $t>(count)))
+                        .into_gen()
+                        .flat_map(|count| (count, char::full_gen().collect_with::<_, $t>(count)))
                         .check(|(count, value)| value.$i().count() == count)
                         .is_none()
                 );
@@ -134,11 +134,11 @@ collection!(arc_char, Arc<[char]>, iter);
 mod check {
     use super::*;
 
-    #[check(char::generator().flat_map(|value| value..value))]
+    #[check(char::full_gen().flat_map(|value| value..value))]
     #[should_panic]
     fn empty_range(_: char) {}
 
-    #[check(char::generator().flat_map(|value| (value, Same(value))))]
+    #[check(char::full_gen().flat_map(|value| (value, Same(value))))]
     fn is_same(pair: (char, char)) {
         assert_eq!(pair.0, pair.1);
     }

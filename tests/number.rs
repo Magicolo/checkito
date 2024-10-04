@@ -1,5 +1,8 @@
 pub mod common;
-use checkito::same::Same;
+use checkito::{
+    same::Same,
+    shrink::{Shrink, Shrinkers},
+};
 use common::*;
 
 mod range {
@@ -13,21 +16,21 @@ mod range {
                 #[test]
                 fn has_sample() {
                     for i in 1..100 {
-                        <$t>::generator().samples(i).next().unwrap();
+                        <$t>::full_gen().samples(i).next().unwrap();
                     }
                 }
 
                 #[test]
                 fn sample_has_count() {
                     for i in 0..100 {
-                        assert_eq!(<$t>::generator().samples(i).len(), i);
+                        assert_eq!(<$t>::full_gen().samples(i).len(), i);
                     }
                 }
 
                 #[test]
                 #[should_panic]
                 fn empty_range() {
-                    <$t>::generator().flat_map(|value| value..value).check(|_| true).unwrap();
+                    <$t>::full_gen().flat_map(|value| value..value).check(|_| true).unwrap();
                 }
 
                 #[test]
@@ -92,14 +95,12 @@ mod range {
 
                 #[test]
                 fn shrinks_to_zero() {
-                    assert!(number::<$t>().check(|value| {
-                        let mut outer = $t::shrinker(value).unwrap();
+                    for mut outer in Shrinkers::from(&number::<$t>()) {
                         while let Some(inner) = outer.shrink() {
                             outer = inner;
                         }
-                        assert_eq!(0 as $t, outer.item())
-                    })
-                    .is_none());
+                        assert_eq!(0 as $t, outer.item());
+                    }
                 }
 
                 #[test]
@@ -112,9 +113,8 @@ mod range {
                                 (0 as $t..=value, value..=value)
                             }
                         })
-                        .flat_map(|(low, high)| (low, high, low..=high))
-                        .check(|(low, high, value)| {
-                            let mut outer = (low..=high).shrinker(value).unwrap();
+                        .flat_map(|(low, high)| (low, high, Shrink(low..=high)))
+                        .check(|(low, high, mut outer)| {
                             while let Some(inner) = outer.shrink() {
                                 outer = inner;
                             }

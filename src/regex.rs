@@ -2,9 +2,9 @@
 
 use crate::{
     collect,
-    generate::{Generate, State},
+    generate::{Generator, State},
     primitive::character,
-    shrink::Shrink,
+    shrink::Shrinker,
 };
 use core::fmt;
 use regex_syntax::{
@@ -21,11 +21,11 @@ pub struct Regex {
 }
 
 #[derive(Clone)]
-pub enum Shrinker {
+pub enum Shrink {
     Empty,
     Text(String),
-    Range(character::Shrinker),
-    All(collect::Shrinker<Shrinker, String>),
+    Range(character::Shrink),
+    All(collect::Shrink<Shrink, String>),
 }
 
 #[derive(Clone)]
@@ -59,39 +59,35 @@ impl Regex {
     }
 }
 
-impl Generate for Regex {
+impl Generator for Regex {
     type Item = String;
-    type Shrink = Shrinker;
+    type Shrink = Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        fn next(kind: &HirKind, state: &mut State, repeats: u32) -> Shrinker {
+        fn next(kind: &HirKind, state: &mut State, repeats: u32) -> Shrink {
             match kind {
-                HirKind::Empty | HirKind::Look(_) => Shrinker::Empty,
+                HirKind::Empty | HirKind::Look(_) => Shrink::Empty,
                 HirKind::Literal(literal) => {
-                    Shrinker::Text(String::from_utf8(literal.0.to_vec()).unwrap())
+                    Shrink::Text(String::from_utf8(literal.0.to_vec()).unwrap())
                 }
-                HirKind::Class(Class::Unicode(class)) if class.ranges().is_empty() => {
-                    Shrinker::Empty
-                }
-                HirKind::Class(Class::Bytes(class)) if class.ranges().is_empty() => Shrinker::Empty,
+                HirKind::Class(Class::Unicode(class)) if class.ranges().is_empty() => Shrink::Empty,
+                HirKind::Class(Class::Bytes(class)) if class.ranges().is_empty() => Shrink::Empty,
                 HirKind::Class(Class::Unicode(class)) => {
-                    Shrinker::Range(class.ranges().any().generate(state).unwrap())
+                    Shrink::Range(class.ranges().any().generate(state).unwrap())
                 }
                 HirKind::Class(Class::Bytes(class)) => {
-                    Shrinker::Range(class.ranges().any().generate(state).unwrap())
+                    Shrink::Range(class.ranges().any().generate(state).unwrap())
                 }
                 HirKind::Capture(Capture { sub, .. }) => next(sub.kind(), state, repeats),
                 HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.is_empty() => {
-                    Shrinker::Empty
+                    Shrink::Empty
                 }
                 HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.len() == 1 => {
                     next(hirs[0].kind(), state, repeats)
                 }
-                HirKind::Concat(hirs) => Shrinker::All(collect::Shrinker::new(
-                    hirs.iter()
-                        .map(|hir| next(hir.kind(), state, repeats))
-                        .collect(),
-                    hirs.len(),
+                HirKind::Concat(hirs) => Shrink::All(collect::Shrink::new(
+                    hirs.iter().map(|hir| next(hir.kind(), state, repeats)),
+                    Some(hirs.len()),
                 )),
                 HirKind::Alternation(hirs) => next(
                     hirs[state.random().usize(..hirs.len())].kind(),
@@ -102,9 +98,9 @@ impl Generate for Regex {
                     let (low, high) = range(*min, *max, repeats);
                     let count = (low..=high).generate(state).item();
                     let limit = repeats / (u32::BITS - high.leading_zeros());
-                    Shrinker::All(collect::Shrinker::new(
-                        Iterator::map(0..count, |_| next(sub.kind(), state, limit)).collect(),
-                        low as _,
+                    Shrink::All(collect::Shrink::new(
+                        Iterator::map(0..count, |_| next(sub.kind(), state, limit)),
+                        Some(low as _),
                     ))
                 }
             }
@@ -117,10 +113,10 @@ impl Generate for Regex {
             match kind {
                 HirKind::Empty | HirKind::Literal(_) | HirKind::Look(_) => true,
                 HirKind::Class(Class::Unicode(class)) => {
-                    class.ranges().iter().all(Generate::constant)
+                    class.ranges().iter().all(Generator::constant)
                 }
                 HirKind::Class(Class::Bytes(class)) => {
-                    class.ranges().iter().all(Generate::constant)
+                    class.ranges().iter().all(Generator::constant)
                 }
                 HirKind::Capture(Capture { sub, .. }) => next(sub.kind(), repeats),
                 HirKind::Concat(hirs) => hirs.iter().all(|hir| next(hir.kind(), repeats)),
@@ -145,9 +141,9 @@ fn range(min: u32, max: Option<u32>, repeats: u32) -> (u32, u32) {
     (low, high)
 }
 
-impl Generate for ClassUnicodeRange {
+impl Generator for ClassUnicodeRange {
     type Item = char;
-    type Shrink = character::Shrinker;
+    type Shrink = character::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         character::Range::char(self.start()..=self.end())
@@ -162,9 +158,9 @@ impl Generate for ClassUnicodeRange {
     }
 }
 
-impl Generate for ClassBytesRange {
+impl Generator for ClassBytesRange {
     type Item = char;
-    type Shrink = character::Shrinker;
+    type Shrink = character::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         character::Range::char(self.start() as char..=self.end() as char)
@@ -179,18 +175,18 @@ impl Generate for ClassBytesRange {
     }
 }
 
-impl Shrink for Shrinker {
+impl Shrinker for Shrink {
     type Item = String;
 
     fn item(&self) -> Self::Item {
-        fn next(shrink: &Shrinker, buffer: &mut String) {
-            match shrink {
-                Shrinker::Empty => {}
-                Shrinker::Text(text) => buffer.push_str(text),
-                Shrinker::Range(shrink) => buffer.push(shrink.item()),
-                Shrinker::All(shrink) => {
-                    for shrink in shrink.shrinks() {
-                        next(shrink, buffer);
+        fn next(shrinker: &Shrink, buffer: &mut String) {
+            match shrinker {
+                Shrink::Empty => {}
+                Shrink::Text(text) => buffer.push_str(text),
+                Shrink::Range(shrinker) => buffer.push(shrinker.item()),
+                Shrink::All(shrinker) => {
+                    for shrinker in shrinker.shrinkers() {
+                        next(shrinker, buffer);
                     }
                 }
             }
@@ -204,8 +200,8 @@ impl Shrink for Shrinker {
     fn shrink(&mut self) -> Option<Self> {
         match self {
             Self::Empty | Self::Text(_) => None,
-            Self::Range(shrink) => Some(Self::Range(shrink.shrink()?)),
-            Self::All(shrink) => Some(Self::All(shrink.shrink()?)),
+            Self::Range(shrinker) => Some(Self::Range(shrinker.shrink()?)),
+            Self::All(shrinker) => Some(Self::All(shrinker.shrink()?)),
         }
     }
 }

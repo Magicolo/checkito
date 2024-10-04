@@ -31,10 +31,10 @@ pub use checkito_macro::check;
 #[cfg(feature = "regex")]
 pub use checkito_macro::regex;
 pub use convenient::*;
-pub use generate::{FullGenerate, Generate, IntoGenerate};
+pub use generate::{FullGenerator, Generator, IntoGenerator};
 pub use prove::Prove;
 #[cfg(feature = "regex")]
 pub use regex::Regex;
 pub use same::Same;
 pub use sample::Sample;
-pub use shrink::{FullShrink, IntoShrink, Shrink};
+pub use shrink::Shrinker;
