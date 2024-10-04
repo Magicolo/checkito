@@ -113,27 +113,24 @@ pub trait Generator {
     fn boxed(self) -> boxed::Gen<Self::Item>
     where
         Self: Sized + 'static,
-        boxed::Gen<Self::Item>: Generator,
     {
         boxed::Gen::new(self)
     }
 
     /// Maps generated [`Generator::Item`] to an arbitrary type `T` using the
     /// provided function `F`.
-    fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
+    fn map<T, F: Fn(Self::Item) -> T + Clone>(self, map: F) -> Map<Self, F>
     where
         Self: Sized,
-        Map<Self, F>: Generator,
     {
         Map::new(self, map)
     }
 
     /// Same as [`Generator::filter_with`] but with a predefined number of
     /// `retries`.
-    fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
+    fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generator,
     {
         self.filter_with(COUNT, filter)
     }
@@ -145,20 +142,22 @@ pub trait Generator {
     /// Since this [`Generator`] implementation is not guaranteed to succeed,
     /// the item type is changed to a [`Option<Generator::Item>`]
     /// where a [`None`] represents the failure to satisfy the filter.
-    fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
+    fn filter_with<F: Fn(&Self::Item) -> bool + Clone>(
+        self,
+        retries: usize,
+        filter: F,
+    ) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generator,
     {
         Filter::new(self, filter, retries)
     }
 
     /// Same as [`Generator::filter_map_with`] but with a predefined number of
     /// `retries`.
-    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
+    fn filter_map<T, F: Fn(Self::Item) -> Option<T> + Clone>(self, map: F) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generator,
     {
         self.filter_map_with(COUNT, map)
     }
@@ -166,25 +165,22 @@ pub trait Generator {
     /// Combines [`Generator::map`] and [`Generator::filter`] in a single
     /// [`Generator`] implementation where the map function is considered to
     /// satisfy the filter when a [`Some(T)`] is produced.
-    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
+    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T> + Clone>(
         self,
         retries: usize,
         map: F,
     ) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generator,
     {
         FilterMap::new(self, map, retries)
     }
 
     /// Combines [`Generator::map`] and [`Generator::flatten`] in a single
     /// [`Generator`] implementation.
-    fn flat_map<G: Generator, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
+    fn flat_map<G: Generator, F: Fn(Self::Item) -> G + Clone>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
-        Map<Self, F>: Generator<Item = G>,
-        Flatten<Map<Self, F>>: Generator,
     {
         self.map(map).flatten()
     }
@@ -209,7 +205,6 @@ pub trait Generator {
     where
         Self: Sized,
         Self::Item: Generator,
-        Flatten<Self>: Generator,
     {
         Flatten(self)
     }
@@ -226,7 +221,6 @@ pub trait Generator {
     fn any(self) -> Any<Self>
     where
         Self: Sized,
-        Any<Self>: Generator,
     {
         Any(self)
     }
@@ -235,7 +229,6 @@ pub trait Generator {
     fn array<const N: usize>(self) -> Array<Self, N>
     where
         Self: Sized,
-        Array<Self, N>: Generator,
     {
         Array(self)
     }
@@ -244,7 +237,6 @@ pub trait Generator {
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Range<usize>, F>
     where
         Self: Sized,
-        Collect<Self, Range<usize>, F>: Generator,
     {
         self.collect_with((..COUNT).into_gen())
     }
@@ -258,7 +250,6 @@ pub trait Generator {
     ) -> Collect<Self, C, F>
     where
         Self: Sized,
-        Collect<Self, C, F>: Generator,
     {
         Collect::new(self, count)
     }
@@ -286,7 +277,6 @@ pub trait Generator {
     fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
-        Size<Self, F>: Generator,
     {
         Size(self, map)
     }
@@ -295,7 +285,6 @@ pub trait Generator {
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
-        Size<Self>: Generator,
     {
         self.dampen_with(1.0, 8, 8192)
     }
@@ -317,7 +306,6 @@ pub trait Generator {
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
-        Dampen<Self>: Generator,
     {
         assert!(pressure.is_finite());
         assert!(pressure >= 0.0);
@@ -334,7 +322,6 @@ pub trait Generator {
     fn keep(self) -> Keep<Self>
     where
         Self: Sized,
-        Keep<Self>: Generator,
     {
         Keep(self)
     }
@@ -441,14 +428,6 @@ impl DoubleEndedIterator for States {
 }
 
 impl FusedIterator for States {}
-
-// pub fn states(count: usize) -> impl ExactSizeIterator<Item = State>
-
-// pub fn states_with(count: usize, size: ops::Range<f64>, seed: u64) -> impl
-// Iterator<Item = State> {     Iterator::map(0..count, move |index| {
-//         State::new(index, count, size.clone(), seed)
-//     })
-// }
 
 pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f64, f64) {
     size.start = size.start.clamp(0.0, 1.0);

@@ -7,7 +7,7 @@ use core::f64;
 
 #[repr(transparent)]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct Any<T: ?Sized>(pub T);
+pub struct Any<G: ?Sized>(pub(crate) G);
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub struct Weight<T: ?Sized> {

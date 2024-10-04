@@ -1,10 +1,10 @@
 use crate::generate::{Generator, State};
 
-pub struct Dampen<T: ?Sized> {
-    pub pressure: f64,
-    pub deepest: usize,
-    pub limit: usize,
-    pub generator: T,
+pub struct Dampen<G: ?Sized> {
+    pub(crate) pressure: f64,
+    pub(crate) deepest: usize,
+    pub(crate) limit: usize,
+    pub(crate) generator: G,
 }
 
 impl<G: Generator + ?Sized> Generator for Dampen<G> {

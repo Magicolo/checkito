@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Default)]
-pub struct Array<T: ?Sized, const N: usize>(pub T);
+pub struct Array<G: ?Sized, const N: usize>(pub(crate) G);
 
 impl<G: FullGenerator, const N: usize> FullGenerator for Array<G, N> {
     type FullGen = Array<G::FullGen, N>;

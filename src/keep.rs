@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Keep<T: ?Sized>(pub T);
+pub struct Keep<T: ?Sized>(pub(crate) T);
 
 impl<G: Generator + ?Sized> Generator for Keep<G> {
     type Item = G::Item;

@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Default)]
-pub struct Flatten<T: ?Sized>(pub T);
+pub struct Flatten<G: ?Sized>(pub(crate) G);
 
 #[derive(Clone, Debug)]
 pub struct Shrink<I, O> {
