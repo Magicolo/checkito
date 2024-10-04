@@ -83,4 +83,4 @@ jobs:
       run: |
         cargo llvm-cov --all-targets --all-features --release --summary-only --json --verbose |
         jq '[.data[0].totals | .functions.percent, .instantiations.percent, .lines.percent, .regions.percent] | add / length' |
-        awk -v threshold=$COVERAGE '{ coverage = int($1); if (coverage > threshold) exit 0; else { print "Expected coverage "coverage"% to be at least "threshold"%."; exit 1; } }'
+        awk -v threshold=$COVERAGE '{ coverage = int($1); if (coverage > threshold) { print "Coverage "coverage"% is above threshold "threshold"%."; exit 0; } else { print "Expected coverage "coverage"% to be at least "threshold"%."; exit 1; } }'
