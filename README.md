@@ -1,4 +1,4 @@
-<div align="center"> <h1> checkito 2.1.1 </h1> </div>
+<div align="center"> <h1> checkito 3.0.0 </h1> </div>
 
 <p align="center">
     <em> 
@@ -26,8 +26,8 @@ The purpose of the library is to test general properties of a program rather tha
 
 ---
 ### Main Traits
--   [`Generate`](src/generate.rs): is implemented for many of rust's standard types and allows the generation of any random composite/structured data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
--   [`Shrink`](src/shrink.rs): tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk below `10`). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, and so on.
+-   [`Generator`](src/generate.rs): is implemented for many of rust's standard types and allows the generation of any random composite/structured data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
+-   [`Shrinker`](src/shrink.rs): tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk below `10`). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, and so on.
 -   [`Prove`](src/prove.rs): represents a desirable property of a program under test. It is used mainly in the context of the [`Check::check`](src/check.rs) or [`Checker::check`](src/check.rs) methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `()`, `bool` and `Result`. A `panic!()` is also considered as a failing property, thus standard `assert!()` macros (or any other panicking assertions) can be used to check the property.
    
 *To ensure safety, this library is `#![forbid(unsafe_code)]`.*
@@ -75,7 +75,7 @@ fn is_ascii(value: String) {
     assert!(value.is_ascii());
 }
 
-/// The `_` and `..` operators can be used to infer the [`FullGenerate`]
+/// The `_` and `..` operators can be used to infer the [`FullGenerator`]
 /// generator implementation for a type. Specifically, the `..` operator works
 /// the same way as slice match patterns.
 ///
@@ -120,9 +120,9 @@ fn sums_to_9001(left: i32, right: i32) {
 
 /// Generics can be used as inputs to the checking function.
 ///
-/// [`Generate::map`] can be used to map a value to another.
+/// [`Generator::map`] can be used to map a value to another.
 #[check(111119)]
-#[check(Generate::map(10..1000, |value| value * 10 - 1))]
+#[check(Generator::map(10..1000, |value| value * 10 - 1))]
 #[check("a string that ends with 9")]
 #[check(regex!("[a-z]*9"))]
 fn ends_with_9(value: impl std::fmt::Display) -> bool {
@@ -134,7 +134,7 @@ pub struct Person {
     pub age: usize,
 }
 /// Use tuples to combine generators and build more complex structured types.
-/// Alternatively implement the [`FullGenerate`] trait for the [`Person`]
+/// Alternatively implement the [`FullGenerator`] trait for the [`Person`]
 /// struct.
 ///
 /// Any generator combinator can be used here; see the other examples in the
@@ -152,7 +152,7 @@ fn person_has_valid_name_and_is_major(person: Person) {
 /// with pretty printing. For some more complex scenarios, it becomes more
 /// convenient to simply call the [`ChecK::check`] manually.
 ///
-/// The [`Generate::any`] combinator chooses from its inputs. The produced
+/// The [`Generator::any`] combinator chooses from its inputs. The produced
 /// `Or<..>` preserves the information about the choice but here, it can be
 /// simply collapsed using `Or<..>::into::<T>()`.
 #[test]
