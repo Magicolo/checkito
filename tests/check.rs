@@ -81,7 +81,7 @@ fn compiles_with_constants_and_runs_once(_: u8, _: char) {
     assert_eq!(COUNT.fetch_add(1, Ordering::Relaxed), 0);
 }
 
-#[check((), generate.count = 1_000_000)]
+#[check(().into_gen(), generate.count = 1_000_000)]
 fn compiles_with_unit_and_runs_once_with_generate_count(_: ()) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -153,7 +153,7 @@ fn compiles_with_mixed_infer_rest_operators(first: f64, second: i8, third: isize
 #[check(1usize)]
 #[check(2u8)]
 #[check('a')]
-#[check("b".to_string())]
+#[check("b".to_string().into_gen())]
 #[check('c'..'d')]
 #[check(['a', 'b'].any().map(Option::unwrap))]
 fn compiles_with_multiple_impl_generics(_a: impl FromStr) {}

@@ -11,9 +11,8 @@ use crate::{
     map::Map,
     primitive::Range,
     random::{self, Random},
-    shrink::{All, Shrinker},
+    shrink::Shrinker,
     size::Size,
-    utility::tuples,
 };
 use core::{
     iter::{FromIterator, FusedIterator},
@@ -506,42 +505,3 @@ impl<G: Generator + ?Sized> Generator for &mut G {
         G::constant(self)
     }
 }
-
-macro_rules! tuple {
-    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: FullGenerator,)*> FullGenerator for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-            type FullGen = ($($t::FullGen,)*);
-
-            #[allow(clippy::unused_unit)]
-            fn full_gen() -> Self::FullGen {
-                ($($t::full_gen(),)*)
-            }
-        }
-
-        impl<$($t: IntoGenerator,)*> IntoGenerator for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-            type IntoGen = ($($t::IntoGen,)*);
-
-            #[allow(clippy::unused_unit)]
-            fn into_gen(self) -> Self::IntoGen {
-                ($(self.$i.into_gen(),)*)
-            }
-        }
-
-        impl<$($t: Generator,)*> Generator for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-            type Shrink = All<($($t::Shrink,)*)>;
-
-            fn generate(&self, _state: &mut State) -> Self::Shrink {
-                All::new(($(self.$i.generate(_state),)*))
-            }
-
-            fn constant(&self) -> bool {
-                $(self.$i.constant() &&)* true
-            }
-        }
-    };
-}
-
-tuples!(tuple);

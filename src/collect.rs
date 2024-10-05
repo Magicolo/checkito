@@ -1,9 +1,10 @@
 use crate::{
+    all::All,
     generate::{FullGenerator, Generator, IntoGenerator, State},
     primitive::{self, Range},
     same::Same,
     sample::Sample,
-    shrink::{All, Shrinker},
+    shrink::Shrinker,
 };
 use core::{
     hash::{BuildHasher, Hash},
@@ -25,14 +26,14 @@ pub struct Collect<I: ?Sized, C, F: ?Sized> {
 }
 
 #[derive(Debug, Default)]
-pub struct Gen<I, F: ?Sized> {
-    generators: Vec<I>,
+pub struct Gen<G, F: ?Sized> {
+    generators: Vec<G>,
     _marker: PhantomData<F>,
 }
 
 #[derive(Debug)]
-pub struct Shrink<I, F: ?Sized> {
-    shrinkers: Vec<I>,
+pub struct Shrink<S, F: ?Sized> {
+    shrinkers: Vec<S>,
     machine: Machine,
     minimum: usize,
     _marker: PhantomData<F>,
@@ -305,16 +306,12 @@ impl FullGenerator for String {
     }
 }
 
-impl Generator for String {
+impl IntoGenerator for String {
+    type IntoGen = Gen<char, Self::Item>;
     type Item = Self;
-    type Shrink = Shrink<char, Self::Item>;
 
-    fn generate(&self, _: &mut State) -> Self::Shrink {
-        Shrink::new(self.chars(), Some(0))
-    }
-
-    fn constant(&self) -> bool {
-        true
+    fn into_gen(self) -> Self::IntoGen {
+        Gen::new(self.chars())
     }
 }
 
@@ -328,27 +325,14 @@ impl<K: FullGenerator<Item = impl Ord>, V: FullGenerator> FullGenerator for BTre
 }
 
 impl<K: Ord + Clone, V: IntoGenerator> IntoGenerator for BTreeMap<K, V> {
-    type IntoGen = Gen<(Same<K>, V::IntoGen), Self::Item>;
+    type IntoGen = Gen<All<(Same<K>, V::IntoGen)>, Self::Item>;
     type Item = BTreeMap<K, V::Item>;
 
     fn into_gen(self) -> Self::IntoGen {
         Gen::new(
             self.into_iter()
-                .map(|(key, value)| (Same(key), value.into_gen())),
+                .map(|(key, value)| All((Same(key), value.into_gen()))),
         )
-    }
-}
-
-impl<K: Ord + Clone, V: Generator> Generator for BTreeMap<K, V> {
-    type Item = BTreeMap<K, V::Item>;
-    type Shrink = Shrink<All<(Same<K>, V::Shrink)>, Self::Item>;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Gen::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        self.iter().all(|(_, value)| value.constant())
     }
 }
 
@@ -370,19 +354,6 @@ impl<G: IntoGenerator<Item = impl Ord>> IntoGenerator for BTreeSet<G> {
     }
 }
 
-impl<G: Generator<Item = impl Ord>> Generator for BTreeSet<G> {
-    type Item = BTreeSet<G::Item>;
-    type Shrink = Shrink<G::Shrink, Self::Item>;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Gen::new(self).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        self.iter().all(G::constant)
-    }
-}
-
 impl<K: FullGenerator<Item = impl Eq + Hash>, V: FullGenerator, S: BuildHasher + Default>
     FullGenerator for HashMap<K, V, S>
 {
@@ -397,27 +368,14 @@ impl<K: FullGenerator<Item = impl Eq + Hash>, V: FullGenerator, S: BuildHasher +
 impl<K: Eq + Hash + Clone, V: IntoGenerator, S: BuildHasher + Default> IntoGenerator
     for HashMap<K, V, S>
 {
-    type IntoGen = Gen<(Same<K>, V::IntoGen), Self::Item>;
+    type IntoGen = Gen<All<(Same<K>, V::IntoGen)>, Self::Item>;
     type Item = HashMap<K, V::Item, S>;
 
     fn into_gen(self) -> Self::IntoGen {
         Gen::new(
             self.into_iter()
-                .map(|(key, value)| (Same(key), value.into_gen())),
+                .map(|(key, value)| All((Same(key), value.into_gen()))),
         )
-    }
-}
-
-impl<K: Eq + Hash + Clone, V: Generator, S: BuildHasher + Default> Generator for HashMap<K, V, S> {
-    type Item = HashMap<K, V::Item, S>;
-    type Shrink = Shrink<All<(Same<K>, V::Shrink)>, Self::Item>;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Gen::new(self.iter().map(|(key, value)| (Same(key.clone()), value))).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        self.iter().all(|(_, value)| value.constant())
     }
 }
 
@@ -441,19 +399,6 @@ impl<G: IntoGenerator<Item = impl Eq + Hash>> IntoGenerator for HashSet<G> {
     }
 }
 
-impl<G: Generator<Item = impl Eq + Hash>> Generator for HashSet<G> {
-    type Item = HashSet<G::Item>;
-    type Shrink = Shrink<G::Shrink, Self::Item>;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Gen::new(self).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        self.iter().all(G::constant)
-    }
-}
-
 impl<G: FullGenerator<Item = impl Ord>> FullGenerator for BinaryHeap<G> {
     type FullGen = Collect<G::FullGen, Range<usize>, Self::Item>;
     type Item = BinaryHeap<G::Item>;
@@ -469,18 +414,5 @@ impl<G: IntoGenerator<Item = impl Ord>> IntoGenerator for BinaryHeap<G> {
 
     fn into_gen(self) -> Self::IntoGen {
         Gen::new(self.into_iter().map(G::into_gen))
-    }
-}
-
-impl<G: Generator<Item = impl Ord>> Generator for BinaryHeap<G> {
-    type Item = BinaryHeap<G::Item>;
-    type Shrink = Shrink<G::Shrink, Self::Item>;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Gen::new(self).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        self.iter().all(G::constant)
     }
 }

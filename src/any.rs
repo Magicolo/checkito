@@ -1,4 +1,5 @@
 use crate::{
+    all::All,
     generate::{FullGenerator, Generator, IntoGenerator, State},
     shrink::Shrinker,
     utility::tuples,
@@ -163,13 +164,13 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ts: Generator,)*> Generator for Any<($($ts,)*)> {
+        impl<$($ts: Generator,)*> Generator for Any<All<($($ts,)*)>> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 match state.random().u8(..$c) {
-                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
+                    $($is => orn::$n::Or::$ts(self.0.0.$is.generate(state)),)*
                     _ => unreachable!(),
                 }
             }
@@ -179,16 +180,25 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ts: Generator,)*> Generator for ($(Weight<$ts>,)*) {
+        impl<$($ts: IntoGenerator,)*> IntoGenerator for ($(Weight<$ts>,)*) {
+            type IntoGen = Any<($(Weight<$ts::IntoGen>,)*)>;
+            type Item = orn::$n::Or<$($ts::Item,)*>;
+
+            fn into_gen(self) -> Any<($(Weight<$ts::IntoGen>,)*)> {
+                Any(($(Weight::new(self.$is.weight, self.$is.value.into_gen()),)*))
+            }
+        }
+
+        impl<$($ts: Generator,)*> Generator for Any<($(Weight<$ts>,)*)> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let _total = $(self.$is.weight.max(f64::EPSILON) +)* 0.0;
+                let _total = $(self.0.$is.weight.max(f64::EPSILON) +)* 0.0;
                 assert!(_total.is_finite());
                 let mut _weight = state.random().f64() * _total;
                 $(
-                    let Weight { weight, value } = &self.$is;
+                    let Weight { weight, value } = &self.0.$is;
                     let weight = weight.max(f64::EPSILON);
                     if _weight < weight {
                         return orn::$n::Or::$ts(value.generate(state));

@@ -1,5 +1,6 @@
 use crate::{
     FullGenerator, IntoGenerator,
+    all::All,
     any::Any,
     generate::{Generator, State},
     map::Map,
@@ -9,12 +10,16 @@ use orn::Or2;
 use std::{rc::Rc, sync::Arc};
 
 impl<G: FullGenerator> FullGenerator for Option<G> {
-    type FullGen =
-        Map<Any<(G::FullGen, ())>, fn(<Any<(G::FullGen, ())> as Generator>::Item) -> Self::Item>;
+    type FullGen = Map<
+        Any<All<(G::FullGen, <() as IntoGenerator>::IntoGen)>>,
+        fn(
+            <Any<All<(G::FullGen, <() as IntoGenerator>::IntoGen)>> as Generator>::Item,
+        ) -> Self::Item,
+    >;
     type Item = Option<G::Item>;
 
     fn full_gen() -> Self::FullGen {
-        Any((G::full_gen(), ())).map(|item| match item {
+        Any(All((G::full_gen(), ().into_gen()))).map(|item| match item {
             Or2::T0(item) => Some(item),
             Or2::T1(_) => None,
         })
@@ -48,13 +53,13 @@ impl<S: Shrinker> Shrinker for Option<S> {
 
 impl<G: FullGenerator, E: FullGenerator> FullGenerator for Result<G, E> {
     type FullGen = Map<
-        Any<(G::FullGen, E::FullGen)>,
-        fn(<Any<(G::FullGen, E::FullGen)> as Generator>::Item) -> Self::Item,
+        Any<All<(G::FullGen, E::FullGen)>>,
+        fn(<Any<All<(G::FullGen, E::FullGen)>> as Generator>::Item) -> Self::Item,
     >;
     type Item = Result<G::Item, E::Item>;
 
     fn full_gen() -> Self::FullGen {
-        Any((G::full_gen(), E::full_gen())).map(|item| match item {
+        Any(All((G::full_gen(), E::full_gen()))).map(|item| match item {
             Or2::T0(item) => Result::Ok(item),
             Or2::T1(item) => Result::Err(item),
         })

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod all;
 pub mod any;
 pub mod array;
 pub mod boxed;

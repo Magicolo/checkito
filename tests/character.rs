@@ -21,7 +21,7 @@ fn empty_range() {
 #[test]
 fn is_same() {
     assert!(
-        char::full_gen()
+        full::<char>()
             .flat_map(|value| (value, Same(value)))
             .check(|(left, right)| left == right)
             .is_none()

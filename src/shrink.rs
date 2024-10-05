@@ -2,15 +2,8 @@ use crate::{
     Generator, boxed, check,
     generate::{State, States},
     random,
-    utility::tuples,
 };
 use core::{iter, ops};
-
-#[derive(Clone, Debug)]
-pub struct All<T: ?Sized> {
-    pub index: usize,
-    pub items: T,
-}
 
 pub trait Shrinker: Clone {
     type Item;
@@ -89,15 +82,6 @@ pub(crate) fn shrinker<G: Generator + ?Sized>(
     generator.generate(&mut state)
 }
 
-impl<T> All<T> {
-    pub const fn new(inner: T) -> Self {
-        Self {
-            items: inner,
-            index: 0,
-        }
-    }
-}
-
 impl<G: Generator + ?Sized> Iterator for Shrinkers<'_, G> {
     type Item = G::Shrink;
 
@@ -139,35 +123,3 @@ impl<G: Generator + ?Sized> ExactSizeIterator for Shrinkers<'_, G> {
 }
 
 impl<G: Generator + ?Sized> iter::FusedIterator for Shrinkers<'_, G> {}
-
-macro_rules! tuple {
-    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: Shrinker,)*> Shrinker for All<($($t,)*)> {
-            type Item = ($($t::Item,)*);
-
-            #[allow(clippy::unused_unit)]
-            fn item(&self) -> Self::Item {
-                ($(self.items.$i.item(),)*)
-            }
-
-            fn shrink(&mut self) -> Option<Self> {
-                loop {
-                    match self.index {
-                        $($i => {
-                            if let Some(shrinker) = self.items.$i.shrink() {
-                                let mut items = self.items.clone();
-                                items.$i = shrinker;
-                                break Some(Self { items, index: self.index });
-                            } else {
-                                self.index += 1;
-                            }
-                        })*
-                        _ => break None,
-                    }
-                }
-            }
-        }
-    };
-}
-
-tuples!(tuple);

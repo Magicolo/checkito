@@ -1,4 +1,6 @@
 use crate::{
+    all::All,
+    any::Any,
     generate::{FullGenerator, Generator, IntoGenerator, State},
     nudge::Nudge,
     shrink::Shrinker,
@@ -10,7 +12,7 @@ use core::{
 };
 
 #[derive(Copy, Clone, Debug, Default)]
-pub struct Full<T: ?Sized>(PhantomData<T>);
+pub struct Full<T: ?Sized>(pub(crate) PhantomData<T>);
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Range<T> {
@@ -144,6 +146,15 @@ impl<T> ops::RangeBounds<T> for Range<T> {
 
 macro_rules! same {
     ($t:ty) => {
+        impl IntoGenerator for $t {
+            type IntoGen = Self;
+            type Item = Self;
+
+            fn into_gen(self) -> Self::IntoGen {
+                self
+            }
+        }
+
         impl Generator for $t {
             type Item = Self;
             type Shrink = Self;
@@ -413,7 +424,7 @@ pub mod character {
         type Shrink = char;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            (
+            Any(All((
                 '\\',
                 '\x0B',
                 '\x1B',
@@ -429,10 +440,9 @@ pub mod character {
                 '🕴',
                 char::MAX,
                 char::REPLACEMENT_CHARACTER,
-            )
-                .any()
-                .generate(state)
-                .into()
+            )))
+            .generate(state)
+            .into()
         }
 
         fn constant(&self) -> bool {
@@ -553,7 +563,7 @@ pub mod number {
                 type Shrink = $t;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    (0 as $t, $t::MIN, $t::MAX).any().generate(state).into()
+                    Any(All((0 as $t, $t::MIN, $t::MAX))).generate(state).into()
                 }
 
                 fn constant(&self) -> bool {
@@ -652,8 +662,7 @@ pub mod number {
                 type Shrink = $t;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    (0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)
-                        .any()
+                    Any(All((0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)))
                         .generate(state)
                         .into()
                 }

@@ -1,10 +1,36 @@
-use crate::{Generator, IntoGenerator, primitive::Range};
+use crate::{
+    Generator, IntoGenerator, Same,
+    all::All,
+    primitive::{Full, Range},
+};
 use core::{
     fmt,
+    marker::PhantomData,
     ops::{RangeFrom, RangeFull, RangeToInclusive},
 };
 
-pub fn number<T>() -> impl Generator<Item = T>
+pub fn full<T>() -> Full<T>
+where
+    Full<T>: Generator<Item = T>,
+{
+    Full(PhantomData)
+}
+
+pub fn same<T>(value: T) -> Same<T>
+where
+    Same<T>: Generator<Item = T>,
+{
+    Same(value)
+}
+
+pub fn all<G>(generators: G) -> All<G>
+where
+    All<G>: Generator,
+{
+    All(generators)
+}
+
+pub fn number<T>() -> Range<T>
 where
     Range<T>: Generator<Item = T>,
     RangeFull: TryInto<Range<T>>,
@@ -40,9 +66,9 @@ pub fn ascii() -> impl Generator<Item = char> {
 }
 
 pub fn with<T, F: Fn() -> T + Clone>(generate: F) -> impl Generator<Item = T> {
-    ().map(move |_| generate())
+    ().into_gen().map(move |_| generate())
 }
 
 pub fn lazy<G: Generator, F: Fn() -> G + Clone>(generate: F) -> impl Generator<Item = G::Item> {
-    ().flat_map(move |_| generate())
+    ().into_gen().flat_map(move |_| generate())
 }
