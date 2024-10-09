@@ -46,7 +46,7 @@ pub struct Shrink<T> {
 }
 
 impl<T> Range<T> {
-    pub fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Range<U> {
+    pub(crate) fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Range<U> {
         Range {
             start: map(self.start),
             end: map(self.end),
@@ -55,7 +55,7 @@ impl<T> Range<T> {
 }
 
 impl<T> Shrink<T> {
-    pub const fn new(range: Range<T>, item: T) -> Self {
+    pub(crate) const fn new(range: Range<T>, item: T) -> Self {
         Self {
             range,
             item,
@@ -63,11 +63,7 @@ impl<T> Shrink<T> {
         }
     }
 
-    pub fn range(self) -> Range<T> {
-        self.range
-    }
-
-    pub fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Shrink<U> {
+    pub(crate) fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Shrink<U> {
         let item = map(self.item);
         Shrink {
             range: self.range.map(map),
@@ -182,6 +178,7 @@ macro_rules! full {
         }
     };
 }
+
 macro_rules! same {
     ($t:ty) => {
         impl Generator for $t {
