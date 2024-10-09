@@ -17,7 +17,9 @@ fn filtered_pair_preserves_inequality() {
 #[test]
 fn filtered_array_preserves_inequality() {
     assert!(
-        Generator::collect::<String>('a'..='z')
+        ('a'..='z')
+            .into_gen()
+            .collect::<String>()
             .array::<3>()
             .filter(|[a, b, c]| a != b && b != c && a != c)
             .check(|array| match array {
@@ -32,8 +34,9 @@ fn filtered_array_preserves_inequality() {
 fn shrinked_filter_preserves_inequality() {
     let fail = (
         <(String, String)>::full_gen().filter(|(left, right)| left != right),
-        usize::full_gen(),
+        <usize>::full_gen(),
     )
+        .into_gen()
         .check(|(pair, value)| {
             let Some((left, right)) = pair else {
                 return true;

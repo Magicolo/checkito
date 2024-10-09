@@ -1,5 +1,4 @@
 use crate::{
-    all::All,
     any::Any,
     generate::{FullGenerator, Generator, IntoGenerator, State},
     nudge::Nudge,
@@ -7,17 +6,16 @@ use crate::{
 };
 use core::{
     convert::TryInto,
+    fmt,
     marker::PhantomData,
     ops::{self, Bound},
 };
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Full<T: ?Sized>(pub(crate) PhantomData<T>);
+use std::error;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Range<T> {
-    start: T,
-    end: T,
+    pub(crate) start: T,
+    pub(crate) end: T,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -34,19 +32,17 @@ enum Direction {
     High,
 }
 
-struct Special<T>(PhantomData<T>);
+#[derive(Debug)]
+pub struct Full<T: ?Sized>(PhantomData<T>);
+
+#[derive(Debug)]
+pub struct Special<T: ?Sized>(PhantomData<T>);
 
 #[derive(Clone, Debug)]
 pub struct Shrink<T> {
     range: Range<T>,
     item: T,
     direction: Direction,
-}
-
-impl<T: ?Sized> Full<T> {
-    pub const fn new() -> Self {
-        Self(PhantomData)
-    }
 }
 
 impl<T> Range<T> {
@@ -144,23 +140,56 @@ impl<T> ops::RangeBounds<T> for Range<T> {
     }
 }
 
-macro_rules! same {
-    ($t:ty) => {
-        impl IntoGenerator for $t {
-            type IntoGen = Self;
-            type Item = Self;
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
 
-            fn into_gen(self) -> Self::IntoGen {
-                self
+impl error::Error for Error {}
+
+impl<T: ?Sized> Special<T> {
+    pub(crate) const NEW: Self = Self(PhantomData);
+}
+
+impl<T: ?Sized> Clone for Special<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T: ?Sized> Copy for Special<T> {}
+
+impl<T: ?Sized> Full<T> {
+    pub(crate) const NEW: Self = Self(PhantomData);
+}
+
+impl<T: ?Sized> Clone for Full<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T: ?Sized> Copy for Full<T> {}
+
+macro_rules! full {
+    ($t:ty) => {
+        impl FullGenerator for $t {
+            type FullGen = Full<$t>;
+            type Item = $t;
+
+            fn full_gen() -> Self::FullGen {
+                Full::<$t>::NEW
             }
         }
-
+    };
+}
+macro_rules! same {
+    ($t:ty) => {
         impl Generator for $t {
             type Item = Self;
             type Shrink = Self;
 
             fn generate(&self, _: &mut State) -> Self::Shrink {
-                *self
+                <$t as Clone>::clone(self)
             }
 
             fn constant(&self) -> bool {
@@ -172,28 +201,13 @@ macro_rules! same {
             type Item = Self;
 
             fn item(&self) -> Self::Item {
-                *self
+                <$t as Clone>::clone(self)
             }
 
             fn shrink(&mut self) -> Option<Self> {
                 None
             }
         }
-    };
-}
-
-macro_rules! full {
-    ($t:ty) => {
-        impl FullGenerator for $t {
-            type FullGen = Full<$t>;
-            type Item = $t;
-
-            fn full_gen() -> Self::FullGen {
-                Full::<$t>::new()
-            }
-        }
-
-        same!($t);
     };
 }
 
@@ -213,23 +227,6 @@ macro_rules! range {
 
             fn into_gen(self) -> Self::IntoGen {
                 <$t as TryFrom<$r>>::try_from(self).unwrap()
-            }
-        }
-
-        impl Generator for $r {
-            type Item = $i;
-            type Shrink = <$t as Generator>::Shrink;
-
-            fn generate(&self, state: &mut State) -> Self::Shrink {
-                <$t as TryFrom<$r>>::try_from(self.clone())
-                    .unwrap()
-                    .generate(state)
-            }
-
-            fn constant(&self) -> bool {
-                <$t as TryFrom<$r>>::try_from(self.clone())
-                    .unwrap()
-                    .constant()
             }
         }
     };
@@ -307,6 +304,7 @@ macro_rules! shrinked {
 
 macro_rules! shrink {
     ($s:expr, $t:ident) => {{
+        // Never change `$s.item` to preserve coherence in calls to `shrinker.item()`.
         match $s.direction {
             Direction::None if $s.item >= 0 as $t => {
                 $s.range.start = $s.range.start.max(0 as $t);
@@ -374,16 +372,17 @@ macro_rules! shrink {
 
 pub mod boolean {
     use super::*;
+    use core::mem::take;
 
-    #[derive(Copy, Clone, Debug, Default)]
-    pub struct Shrink(bool);
+    #[derive(Copy, Clone, Debug)]
+    pub struct Shrink(bool, bool);
 
     impl Generator for Full<bool> {
         type Item = bool;
         type Shrink = Shrink;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink(state.random().f64() * state.size() >= 0.5)
+            Shrink(true, state.random().bool())
         }
 
         fn constant(&self) -> bool {
@@ -395,13 +394,14 @@ pub mod boolean {
         type Item = bool;
 
         fn item(&self) -> Self::Item {
-            self.0
+            self.1
         }
 
         fn shrink(&mut self) -> Option<Self> {
-            if self.0 {
-                self.0 = false;
-                Some(*self)
+            // A distinct `bool` is required to avoid modifying the `item()` if it would be
+            // called after shrink.
+            if self.1 && take(&mut self.0) {
+                Some(Shrink(false, false))
             } else {
                 None
             }
@@ -409,6 +409,7 @@ pub mod boolean {
     }
 
     full!(bool);
+    same!(bool);
 }
 
 pub mod character {
@@ -424,7 +425,7 @@ pub mod character {
         type Shrink = char;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Any(All((
+            Any((
                 '\\',
                 '\x0B',
                 '\x1B',
@@ -440,7 +441,7 @@ pub mod character {
                 '🕴',
                 char::MAX,
                 char::REPLACEMENT_CHARACTER,
-            )))
+            ))
             .generate(state)
             .into()
         }
@@ -483,7 +484,7 @@ pub mod character {
         }
 
         const fn special() -> Special<char> {
-            Special(PhantomData)
+            Special::NEW
         }
     }
 
@@ -544,6 +545,7 @@ pub mod character {
     }
 
     full!(char);
+    same!(char);
     ranges!(char, Range);
 }
 
@@ -551,6 +553,8 @@ pub mod string {
     use super::*;
 
     same!(&str);
+    same!(Box<str>);
+    same!(String);
 }
 
 pub mod number {
@@ -563,7 +567,7 @@ pub mod number {
                 type Shrink = $t;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    Any(All((0 as $t, $t::MIN, $t::MAX))).generate(state).into()
+                    Any((0 as $t, $t::MIN, $t::MAX)).generate(state).into()
                 }
 
                 fn constant(&self) -> bool {
@@ -581,7 +585,7 @@ pub mod number {
                 }
 
                 const fn special() -> Special<$t> {
-                    Special(PhantomData)
+                    Special::NEW
                 }
             }
 
@@ -650,6 +654,7 @@ pub mod number {
             }
 
             full!($t);
+            same!($t);
             ranges!($t, Range<$t>);
         };
         ($($ts:ident),*) => { $(integer!($ts);)* };
@@ -662,7 +667,7 @@ pub mod number {
                 type Shrink = $t;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    Any(All((0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN)))
+                    Any((0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN))
                         .generate(state)
                         .into()
                 }
@@ -674,7 +679,7 @@ pub mod number {
 
             impl Full<$t> {
                 const fn special() -> Special<$t> {
-                    Special(PhantomData)
+                    Special::NEW
                 }
 
                 const fn range() -> Range<$t> {
@@ -786,6 +791,7 @@ pub mod number {
             }
 
             full!($t);
+            same!($t);
             ranges!($t, Range<$t>);
         };
         ($($ts:ident),*) => { $(floating!($ts);)* };

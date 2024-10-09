@@ -188,11 +188,11 @@ impl Check {
             };
 
             let generator = if index >= rest.0 && index < rest.1 {
-                quote_spanned!(rest.2 => <#ty as ::checkito::FullGenerator>::full_gen())
+                quote_spanned!(rest.2 => <#ty as ::checkito::generate::FullGenerator>::full_gen())
             } else {
                 match expressions.next() {
                     Some(Expr::Infer(infer)) => {
-                        quote_spanned!(infer.span() => <#ty as ::checkito::FullGenerator>::full_gen())
+                        quote_spanned!(infer.span() => <#ty as ::checkito::generate::FullGenerator>::full_gen())
                     }
                     Some(expression) => quote_spanned!(expression.span() => #expression),
                     None => {
@@ -256,21 +256,21 @@ impl Check {
         let verbose = self.verbose.unwrap_or(false);
         Ok(match self.debug {
             Some(true) => quote_spanned!(self.span => ::checkito::check::help::debug(
-                ::checkito::all((#(#generators,)*)),
+                ::checkito::IntoGenerator::into_gen((#(#generators,)*)),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
             Some(false) => quote_spanned!(self.span => ::checkito::check::help::minimal(
-                ::checkito::all((#(#generators,)*)),
+                ::checkito::IntoGenerator::into_gen((#(#generators,)*)),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
             None => quote_spanned!(self.span => ::checkito::check::help::default(
-                ::checkito::all((#(#generators,)*)),
+                ::checkito::IntoGenerator::into_gen((#(#generators,)*)),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,

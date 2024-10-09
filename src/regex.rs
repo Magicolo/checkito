@@ -1,9 +1,11 @@
 #![cfg(feature = "regex")]
 
 use crate::{
-    collect,
+    all::{self, All},
+    any::{self, Any},
+    collect::{self},
     generate::{Generator, State},
-    primitive::character,
+    primitive::{self, character},
     shrink::Shrinker,
 };
 use core::fmt;
@@ -11,13 +13,16 @@ use regex_syntax::{
     Parser,
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
 };
-use std::borrow::Cow;
+use std::string::FromUtf8Error;
 
 #[derive(Debug, Clone)]
-pub struct Regex {
-    pattern: Cow<'static, str>,
-    tree: Hir,
-    repeats: u32,
+pub enum Regex {
+    Empty,
+    Text(String),
+    Range(character::Range),
+    Collect(collect::Collect<Box<Regex>, primitive::Range<usize>, String>),
+    Any(any::Any<Box<[Regex]>>),
+    All(all::All<Box<[Regex]>>),
 }
 
 #[derive(Clone)]
@@ -25,11 +30,19 @@ pub enum Shrink {
     Empty,
     Text(String),
     Range(character::Shrink),
-    All(collect::Shrink<Shrink, String>),
+    All(all::Shrink<Box<[Shrink]>>),
+    Collect(collect::Shrink<Shrink, String>),
 }
 
 #[derive(Clone)]
-pub struct Error(Box<regex_syntax::Error>);
+pub struct Error(Inner);
+
+#[derive(Clone)]
+enum Inner {
+    Regex(Box<regex_syntax::Error>),
+    Primitive(primitive::Error),
+    Utf8(FromUtf8Error),
+}
 
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,25 +50,129 @@ impl fmt::Debug for Error {
     }
 }
 
+impl fmt::Debug for Inner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Inner::Regex(error) => write!(f, "Regex({error})"),
+            Inner::Primitive(error) => write!(f, "Primitive({error})"),
+            Inner::Utf8(error) => write!(f, "Utf8({error})"),
+        }
+    }
+}
+
 impl Regex {
-    pub fn new(pattern: impl Into<Cow<'static, str>>) -> Result<Self, Error> {
-        let pattern = pattern.into();
-        Ok(Regex {
-            tree: Parser::new()
-                .parse(&pattern)
-                .map_err(|error| Error(Box::new(error)))?,
-            pattern,
-            repeats: 64,
+    pub fn new(pattern: &str, repeats: Option<u32>) -> Result<Self, Error> {
+        let hir = Parser::new().parse(pattern)?;
+        Regex::try_from_hir(hir, repeats.unwrap_or(64))
+    }
+}
+
+impl From<regex_syntax::Error> for Error {
+    fn from(value: regex_syntax::Error) -> Self {
+        Error(Inner::Regex(Box::new(value)))
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(value: FromUtf8Error) -> Self {
+        Error(Inner::Utf8(value))
+    }
+}
+
+impl From<primitive::Error> for Error {
+    fn from(value: primitive::Error) -> Self {
+        Error(Inner::Primitive(value))
+    }
+}
+
+impl TryFrom<&ClassUnicodeRange> for Regex {
+    type Error = Error;
+
+    fn try_from(value: &ClassUnicodeRange) -> Result<Self, Self::Error> {
+        Ok(Regex::Range(character::Range::char(
+            value.start()..=value.end(),
+        )?))
+    }
+}
+
+impl TryFrom<&ClassBytesRange> for Regex {
+    type Error = Error;
+
+    fn try_from(value: &ClassBytesRange) -> Result<Self, Self::Error> {
+        Ok(Regex::Range(character::Range::char(
+            value.start() as char..=value.end() as char,
+        )?))
+    }
+}
+
+impl Regex {
+    const fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    fn try_from_iter(
+        results: impl IntoIterator<Item = Result<Regex, Error>>,
+        merge: impl FnOnce(Box<[Regex]>) -> Regex,
+    ) -> Result<Regex, Error> {
+        let mut trees = Vec::new();
+        let mut last = None;
+        for result in results {
+            match result? {
+                Self::Empty => {}
+                tree => trees.extend(last.replace(tree)),
+            }
+        }
+        Ok(match last {
+            Some(tree) if trees.is_empty() => tree,
+            Some(tree) => {
+                trees.push(tree);
+                merge(trees.into_boxed_slice())
+            }
+            None => Self::Empty,
         })
     }
 
-    pub fn pattern(&self) -> &str {
-        &self.pattern
-    }
-
-    pub fn repeats(mut self, repeats: u32) -> Self {
-        self.repeats = repeats;
-        self
+    fn try_from_hir(hir: Hir, repeats: u32) -> Result<Self, Error> {
+        match hir.into_kind() {
+            HirKind::Empty | HirKind::Look(_) => Ok(Self::Empty),
+            HirKind::Literal(literal) => Ok(Self::Text(String::from_utf8(literal.0.to_vec())?)),
+            HirKind::Capture(Capture { sub, .. }) => Self::try_from_hir(*sub, repeats),
+            HirKind::Repetition(Repetition { min, max, sub, .. }) => {
+                let tree = Self::try_from_hir(*sub, repeats / 2)?;
+                if tree.is_empty() {
+                    return Ok(Self::Empty);
+                }
+                let low = min;
+                let high = max.unwrap_or(repeats.max(low));
+                if low == 1 && high == 1 {
+                    return Ok(tree);
+                }
+                let range = primitive::Range::usize(low as usize..=high as usize)?;
+                Ok(Self::Collect(collect::Collect::new_with(
+                    Box::new(tree),
+                    range,
+                    Some(low as _),
+                )))
+            }
+            HirKind::Class(Class::Unicode(class)) => {
+                Self::try_from_iter(class.ranges().iter().map(Self::try_from), |trees| {
+                    Self::Any(Any(trees))
+                })
+            }
+            HirKind::Class(Class::Bytes(class)) => {
+                Self::try_from_iter(class.ranges().iter().map(Self::try_from), |trees| {
+                    Self::Any(Any(trees))
+                })
+            }
+            HirKind::Concat(hirs) => Self::try_from_iter(
+                hirs.into_iter().map(|hir| Self::try_from_hir(hir, repeats)),
+                |trees| Self::All(All(trees)),
+            ),
+            HirKind::Alternation(hirs) => Self::try_from_iter(
+                hirs.into_iter().map(|hir| Self::try_from_hir(hir, repeats)),
+                |trees| Self::Any(Any(trees)),
+            ),
+        }
     }
 }
 
@@ -64,114 +181,24 @@ impl Generator for Regex {
     type Shrink = Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        fn next(kind: &HirKind, state: &mut State, repeats: u32) -> Shrink {
-            match kind {
-                HirKind::Empty | HirKind::Look(_) => Shrink::Empty,
-                HirKind::Literal(literal) => {
-                    Shrink::Text(String::from_utf8(literal.0.to_vec()).unwrap())
-                }
-                HirKind::Class(Class::Unicode(class)) if class.ranges().is_empty() => Shrink::Empty,
-                HirKind::Class(Class::Bytes(class)) if class.ranges().is_empty() => Shrink::Empty,
-                HirKind::Class(Class::Unicode(class)) => {
-                    Shrink::Range(class.ranges().any().generate(state).unwrap())
-                }
-                HirKind::Class(Class::Bytes(class)) => {
-                    Shrink::Range(class.ranges().any().generate(state).unwrap())
-                }
-                HirKind::Capture(Capture { sub, .. }) => next(sub.kind(), state, repeats),
-                HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.is_empty() => {
-                    Shrink::Empty
-                }
-                HirKind::Concat(hirs) | HirKind::Alternation(hirs) if hirs.len() == 1 => {
-                    next(hirs[0].kind(), state, repeats)
-                }
-                HirKind::Concat(hirs) => Shrink::All(collect::Shrink::new(
-                    hirs.iter().map(|hir| next(hir.kind(), state, repeats)),
-                    Some(hirs.len()),
-                )),
-                HirKind::Alternation(hirs) => next(
-                    hirs[state.random().usize(..hirs.len())].kind(),
-                    state,
-                    repeats,
-                ),
-                HirKind::Repetition(Repetition { min, max, sub, .. }) => {
-                    let (low, high) = range(*min, *max, repeats);
-                    let count = (low..=high).generate(state).item();
-                    let limit = repeats / (u32::BITS - high.leading_zeros());
-                    Shrink::All(collect::Shrink::new(
-                        Iterator::map(0..count, |_| next(sub.kind(), state, limit)),
-                        Some(low as _),
-                    ))
-                }
-            }
+        match self {
+            Regex::Empty => Shrink::Empty,
+            Regex::Text(text) => Shrink::Text(text.clone()),
+            Regex::Range(range) => Shrink::Range(range.generate(state)),
+            Regex::Collect(collect) => Shrink::Collect(collect.generate(state)),
+            Regex::Any(any) => any.generate(state).0.unwrap_or(Shrink::Empty),
+            Regex::All(all) => Shrink::All(all.generate(state)),
         }
-        next(self.tree.kind(), state, self.repeats)
     }
 
     fn constant(&self) -> bool {
-        fn next(kind: &HirKind, repeats: u32) -> bool {
-            match kind {
-                HirKind::Empty | HirKind::Literal(_) | HirKind::Look(_) => true,
-                HirKind::Class(Class::Unicode(class)) => {
-                    class.ranges().iter().all(Generator::constant)
-                }
-                HirKind::Class(Class::Bytes(class)) => {
-                    class.ranges().iter().all(Generator::constant)
-                }
-                HirKind::Capture(Capture { sub, .. }) => next(sub.kind(), repeats),
-                HirKind::Concat(hirs) => hirs.iter().all(|hir| next(hir.kind(), repeats)),
-                HirKind::Alternation(hirs) => hirs.iter().all(|hir| next(hir.kind(), repeats)),
-                HirKind::Repetition(Repetition { min, max, sub, .. }) => {
-                    let (low, high) = range(*min, *max, repeats);
-                    if low == 0 && high == 0 {
-                        true
-                    } else {
-                        (low..=high).constant() && next(sub.kind(), repeats)
-                    }
-                }
-            }
+        match self {
+            Regex::Empty | Regex::Text(_) => true,
+            Regex::Range(range) => range.constant(),
+            Regex::Collect(collect) => collect.constant(),
+            Regex::Any(any) => any.constant(),
+            Regex::All(all) => all.constant(),
         }
-        next(self.tree.kind(), self.repeats)
-    }
-}
-
-fn range(min: u32, max: Option<u32>, repeats: u32) -> (u32, u32) {
-    let low = min;
-    let high = max.unwrap_or(repeats.max(low));
-    (low, high)
-}
-
-impl Generator for ClassUnicodeRange {
-    type Item = char;
-    type Shrink = character::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        character::Range::char(self.start()..=self.end())
-            .unwrap()
-            .generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        character::Range::char(self.start()..=self.end())
-            .unwrap()
-            .constant()
-    }
-}
-
-impl Generator for ClassBytesRange {
-    type Item = char;
-    type Shrink = character::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        character::Range::char(self.start() as char..=self.end() as char)
-            .unwrap()
-            .generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        character::Range::char(self.start() as char..=self.end() as char)
-            .unwrap()
-            .constant()
     }
 }
 
@@ -179,21 +206,26 @@ impl Shrinker for Shrink {
     type Item = String;
 
     fn item(&self) -> Self::Item {
-        fn next(shrinker: &Shrink, buffer: &mut String) {
+        fn descend(shrinker: &Shrink, buffer: &mut String) {
             match shrinker {
                 Shrink::Empty => {}
                 Shrink::Text(text) => buffer.push_str(text),
                 Shrink::Range(shrinker) => buffer.push(shrinker.item()),
                 Shrink::All(shrinker) => {
-                    for shrinker in shrinker.shrinkers() {
-                        next(shrinker, buffer);
+                    for shrinker in shrinker.shrinkers.iter() {
+                        descend(shrinker, buffer);
+                    }
+                }
+                Shrink::Collect(shrinker) => {
+                    for shrinker in shrinker.shrinkers.iter() {
+                        descend(shrinker, buffer);
                     }
                 }
             }
         }
 
         let mut buffer = String::new();
-        next(self, &mut buffer);
+        descend(self, &mut buffer);
         buffer
     }
 
@@ -202,6 +234,7 @@ impl Shrinker for Shrink {
             Self::Empty | Self::Text(_) => None,
             Self::Range(shrinker) => Some(Self::Range(shrinker.shrink()?)),
             Self::All(shrinker) => Some(Self::All(shrinker.shrink()?)),
+            Self::Collect(shrinker) => Some(Self::Collect(shrinker.shrink()?)),
         }
     }
 }

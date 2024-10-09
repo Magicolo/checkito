@@ -1,38 +1,49 @@
 use crate::{
     all::All,
-    generate::{FullGenerator, Generator, IntoGenerator, State},
+    generate::{Generator, IntoGenerator, State},
     shrink::Shrinker,
     utility::tuples,
 };
 use core::f64;
+use ref_cast::RefCast;
 
 #[repr(transparent)]
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Debug, RefCast)]
 pub struct Any<G: ?Sized>(pub(crate) G);
 
-#[derive(Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Clone, Debug)]
+pub struct Shrink<S>(pub(crate) Option<S>);
+
+#[derive(Clone, Debug)]
 pub struct Weight<T: ?Sized> {
     weight: f64,
-    value: T,
+    generator: T,
 }
 
 impl<T> Weight<T> {
-    pub fn new(weight: f64, value: T) -> Self {
-        assert!(weight.is_finite());
-        assert!(weight > f64::EPSILON);
-        Self { weight, value }
-    }
-
-    pub fn weight(&self) -> f64 {
+    pub const fn weight(&self) -> f64 {
         self.weight
     }
 
-    pub fn value(&self) -> &T {
-        &self.value
+    pub const fn value(&self) -> &T {
+        &self.generator
     }
+}
 
-    pub fn into_value(self) -> T {
-        self.value
+impl<G: Generator> Weight<G> {
+    pub fn new<I: IntoGenerator<IntoGen = G>>(weight: f64, generator: I) -> Self {
+        assert!(weight.is_finite());
+        assert!(weight > f64::EPSILON);
+        Self {
+            weight,
+            generator: generator.into_gen(),
+        }
+    }
+}
+
+impl<G: Generator + ?Sized> Weight<G> {
+    fn constant(&self) -> bool {
+        self.generator.constant()
     }
 }
 
@@ -50,13 +61,16 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
     } else {
         let total = items
             .iter()
-            .map(|Weight { weight, .. }| weight.max(f64::EPSILON))
+            .map(|Weight { weight, .. }| weight)
             .sum::<f64>();
         assert!(total.is_finite());
         let mut random = state.random().f64() * total;
-        for Weight { weight, value } in items {
-            let weight = weight.max(f64::EPSILON);
-            if random < weight {
+        for Weight {
+            weight,
+            generator: value,
+        } in items
+        {
+            if random < *weight {
                 return Some(value);
             } else {
                 random -= weight;
@@ -66,67 +80,107 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
     }
 }
 
-impl<T: ?Sized> AsRef<T> for Any<T> {
-    fn as_ref(&self) -> &T {
-        &self.0
-    }
-}
-
-impl<G: FullGenerator + ?Sized> FullGenerator for Any<G>
+impl<G: ?Sized> Generator for Any<Any<G>>
 where
-    Any<G::FullGen>: Generator,
+    Any<G>: Generator,
 {
-    type FullGen = Any<G::FullGen>;
-    type Item = <Any<G::FullGen> as Generator>::Item;
+    type Item = <Any<G> as Generator>::Item;
+    type Shrink = <Any<G> as Generator>::Shrink;
 
-    fn full_gen() -> Self::FullGen {
-        Any(G::full_gen())
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        Any::ref_cast(&self.0.0).generate(state)
+    }
+
+    fn constant(&self) -> bool {
+        Any::ref_cast(&self.0.0).constant()
     }
 }
 
-impl<G: IntoGenerator> IntoGenerator for Any<G>
+impl<G: ?Sized> Generator for Any<All<G>>
 where
-    Any<G::IntoGen>: Generator,
+    Any<G>: Generator,
 {
-    type IntoGen = Any<G::IntoGen>;
-    type Item = <Any<G::IntoGen> as Generator>::Item;
+    type Item = <Any<G> as Generator>::Item;
+    type Shrink = <Any<G> as Generator>::Shrink;
 
-    fn into_gen(self) -> Self::IntoGen {
-        Any(self.0.into_gen())
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        Any::ref_cast(&self.0.0).generate(state)
+    }
+
+    fn constant(&self) -> bool {
+        Any::ref_cast(&self.0.0).constant()
     }
 }
 
-const fn as_slice<T>(slice: &[T]) -> &[T] {
-    slice
+impl<G: ?Sized> Generator for Any<&G>
+where
+    Any<G>: Generator,
+{
+    type Item = <Any<G> as Generator>::Item;
+    type Shrink = <Any<G> as Generator>::Shrink;
+
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        Any::ref_cast(self.0).generate(state)
+    }
+
+    fn constant(&self) -> bool {
+        Any::ref_cast(self.0).constant()
+    }
 }
 
-macro_rules! collection {
-    ($t:ty, $i:ident, [$($n:ident)?]) => {
-        impl<T: Generator $(,const $n: usize)?> Generator for $t {
-            type Item = Option<T::Item>;
-            type Shrink = Option<T::Shrink>;
+impl<G: ?Sized> Generator for Any<&mut G>
+where
+    Any<G>: Generator,
+{
+    type Item = <Any<G> as Generator>::Item;
+    type Shrink = <Any<G> as Generator>::Shrink;
+
+    fn generate(&self, state: &mut State) -> Self::Shrink {
+        Any::ref_cast(self.0).generate(state)
+    }
+
+    fn constant(&self) -> bool {
+        Any::ref_cast(self.0).constant()
+    }
+}
+
+macro_rules! slice {
+    ($t: ty, $i: ident, [$($n: ident)?]) => {
+        impl<G: Generator $(,const $n: usize)?> Generator for Any<$t> {
+            type Item = Option<G::Item>;
+            type Shrink = Shrink<G::Shrink>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                Some($i(as_slice(self.as_ref()), state)?.generate(state))
+                Shrink($i(&self.0, state).map(|generator| generator.generate(state)))
             }
 
             fn constant(&self) -> bool {
-                as_slice(self.as_ref()).len() <= 1
+                self.0.iter().all(|generator| generator.constant())
             }
         }
     };
 }
 
-collection!(Any<[T]>, indexed, []);
-collection!(Any<&[T]>, indexed, []);
-collection!(Any<&mut [T]>, indexed, []);
-collection!([Weight<T>], weighted, []);
-collection!(Any<[T; N]>, indexed, [N]);
-collection!([Weight<T>; N], weighted, [N]);
-collection!(Any<Box<[T]>>, indexed, []);
-collection!(Box<[Weight<T>]>, weighted, []);
-collection!(Any<Vec<T>>, indexed, []);
-collection!(Vec<Weight<T>>, weighted, []);
+slice!([G], indexed, []);
+slice!([G; N], indexed, [N]);
+slice!(Vec<G>, indexed, []);
+slice!(Box<[G]>, indexed, []);
+slice!([Weight<G>], weighted, []);
+slice!([Weight<G>; N], weighted, [N]);
+slice!(Vec<Weight<G>>, weighted, []);
+slice!(Box<[Weight<G>]>, weighted, []);
+
+impl<S: Shrinker> Shrinker for Shrink<S> {
+    type Item = Option<S::Item>;
+
+    fn item(&self) -> Self::Item {
+        Some(self.0.as_ref()?.item())
+    }
+
+    fn shrink(&mut self) -> Option<Self> {
+        Some(Self(self.0.as_mut()?.shrink()))
+    }
+}
 
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
@@ -164,13 +218,13 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ts: Generator,)*> Generator for Any<All<($($ts,)*)>> {
+        impl<$($ts: Generator,)*> Generator for Any<($($ts,)*)> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 match state.random().u8(..$c) {
-                    $($is => orn::$n::Or::$ts(self.0.0.$is.generate(state)),)*
+                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
                     _ => unreachable!(),
                 }
             }
@@ -185,7 +239,7 @@ macro_rules! tuple {
             type Item = orn::$n::Or<$($ts::Item,)*>;
 
             fn into_gen(self) -> Any<($(Weight<$ts::IntoGen>,)*)> {
-                Any(($(Weight::new(self.$is.weight, self.$is.value.into_gen()),)*))
+                Any(($(Weight::new(self.$is.weight, self.$is.generator.into_gen()),)*))
             }
         }
 
@@ -194,14 +248,13 @@ macro_rules! tuple {
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let _total = $(self.0.$is.weight.max(f64::EPSILON) +)* 0.0;
+                let _total = $(self.0.$is.weight +)* 0.0;
                 assert!(_total.is_finite());
                 let mut _weight = state.random().f64() * _total;
                 $(
-                    let Weight { weight, value } = &self.0.$is;
-                    let weight = weight.max(f64::EPSILON);
-                    if _weight < weight {
-                        return orn::$n::Or::$ts(value.generate(state));
+                    let Weight { weight, generator } = &self.0.$is;
+                    if _weight < *weight {
+                        return orn::$n::Or::$ts(generator.generate(state));
                     } else {
                         _weight -= weight;
                     }

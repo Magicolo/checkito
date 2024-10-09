@@ -58,12 +58,12 @@ impl<S: Shrinker, T, F: Fn(S::Item) -> Option<T> + Clone> Shrinker for Shrink<S,
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {
-        self.shrinker.item().and_then(&self.map)
+        (self.map)(self.shrinker.as_ref()?.item())
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Self {
-            shrinker: self.shrinker.shrink()?,
+            shrinker: Some(self.shrinker.as_mut()?.shrink()?),
             map: self.map.clone(),
         })
     }

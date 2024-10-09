@@ -23,6 +23,7 @@ regex = ["regex-syntax/unicode", "checkito_macro/regex"]
 [dependencies]
 orn = { version = "0.4.3" }
 fastrand = { version = "2.1.1" }
+ref-cast = { version = "1.0.23" }
 checkito_macro = { version = "0.3.0", path = "checkito_macro", default-features = false, optional = true }
 regex-syntax = { version = "0.8.5", default-features = false, optional = true }
 

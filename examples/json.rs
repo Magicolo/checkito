@@ -78,17 +78,19 @@ fn node() -> impl Generator<Item = Node> {
             // to prevent an exponential explosion of nodes by reducing the `size` of the
             // [`Generator`] it is applied to as recursion goes deeper. When the maximum
             // depth is reached (see [`Generator::dampen_with`]), the `size` is set to 0.
-            .collect_with((..32usize).dampen())
+            .collect_with((..32usize).into_gen().dampen())
             .map(Node::Array)
             // [`Generator::boxed`] is used to make the return type finite. Without it, since the
             // `impl Generator` type refers to itself through the recursive calls to
             // [`node`], the type never stabilizes.
             .boxed(),
         (string(), lazy(node))
-            .collect_with((..32usize).dampen())
+            .into_gen()
+            .collect_with((..32usize).into_gen().dampen())
             .map(Node::Object)
             .boxed(),
     )
+        .into_gen()
         .any()
         // To be fully general, [`Generator::any`] applied to tuples produces a value of type
         // `Or<T1, T2...>` which is an enum that represents each possible item of the tuple.

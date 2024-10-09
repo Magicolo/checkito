@@ -153,9 +153,9 @@ fn compiles_with_mixed_infer_rest_operators(first: f64, second: i8, third: isize
 #[check(1usize)]
 #[check(2u8)]
 #[check('a')]
-#[check("b".to_string().into_gen())]
+#[check(same("b".to_string()))]
 #[check('c'..'d')]
-#[check(['a', 'b'].any().map(Option::unwrap))]
+#[check(['a', 'b'].into_gen().any().map(Option::unwrap))]
 fn compiles_with_multiple_impl_generics(_a: impl FromStr) {}
 
 #[check(1isize)]
@@ -182,7 +182,7 @@ fn compiles_with_multiple_identical_check(_: usize) {}
 struct A;
 #[derive(Clone)]
 struct B;
-#[check(with(|| A), Same(B), debug = false)]
+#[check(with(|| A), same(B), debug = false)]
 fn compiles_with_non_debug_parameter(_a: A, _b: B) {}
 
 #[check(Option::<usize>::full_gen().map(Option::unwrap))]

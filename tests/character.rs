@@ -1,5 +1,4 @@
 pub mod common;
-use checkito::same::Same;
 use common::*;
 use std::{
     collections::{LinkedList, VecDeque},
@@ -21,8 +20,8 @@ fn empty_range() {
 #[test]
 fn is_same() {
     assert!(
-        full::<char>()
-            .flat_map(|value| (value, Same(value)))
+        char::full_gen()
+            .flat_map(|value| (value, same(value)))
             .check(|(left, right)| left == right)
             .is_none()
     );
@@ -138,7 +137,7 @@ mod check {
     #[should_panic]
     fn empty_range(_: char) {}
 
-    #[check(char::full_gen().flat_map(|value| (value, Same(value))))]
+    #[check(char::full_gen().flat_map(|value| (value, same(value))))]
     fn is_same(pair: (char, char)) {
         assert_eq!(pair.0, pair.1);
     }

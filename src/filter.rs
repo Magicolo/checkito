@@ -58,13 +58,18 @@ impl<S: Shrinker, F: Fn(&S::Item) -> bool + Clone> Shrinker for Shrink<S, F> {
     type Item = Option<S::Item>;
 
     fn item(&self) -> Self::Item {
-        self.shrinker.item().filter(&self.filter)
+        let item = self.shrinker.as_ref()?.item();
+        if (self.filter)(&item) {
+            Some(item)
+        } else {
+            None
+        }
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Shrink {
             filter: self.filter.clone(),
-            shrinker: self.shrinker.shrink()?,
+            shrinker: Some(self.shrinker.as_mut()?.shrink()?),
         })
     }
 }

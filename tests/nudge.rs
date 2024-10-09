@@ -5,6 +5,7 @@ use common::*;
 fn positive_towards_zero() {
     assert!(
         (f64::EPSILON..f64::MAX)
+            .into_gen()
             .check(|value| value > value.nudge(-1.0))
             .is_none()
     );
@@ -14,6 +15,7 @@ fn positive_towards_zero() {
 fn positive_towards_maximum() {
     assert!(
         (f64::EPSILON..f64::MAX)
+            .into_gen()
             .check(|value| value < value.nudge(1.0))
             .is_none()
     );
@@ -23,6 +25,7 @@ fn positive_towards_maximum() {
 fn negative_towards_zero() {
     assert!(
         (f64::MIN.nudge(-1.0)..=-f64::EPSILON)
+            .into_gen()
             .check(|value| value < value.nudge(-1.0))
             .is_none()
     );
@@ -32,6 +35,7 @@ fn negative_towards_zero() {
 fn negative_towards_minimum() {
     assert!(
         (f64::MIN.nudge(-1.0)..=-f64::EPSILON)
+            .into_gen()
             .check(|value| value > value.nudge(1.0))
             .is_none()
     );

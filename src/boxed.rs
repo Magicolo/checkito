@@ -4,7 +4,7 @@ use crate::{
 };
 use core::any::Any;
 
-pub struct Gen<I> {
+pub struct Generate<I> {
     generator: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrink<I>,
     constant: fn(&dyn Any) -> bool,
@@ -17,7 +17,7 @@ pub struct Shrink<I> {
     shrink: fn(&mut dyn Any) -> Option<Box<dyn Any>>,
 }
 
-impl<I> Generator for Gen<I> {
+impl<I> Generator for Generate<I> {
     type Item = I;
     type Shrink = Shrink<I>;
 
@@ -30,7 +30,7 @@ impl<I> Generator for Gen<I> {
     }
 }
 
-impl<I> Gen<I> {
+impl<I> Generate<I> {
     pub(crate) fn new<G: Generator<Item = I> + 'static>(generator: G) -> Self
     where
         G::Shrink: 'static,
@@ -49,7 +49,7 @@ impl<I> Gen<I> {
     }
 }
 
-impl<I> Gen<I> {
+impl<I> Generate<I> {
     pub fn downcast<G: Generator + 'static>(self) -> Result<G, Self> {
         match self.generator.downcast::<G>() {
             Ok(generator) => Ok(*generator),

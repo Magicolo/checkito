@@ -36,7 +36,7 @@ mod range {
                 #[test]
                 fn is_same() {
                     assert!(number::<$t>()
-                        .flat_map(|value| (value, Same(value)))
+                        .flat_map(|value| (value, same(value)))
                         .check(|(left, right)| left == right)
                         .is_none());
                 }
@@ -44,6 +44,7 @@ mod range {
                 #[test]
                 fn is_in_range() {
                     assert!((number::<$t>(), number::<$t>())
+                        .into_gen()
                         .map(|(low, high)| (low.min($t::MAX - $t::MAX / 100 as $t), high.min($t::MAX - $t::MAX / 100 as $t)))
                         .map(|(low, high)| (low.min(high), low.max(high) + $t::MAX / 100 as $t))
                         .flat_map(|(low, high)| (low..high, low, high))
@@ -54,6 +55,7 @@ mod range {
                 #[test]
                 fn is_in_range_inclusive() {
                     assert!((number::<$t>(), number::<$t>())
+                        .into_gen()
                         .map(|(low, high)| (low.min(high), low.max(high)))
                         .flat_map(|(low, high)| (low..=high, low, high))
                         .check(|(value, low, high)| value >= low && value <= high)
@@ -135,6 +137,7 @@ mod range {
                 #[test]
                 fn check_finds_maximum() {
                     let fail = (negative::<$t>(), negative::<$t>().keep())
+                        .into_gen()
                         .check(|(left, right)| left > right)
                         .unwrap();
                     assert_eq!(fail.item.0, fail.item.1);
@@ -143,6 +146,7 @@ mod range {
                 #[test]
                 fn check_finds_minimum() {
                     let fail = (positive::<$t>(), positive::<$t>().keep())
+                        .into_gen()
                         .check(|(left, right)| left < right)
                         .unwrap();
                     assert_eq!(fail.item.0, fail.item.1);
@@ -151,6 +155,7 @@ mod range {
                 #[test]
                 fn check_shrinks_irrelevant_items() {
                     let fail = (positive::<$t>(), positive::<$t>().keep(), number::<$t>())
+                        .into_gen()
                         .check(|(left, right, _)| left < right)
                         .unwrap();
                     assert_eq!(fail.item.2, 0 as $t);

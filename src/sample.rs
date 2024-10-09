@@ -88,7 +88,7 @@ impl<'a, G: Generator + ?Sized> Sampler<'a, G> {
 
 impl<'a, G: Generator + ?Sized> From<&'a G> for Samples<'a, G> {
     fn from(value: &'a G) -> Self {
-        Samples(value.into())
+        Samples(Shrinkers::from(value))
     }
 }
 

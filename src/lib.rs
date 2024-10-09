@@ -6,15 +6,17 @@ pub mod array;
 pub mod boxed;
 pub mod check;
 pub mod collect;
-mod convenient;
+pub mod convert;
 pub mod dampen;
 pub mod filter;
 pub mod filter_map;
 pub mod flatten;
+pub mod fuse;
 pub mod generate;
 pub mod keep;
 pub mod map;
 pub mod nudge;
+mod prelude;
 pub mod primitive;
 pub mod prove;
 pub mod random;
@@ -31,8 +33,8 @@ pub use check::Check;
 pub use checkito_macro::check;
 #[cfg(feature = "regex")]
 pub use checkito_macro::regex;
-pub use convenient::*;
 pub use generate::{FullGenerator, Generator, IntoGenerator};
+pub use prelude::*;
 pub use prove::Prove;
 #[cfg(feature = "regex")]
 pub use regex::Regex;

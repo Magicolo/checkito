@@ -3,10 +3,12 @@ use crate::{
     array::Array,
     boxed,
     collect::Collect,
+    convert::Convert,
     dampen::Dampen,
     filter::Filter,
     filter_map::FilterMap,
     flatten::Flatten,
+    fuse::Fuse,
     keep::Keep,
     map::Map,
     primitive::Range,
@@ -16,10 +18,11 @@ use crate::{
 };
 use core::{
     iter::{FromIterator, FusedIterator},
+    marker::PhantomData,
     ops,
 };
 
-const COUNT: usize = 1024;
+pub(crate) const COUNT: usize = 1024;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -37,6 +40,7 @@ pub struct States {
     size: ops::Range<f64>,
     seed: u64,
 }
+
 /// When implemented for a type `T`, this allows to retrieve a generator for `T`
 /// that does not require any parameter. It should be implemented for any type
 
@@ -71,9 +75,7 @@ pub trait Generator {
 
     /// Returns true if the generator will always produce the same item.
     /// This is used in some optimizations to prevent redundant generations.
-    fn constant(&self) -> bool {
-        false
-    }
+    fn constant(&self) -> bool;
 
     /// Wraps `self` in a boxed [`Generator`]. This is notably relevant for
     /// recursive [`Generator`] implementations where the type would
@@ -109,27 +111,30 @@ pub trait Generator {
     ///     }
     /// }
     /// ```
-    fn boxed(self) -> boxed::Gen<Self::Item>
+    fn boxed(self) -> boxed::Generate<Self::Item>
     where
         Self: Sized + 'static,
+        boxed::Generate<Self::Item>: Generator,
     {
-        boxed::Gen::new(self)
+        boxed::Generate::new(self)
     }
 
     /// Maps generated [`Generator::Item`] to an arbitrary type `T` using the
     /// provided function `F`.
-    fn map<T, F: Fn(Self::Item) -> T + Clone>(self, map: F) -> Map<Self, F>
+    fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
     where
         Self: Sized,
+        Map<Self, F>: Generator,
     {
-        Map::new(self, map)
+        Map(map, self)
     }
 
     /// Same as [`Generator::filter_with`] but with a predefined number of
     /// `retries`.
-    fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
+    fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
+        Filter<Self, F>: Generator,
     {
         self.filter_with(COUNT, filter)
     }
@@ -141,22 +146,20 @@ pub trait Generator {
     /// Since this [`Generator`] implementation is not guaranteed to succeed,
     /// the item type is changed to a [`Option<Generator::Item>`]
     /// where a [`None`] represents the failure to satisfy the filter.
-    fn filter_with<F: Fn(&Self::Item) -> bool + Clone>(
-        self,
-        retries: usize,
-        filter: F,
-    ) -> Filter<Self, F>
+    fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
+        Filter<Self, F>: Generator,
     {
         Filter::new(self, filter, retries)
     }
 
     /// Same as [`Generator::filter_map_with`] but with a predefined number of
     /// `retries`.
-    fn filter_map<T, F: Fn(Self::Item) -> Option<T> + Clone>(self, map: F) -> FilterMap<Self, F>
+    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
     where
         Self: Sized,
+        FilterMap<Self, F>: Generator,
     {
         self.filter_map_with(COUNT, map)
     }
@@ -164,22 +167,25 @@ pub trait Generator {
     /// Combines [`Generator::map`] and [`Generator::filter`] in a single
     /// [`Generator`] implementation where the map function is considered to
     /// satisfy the filter when a [`Some(T)`] is produced.
-    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T> + Clone>(
+    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
         self,
         retries: usize,
         map: F,
     ) -> FilterMap<Self, F>
     where
         Self: Sized,
+        FilterMap<Self, F>: Generator,
     {
         FilterMap::new(self, map, retries)
     }
 
     /// Combines [`Generator::map`] and [`Generator::flatten`] in a single
     /// [`Generator`] implementation.
-    fn flat_map<G: Generator, F: Fn(Self::Item) -> G + Clone>(self, map: F) -> Flatten<Map<Self, F>>
+    fn flat_map<G: IntoGenerator, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
+        Map<Self, F>: Generator<Item = G>,
+        Flatten<Map<Self, F>>: Generator,
     {
         self.map(map).flatten()
     }
@@ -203,7 +209,8 @@ pub trait Generator {
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
-        Self::Item: Generator,
+        Self::Item: IntoGenerator,
+        Flatten<Self>: Generator,
     {
         Flatten(self)
     }
@@ -220,6 +227,7 @@ pub trait Generator {
     fn any(self) -> Any<Self>
     where
         Self: Sized,
+        Any<Self>: Generator,
     {
         Any(self)
     }
@@ -228,6 +236,7 @@ pub trait Generator {
     fn array<const N: usize>(self) -> Array<Self, N>
     where
         Self: Sized,
+        Array<Self, N>: Generator,
     {
         Array(self)
     }
@@ -236,21 +245,23 @@ pub trait Generator {
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Range<usize>, F>
     where
         Self: Sized,
+        Collect<Self, Range<usize>, F>: Generator,
     {
-        self.collect_with((..COUNT).into_gen())
+        Collect::new(self)
     }
 
     /// Generates a variable number of items based on the provided `count`
     /// [`Generator`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
-    fn collect_with<C: Generator<Item = usize>, F: FromIterator<Self::Item>>(
+    fn collect_with<C: IntoGenerator<Item = usize>, F: FromIterator<Self::Item>>(
         self,
         count: C,
-    ) -> Collect<Self, C, F>
+    ) -> Collect<Self, C::IntoGen, F>
     where
         Self: Sized,
+        Collect<Self, C::IntoGen, F>: Generator,
     {
-        Collect::new(self, count)
+        Collect::new_with(self, count.into_gen(), None)
     }
 
     /// Maps the current `size` of the generation process to a different one.
@@ -276,6 +287,7 @@ pub trait Generator {
     fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
+        Size<Self, F>: Generator,
     {
         Size(self, map)
     }
@@ -284,6 +296,7 @@ pub trait Generator {
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
+        Dampen<Self>: Generator,
     {
         self.dampen_with(1.0, 8, 8192)
     }
@@ -305,6 +318,7 @@ pub trait Generator {
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
+        Dampen<Self>: Generator,
     {
         assert!(pressure.is_finite());
         assert!(pressure >= 0.0);
@@ -321,8 +335,25 @@ pub trait Generator {
     fn keep(self) -> Keep<Self>
     where
         Self: Sized,
+        Keep<Self>: Generator,
     {
         Keep(self)
+    }
+
+    fn fuse<T>(self) -> Fuse<Self, T>
+    where
+        Self: Sized,
+        Fuse<Self, T>: Generator,
+    {
+        Fuse(PhantomData, self)
+    }
+
+    fn convert<T>(self) -> Convert<Self, T>
+    where
+        Self: Sized,
+        Convert<Self, T>: Generator,
+    {
+        Convert(PhantomData, self)
     }
 }
 
@@ -444,39 +475,12 @@ pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f6
     }
 }
 
-impl<G: FullGenerator + ?Sized> FullGenerator for &G {
-    type FullGen = G::FullGen;
-    type Item = G::Item;
-
-    fn full_gen() -> Self::FullGen {
-        G::full_gen()
-    }
-}
-
-impl<G: FullGenerator + ?Sized> FullGenerator for &mut G {
-    type FullGen = G::FullGen;
-    type Item = G::Item;
-
-    fn full_gen() -> Self::FullGen {
-        G::full_gen()
-    }
-}
-
-impl<G: IntoGenerator + Clone> IntoGenerator for &G {
-    type IntoGen = G::IntoGen;
+impl<G: Generator> IntoGenerator for G {
+    type IntoGen = G;
     type Item = G::Item;
 
     fn into_gen(self) -> Self::IntoGen {
-        self.clone().into_gen()
-    }
-}
-
-impl<G: IntoGenerator + Clone> IntoGenerator for &mut G {
-    type IntoGen = G::IntoGen;
-    type Item = G::Item;
-
-    fn into_gen(self) -> Self::IntoGen {
-        self.clone().into_gen()
+        self
     }
 }
 

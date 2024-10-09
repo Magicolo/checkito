@@ -12,7 +12,7 @@ pub fn regex(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use syn::parse_macro_input;
     let regex::Regex(string) = parse_macro_input!(input);
     let token = string.token();
-    quote!(::checkito::regex::Regex::new(#token).unwrap()).into()
+    quote!(::checkito::regex::Regex::new(#token, None).unwrap()).into()
 }
 
 #[cfg(feature = "check")]
