@@ -94,9 +94,9 @@ fn node() -> impl Generator<Item = Node> {
         .any()
         // To be fully general, [`Generator::any`] applied to tuples produces a value of type
         // `Or<T1, T2...>` which is an enum that represents each possible item of the tuple.
-        // Since the concrete type is actually `Or<Node, Node...>`, the enum can be unified
-        // into a [`Node`], which is what [`Or::into`] does.
-        .map(|or| or.into())
+        // Since the concrete type is actually `Or<Node, Node...>`, the enum can be fused
+        // into a [`Node`], which is what [`Generator::fuse`] does.
+        .fuse()
 }
 
 fn main() {

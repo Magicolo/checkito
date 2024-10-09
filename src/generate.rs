@@ -98,8 +98,9 @@ pub trait Generator {
     ///         // Without [`Generator::dampen`], the tree would grow exponentially.
     ///         lazy(node).collect().map(Node::Branch).dampen().boxed(),
     ///     )
+    ///         .into_gen()
     ///         .any()
-    ///         .map(|or| or.into())
+    ///         .fuse()
     /// }
     ///
     /// fn choose(choose: bool) -> impl Generator<Item = char> {

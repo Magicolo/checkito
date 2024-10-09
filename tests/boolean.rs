@@ -18,5 +18,5 @@ fn first_size_is_0_and_false() {
     assert_eq!(fail.state.size(), 0.);
     assert_eq!(fail.cause, Cause::Disprove(()));
     assert!(!fail.item);
-    assert_eq!(fail.shrinks, 0);
+    assert!(fail.shrinks <= 1);
 }

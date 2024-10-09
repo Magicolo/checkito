@@ -10,7 +10,7 @@ fn weighted_any() {
         Weight::new(100.0, 100),
     )
         .into_gen()
-        .map(|or| or.into::<i32>())
+        .fuse::<i32>()
         .samples(1000)
         .collect::<Vec<_>>();
     let one = samples.iter().filter(|&&value| value == 1).count();
