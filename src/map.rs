@@ -3,7 +3,7 @@ use crate::{
     shrink::Shrink,
 };
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Map<T: ?Sized, F>(pub(crate) F, pub(crate) T);
 
 impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generate for Map<G, F> {

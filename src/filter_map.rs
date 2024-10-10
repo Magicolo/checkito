@@ -3,7 +3,7 @@ use crate::{
     shrink::Shrink,
 };
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct FilterMap<G: ?Sized, F> {
     map: F,
     retries: usize,

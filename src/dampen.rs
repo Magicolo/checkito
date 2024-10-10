@@ -1,5 +1,6 @@
 use crate::generate::{Generate, State};
 
+#[derive(Clone, Debug)]
 pub struct Dampen<G: ?Sized> {
     pub(crate) pressure: f64,
     pub(crate) deepest: usize,

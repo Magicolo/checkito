@@ -4,7 +4,7 @@ use crate::{
 };
 use core::array;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Array<G: ?Sized, const N: usize>(pub(crate) G);
 
 impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {

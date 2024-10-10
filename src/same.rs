@@ -3,7 +3,7 @@ use crate::{
     shrink::Shrink,
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Same<T: ?Sized>(pub(crate) T);
 
 impl<T: Clone> Generate for Same<T> {

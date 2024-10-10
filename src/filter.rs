@@ -3,14 +3,14 @@ use crate::{
     shrink::Shrink,
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Filter<G: ?Sized, F> {
     filter: F,
     retries: usize,
     generator: G,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Shrinker<S, F> {
     shrinker: Option<S>,
     filter: F,

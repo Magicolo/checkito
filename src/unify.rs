@@ -5,6 +5,7 @@ use crate::{
 };
 use core::marker::PhantomData;
 
+#[derive(Debug)]
 pub struct Unify<T: ?Sized, I: ?Sized>(pub(crate) PhantomData<I>, pub(crate) T);
 
 impl<T: Clone, I: ?Sized> Clone for Unify<T, I> {

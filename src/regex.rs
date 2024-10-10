@@ -25,7 +25,7 @@ pub enum Regex {
     All(Box<[Regex]>),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Shrinker {
     Empty,
     Text(String),

@@ -7,7 +7,7 @@ use crate::{
 };
 use core::{marker::PhantomData, mem::replace, ops::RangeInclusive};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Collect<I: ?Sized, C, F: ?Sized> {
     _marker: PhantomData<F>,
     pub(crate) count: C,
@@ -15,7 +15,7 @@ pub struct Collect<I: ?Sized, C, F: ?Sized> {
     pub(crate) generator: I,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Generator<G, F: ?Sized> {
     generators: Vec<G>,
     _marker: PhantomData<F>,

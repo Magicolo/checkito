@@ -13,7 +13,7 @@ pub mod option {
     #[derive(Clone, Debug)]
     pub struct Generator<G>(pub(crate) G);
 
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     pub struct Shrinker<S>(bool, Option<S>);
 
     impl<G: FullGenerate> FullGenerate for Option<G> {

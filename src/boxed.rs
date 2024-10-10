@@ -4,12 +4,14 @@ use crate::{
 };
 use core::any::Any;
 
+#[derive(Debug)]
 pub struct Boxed<I> {
     generator: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
     constant: fn(&dyn Any) -> bool,
 }
 
+#[derive(Debug)]
 pub struct Shrinker<I> {
     shrinker: Box<dyn Any>,
     clone: fn(&dyn Any) -> Box<dyn Any>,

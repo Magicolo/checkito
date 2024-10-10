@@ -1,5 +1,6 @@
 use crate::generate::{Generate, State};
 
+#[derive(Debug, Clone)]
 pub struct Size<G, F = fn(f64) -> f64>(pub(crate) G, pub(crate) F);
 
 impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
