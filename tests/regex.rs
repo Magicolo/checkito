@@ -20,7 +20,7 @@ fn generate_matches_regex() {
 fn generate_constant() {
     assert!(
         regex!("[a-zA-Z0-9_]+")
-            .flat_map(|pattern| (Regex::new(&pattern, None).unwrap(), pattern).into_gen())
+            .flat_map(|pattern| (Regex::new(&pattern, None).unwrap(), pattern))
             .check(|(item, pattern)| item == pattern)
             .is_none()
     );

@@ -256,21 +256,21 @@ impl Check {
         let verbose = self.verbose.unwrap_or(false);
         Ok(match self.debug {
             Some(true) => quote_spanned!(self.span => ::checkito::check::help::debug(
-                ::checkito::IntoGenerator::into_gen((#(#generators,)*)),
+                (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
             Some(false) => quote_spanned!(self.span => ::checkito::check::help::minimal(
-                ::checkito::IntoGenerator::into_gen((#(#generators,)*)),
+                (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
             None => quote_spanned!(self.span => ::checkito::check::help::default(
-                ::checkito::IntoGenerator::into_gen((#(#generators,)*)),
+                (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,

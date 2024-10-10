@@ -11,7 +11,7 @@ fn finds_minimum() {
 
 #[test]
 fn integer_shrink_to_minimum() {
-    for high in (1usize..1_000_000_000).into_gen().samples(1_000) {
+    for high in (1usize..1_000_000_000).samples(1_000) {
         println!("{high}");
         let fail = usize::full_gen().check(|item| item < high).unwrap();
         assert_eq!(fail.item, high);
@@ -21,7 +21,6 @@ fn integer_shrink_to_minimum() {
 #[test]
 fn vec_removes_irrelevant_then_shrinks() {
     let fail = (..100usize)
-        .into_gen()
         .collect::<Vec<_>>()
         .check(|items| items.len() < 10 || items.iter().all(|&item| item < 10))
         .unwrap();

@@ -1,14 +1,14 @@
 #![cfg(feature = "regex")]
 
 use crate::{
-    all::{self, All},
+    all,
     any::{self, Any},
     collect::{self},
     generate::{Generator, State},
-    primitive::{self, character},
+    primitive::char,
     shrink::Shrinker,
 };
-use core::fmt;
+use core::{fmt, ops::RangeInclusive};
 use regex_syntax::{
     Parser,
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
@@ -19,17 +19,17 @@ use std::string::FromUtf8Error;
 pub enum Regex {
     Empty,
     Text(String),
-    Range(character::Range),
-    Collect(collect::Collect<Box<Regex>, primitive::Range<usize>, String>),
+    Range(RangeInclusive<char>),
+    Collect(collect::Collect<Box<Regex>, RangeInclusive<usize>, String>),
     Any(any::Any<Box<[Regex]>>),
-    All(all::All<Box<[Regex]>>),
+    All(Box<[Regex]>),
 }
 
 #[derive(Clone)]
 pub enum Shrink {
     Empty,
     Text(String),
-    Range(character::Shrink),
+    Range(char::Shrink),
     All(all::Shrink<Box<[Shrink]>>),
     Collect(collect::Shrink<Shrink, String>),
 }
@@ -40,7 +40,6 @@ pub struct Error(Inner);
 #[derive(Clone)]
 enum Inner {
     Regex(Box<regex_syntax::Error>),
-    Primitive(primitive::Error),
     Utf8(FromUtf8Error),
 }
 
@@ -54,7 +53,6 @@ impl fmt::Debug for Inner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Inner::Regex(error) => write!(f, "Regex({error})"),
-            Inner::Primitive(error) => write!(f, "Primitive({error})"),
             Inner::Utf8(error) => write!(f, "Utf8({error})"),
         }
     }
@@ -79,29 +77,15 @@ impl From<FromUtf8Error> for Error {
     }
 }
 
-impl From<primitive::Error> for Error {
-    fn from(value: primitive::Error) -> Self {
-        Error(Inner::Primitive(value))
+impl From<&ClassUnicodeRange> for Regex {
+    fn from(value: &ClassUnicodeRange) -> Self {
+        Regex::Range(value.start()..=value.end())
     }
 }
 
-impl TryFrom<&ClassUnicodeRange> for Regex {
-    type Error = Error;
-
-    fn try_from(value: &ClassUnicodeRange) -> Result<Self, Self::Error> {
-        Ok(Regex::Range(character::Range::char(
-            value.start()..=value.end(),
-        )?))
-    }
-}
-
-impl TryFrom<&ClassBytesRange> for Regex {
-    type Error = Error;
-
-    fn try_from(value: &ClassBytesRange) -> Result<Self, Self::Error> {
-        Ok(Regex::Range(character::Range::char(
-            value.start() as char..=value.end() as char,
-        )?))
+impl From<&ClassBytesRange> for Regex {
+    fn from(value: &ClassBytesRange) -> Self {
+        Regex::Range(value.start() as char..=value.end() as char)
     }
 }
 
@@ -147,26 +131,23 @@ impl Regex {
                 if low == 1 && high == 1 {
                     return Ok(tree);
                 }
-                let range = primitive::Range::usize(low as usize..=high as usize)?;
                 Ok(Self::Collect(collect::Collect::new_with(
                     Box::new(tree),
-                    range,
+                    low as usize..=high as usize,
                     Some(low as _),
                 )))
             }
-            HirKind::Class(Class::Unicode(class)) => {
-                Self::try_from_iter(class.ranges().iter().map(Self::try_from), |trees| {
-                    Self::Any(Any(trees))
-                })
-            }
-            HirKind::Class(Class::Bytes(class)) => {
-                Self::try_from_iter(class.ranges().iter().map(Self::try_from), |trees| {
-                    Self::Any(Any(trees))
-                })
-            }
+            HirKind::Class(Class::Unicode(class)) => Self::try_from_iter(
+                class.ranges().iter().map(|range| Ok(Self::from(range))),
+                |trees| Self::Any(Any(trees)),
+            ),
+            HirKind::Class(Class::Bytes(class)) => Self::try_from_iter(
+                class.ranges().iter().map(|range| Ok(Self::from(range))),
+                |trees| Self::Any(Any(trees)),
+            ),
             HirKind::Concat(hirs) => Self::try_from_iter(
                 hirs.into_iter().map(|hir| Self::try_from_hir(hir, repeats)),
-                |trees| Self::All(All(trees)),
+                Self::All,
             ),
             HirKind::Alternation(hirs) => Self::try_from_iter(
                 hirs.into_iter().map(|hir| Self::try_from_hir(hir, repeats)),

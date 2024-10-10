@@ -1,5 +1,4 @@
 use crate::{
-    IntoGenerator,
     generate::{Generator, State},
     shrink::Shrinker,
 };
@@ -14,16 +13,14 @@ pub struct Shrink<I, O> {
     outer: O,
 }
 
-impl<G: Generator, I: IntoGenerator<IntoGen = G>, O: Generator<Item = I> + ?Sized> Generator
-    for Flatten<O>
-{
-    type Item = G::Item;
-    type Shrink = Shrink<G::Shrink, O::Shrink>;
+impl<I: Generator, O: Generator<Item = I> + ?Sized> Generator for Flatten<O> {
+    type Item = I::Item;
+    type Shrink = Shrink<I::Shrink, O::Shrink>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.clone();
         let outer = self.0.generate(state);
-        let generator = outer.item().into_gen();
+        let generator = outer.item();
         state.limit += 1;
         state.depth += 1;
         let inner = generator.generate(state);
@@ -40,10 +37,8 @@ impl<G: Generator, I: IntoGenerator<IntoGen = G>, O: Generator<Item = I> + ?Size
     }
 }
 
-impl<G: Generator, I: IntoGenerator<IntoGen = G>, O: Shrinker<Item = I>> Shrinker
-    for Shrink<G::Shrink, O>
-{
-    type Item = G::Item;
+impl<I: Generator, O: Shrinker<Item = I>> Shrinker for Shrink<I::Shrink, O> {
+    type Item = I::Item;
 
     fn item(&self) -> Self::Item {
         self.inner.item()
@@ -52,7 +47,7 @@ impl<G: Generator, I: IntoGenerator<IntoGen = G>, O: Shrinker<Item = I>> Shrinke
     fn shrink(&mut self) -> Option<Self> {
         if let Some(outer) = self.outer.shrink() {
             let mut state = self.state.clone();
-            let inner = outer.item().into_gen().generate(&mut state);
+            let inner = outer.item().generate(&mut state);
             return Some(Self {
                 state,
                 outer,

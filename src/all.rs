@@ -1,83 +1,13 @@
 use crate::{
-    any::Any,
-    generate::{FullGenerator, Generator, IntoGenerator, State},
+    generate::{FullGenerator, Generator, State},
     shrink::Shrinker,
     utility::tuples,
 };
-use ref_cast::RefCast;
-
-#[repr(transparent)]
-#[derive(Clone, Debug, RefCast)]
-pub struct All<G: ?Sized>(pub(crate) G);
 
 #[derive(Clone, Debug)]
 pub struct Shrink<S: ?Sized> {
     pub(crate) index: usize,
     pub(crate) shrinkers: S,
-}
-
-impl<G: ?Sized> Generator for All<All<G>>
-where
-    All<G>: Generator,
-{
-    type Item = <All<G> as Generator>::Item;
-    type Shrink = <All<G> as Generator>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        All::ref_cast(&self.0.0).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        All::ref_cast(&self.0.0).constant()
-    }
-}
-
-impl<G: ?Sized> Generator for All<Any<G>>
-where
-    All<G>: Generator,
-{
-    type Item = <All<G> as Generator>::Item;
-    type Shrink = <All<G> as Generator>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        All::ref_cast(&self.0.0).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        All::ref_cast(&self.0.0).constant()
-    }
-}
-
-impl<G: ?Sized> Generator for All<&G>
-where
-    All<G>: Generator,
-{
-    type Item = <All<G> as Generator>::Item;
-    type Shrink = <All<G> as Generator>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        All::ref_cast(self.0).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        All::ref_cast(self.0).constant()
-    }
-}
-
-impl<G: ?Sized> Generator for All<&mut G>
-where
-    All<G>: Generator,
-{
-    type Item = <All<G> as Generator>::Item;
-    type Shrink = <All<G> as Generator>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        All::ref_cast(self.0).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        All::ref_cast(self.0).constant()
-    }
 }
 
 pub(crate) fn shrink<S: Shrinker, I: AsMut<[S]> + Clone>(
@@ -101,36 +31,27 @@ pub mod array {
     use core::array;
 
     impl<G: FullGenerator, const N: usize> FullGenerator for [G; N] {
-        type FullGen = All<[G::FullGen; N]>;
+        type FullGen = [G::FullGen; N];
         type Item = [G::Item; N];
 
         fn full_gen() -> Self::FullGen {
-            All(array::from_fn(|_| G::full_gen()))
+            array::from_fn(|_| G::full_gen())
         }
     }
 
-    impl<G: IntoGenerator, const N: usize> IntoGenerator for [G; N] {
-        type IntoGen = All<[G::IntoGen; N]>;
-        type Item = [G::Item; N];
-
-        fn into_gen(self) -> Self::IntoGen {
-            All(self.map(IntoGenerator::into_gen))
-        }
-    }
-
-    impl<G: Generator, const N: usize> Generator for All<[G; N]> {
+    impl<G: Generator, const N: usize> Generator for [G; N] {
         type Item = [G::Item; N];
         type Shrink = Shrink<[G::Shrink; N]>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrink {
                 index: 0,
-                shrinkers: array::from_fn(|index| self.0[index].generate(state)),
+                shrinkers: array::from_fn(|index| self[index].generate(state)),
             }
         }
 
         fn constant(&self) -> bool {
-            self.0.iter().all(Generator::constant)
+            self.iter().all(Generator::constant)
         }
     }
 
@@ -154,25 +75,7 @@ pub mod array {
 pub mod slice {
     use super::*;
 
-    impl<'a, G: Generator> IntoGenerator for &'a [G] {
-        type IntoGen = All<&'a [G]>;
-        type Item = Box<[G::Item]>;
-
-        fn into_gen(self) -> Self::IntoGen {
-            All(self)
-        }
-    }
-
-    impl<'a, G: Generator> IntoGenerator for &'a mut [G] {
-        type IntoGen = All<&'a mut [G]>;
-        type Item = Box<[G::Item]>;
-
-        fn into_gen(self) -> Self::IntoGen {
-            All(self)
-        }
-    }
-
-    impl<G: Generator> Generator for All<[G]> {
+    impl<G: Generator> Generator for [G] {
         type Item = Box<[G::Item]>;
         type Shrink = Shrink<Box<[G::Shrink]>>;
 
@@ -180,7 +83,6 @@ pub mod slice {
             Shrink {
                 index: 0,
                 shrinkers: self
-                    .0
                     .iter()
                     .map(|generator| generator.generate(state))
                     .collect(),
@@ -188,36 +90,7 @@ pub mod slice {
         }
 
         fn constant(&self) -> bool {
-            self.0.iter().all(|generator| generator.constant())
-        }
-    }
-
-    impl<G: IntoGenerator> IntoGenerator for Box<[G]> {
-        type IntoGen = All<Box<[G::IntoGen]>>;
-        type Item = Box<[G::Item]>;
-
-        fn into_gen(self) -> Self::IntoGen {
-            All(Box::into_iter(self).map(G::into_gen).collect())
-        }
-    }
-
-    impl<G: Generator> Generator for All<Box<[G]>> {
-        type Item = Box<[G::Item]>;
-        type Shrink = Shrink<Box<[G::Shrink]>>;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink {
-                index: 0,
-                shrinkers: self
-                    .0
-                    .iter()
-                    .map(|generator| generator.generate(state))
-                    .collect(),
-            }
-        }
-
-        fn constant(&self) -> bool {
-            self.0.iter().all(|generator| generator.constant())
+            self.iter().all(|generator| generator.constant())
         }
     }
 
@@ -241,16 +114,7 @@ pub mod slice {
 pub mod vector {
     use super::*;
 
-    impl<G: IntoGenerator> IntoGenerator for Vec<G> {
-        type IntoGen = All<Vec<G::IntoGen>>;
-        type Item = Vec<G::Item>;
-
-        fn into_gen(self) -> Self::IntoGen {
-            All(Vec::into_iter(self).map(G::into_gen).collect())
-        }
-    }
-
-    impl<G: Generator> Generator for All<Vec<G>> {
+    impl<G: Generator> Generator for Vec<G> {
         type Item = Vec<G::Item>;
         type Shrink = Shrink<Vec<G::Shrink>>;
 
@@ -258,7 +122,6 @@ pub mod vector {
             Shrink {
                 index: 0,
                 shrinkers: self
-                    .0
                     .iter()
                     .map(|generator| generator.generate(state))
                     .collect(),
@@ -266,7 +129,7 @@ pub mod vector {
         }
 
         fn constant(&self) -> bool {
-            self.0.iter().all(|generator| generator.constant())
+            self.iter().all(|generator| generator.constant())
         }
     }
 
@@ -290,37 +153,28 @@ pub mod vector {
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: FullGenerator,)*> FullGenerator for ($($t,)*) {
-            type FullGen = All<($($t::FullGen,)*)>;
+            type FullGen = ($($t::FullGen,)*);
             type Item = ($($t::Item,)*);
-
-            fn full_gen() -> Self::FullGen {
-                All(($($t::full_gen(),)*))
-            }
-        }
-
-        impl<$($t: IntoGenerator,)*> IntoGenerator for ($($t,)*) {
-            type Item = ($($t::Item,)*);
-            type IntoGen = All<($($t::IntoGen,)*)>;
 
             #[allow(clippy::unused_unit)]
-            fn into_gen(self) -> Self::IntoGen {
-                All(($(self.$i.into_gen(),)*))
+            fn full_gen() -> Self::FullGen {
+                ($($t::full_gen(),)*)
             }
         }
 
-        impl<$($t: Generator,)*> Generator for All<($($t,)*)> {
+        impl<$($t: Generator,)*> Generator for ($($t,)*) {
             type Item = ($($t::Item,)*);
             type Shrink = Shrink<($($t::Shrink,)*)>;
 
             fn generate(&self, _state: &mut State) -> Self::Shrink {
                 Shrink {
                     index: 0,
-                    shrinkers: ($($t::generate(&self.0.$i, _state),)*),
+                    shrinkers: ($($t::generate(&self.$i, _state),)*),
                 }
             }
 
             fn constant(&self) -> bool {
-                $($t::constant(&self.0.$i) &&)* true
+                $($t::constant(&self.$i) &&)* true
             }
         }
 

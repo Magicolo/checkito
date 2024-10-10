@@ -1,60 +1,47 @@
-use crate::{Generator, IntoGenerator, Same, all::All, any::Any, primitive::Range};
-use core::{
-    fmt,
-    ops::{RangeFrom, RangeFull, RangeToInclusive},
-};
+use crate::{Generator, Same, any::Any, primitive::number::Number};
 
 pub const fn same<T>(value: T) -> Same<T> {
     Same(value)
 }
 
-pub fn all<G: IntoGenerator>(generators: G) -> All<G::IntoGen> {
-    All(generators.into_gen())
+pub const fn any<G: Generator>(generators: G) -> Any<G> {
+    Any(generators)
 }
 
-pub fn any<G: IntoGenerator>(generators: G) -> Any<G::IntoGen> {
-    Any(generators.into_gen())
+/// From `MIN..=MAX`.
+pub const fn number<T: Number>() -> impl Generator<Item = T> {
+    T::FULL
 }
 
-pub fn number<T>() -> Range<T>
-where
-    Range<T>: Generator,
-    RangeFull: TryInto<Range<T>>,
-    <RangeFull as TryInto<Range<T>>>::Error: fmt::Debug,
-{
-    (..).try_into().unwrap()
+/// From `0..=MAX`.
+pub const fn positive<T: Number>() -> impl Generator<Item = T> {
+    T::POSITIVE
 }
 
-pub fn positive<T: Default>() -> impl Generator<Item = T>
-where
-    RangeFrom<T>: IntoGenerator<Item = T>,
-{
-    (T::default()..).into_gen()
+/// From `MIN..=0`.
+pub const fn negative<T: Number>() -> impl Generator<Item = T> {
+    T::NEGATIVE
 }
 
-pub fn negative<T: Default>() -> impl Generator<Item = T>
-where
-    RangeToInclusive<T>: IntoGenerator<Item = T>,
-{
-    (..=T::default()).into_gen()
-}
-
+/// Ascii letters.
 pub fn letter() -> impl Generator<Item = char> {
-    ('a'..='z', 'A'..='Z').into_gen().any().fuse::<char>()
+    ('a'..='z', 'A'..='Z').any().fuse::<char>()
 }
 
+/// Ascii digits.
 pub fn digit() -> impl Generator<Item = char> {
-    ('0'..='9').into_gen()
+    '0'..='9'
 }
 
+/// Ascii characters.
 pub fn ascii() -> impl Generator<Item = char> {
-    (0 as char..127 as char).into_gen()
+    0 as char..127 as char
 }
 
 pub fn with<T, F: Fn() -> T + Clone>(generator: F) -> impl Generator<Item = T> {
-    ().into_gen().map(move |_| generator())
+    ().map(move |_| generator())
 }
 
 pub fn lazy<G: Generator, F: Fn() -> G + Clone>(generator: F) -> impl Generator<Item = G::Item> {
-    ().into_gen().flat_map(move |_| generator())
+    ().flat_map(move |_| generator())
 }

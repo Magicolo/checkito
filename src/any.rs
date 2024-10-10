@@ -1,6 +1,5 @@
 use crate::{
-    all::All,
-    generate::{Generator, IntoGenerator, State},
+    generate::{Generator, State},
     shrink::Shrinker,
     utility::tuples,
 };
@@ -31,13 +30,10 @@ impl<T> Weight<T> {
 }
 
 impl<G: Generator> Weight<G> {
-    pub fn new<I: IntoGenerator<IntoGen = G>>(weight: f64, generator: I) -> Self {
+    pub fn new(weight: f64, generator: G) -> Self {
         assert!(weight.is_finite());
         assert!(weight > f64::EPSILON);
-        Self {
-            weight,
-            generator: generator.into_gen(),
-        }
+        Self { weight, generator }
     }
 }
 
@@ -81,22 +77,6 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
 }
 
 impl<G: ?Sized> Generator for Any<Any<G>>
-where
-    Any<G>: Generator,
-{
-    type Item = <Any<G> as Generator>::Item;
-    type Shrink = <Any<G> as Generator>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Any::ref_cast(&self.0.0).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        Any::ref_cast(&self.0.0).constant()
-    }
-}
-
-impl<G: ?Sized> Generator for Any<All<G>>
 where
     Any<G>: Generator,
 {
@@ -230,29 +210,20 @@ macro_rules! tuple {
             }
 
             fn constant(&self) -> bool {
-                $c <= 1
+                $(self.0.$is.constant() &&)* true
             }
         }
 
-        impl<$($ts: IntoGenerator,)*> IntoGenerator for ($(Weight<$ts>,)*) {
-            type IntoGen = Any<($(Weight<$ts::IntoGen>,)*)>;
-            type Item = orn::$n::Or<$($ts::Item,)*>;
-
-            fn into_gen(self) -> Any<($(Weight<$ts::IntoGen>,)*)> {
-                Any(($(Weight::new(self.$is.weight, self.$is.generator.into_gen()),)*))
-            }
-        }
-
-        impl<$($ts: Generator,)*> Generator for Any<($(Weight<$ts>,)*)> {
+        impl<$($ts: Generator,)*> Generator for ($(Weight<$ts>,)*) {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let _total = $(self.0.$is.weight +)* 0.0;
+                let _total = $(self.$is.weight +)* 0.0;
                 assert!(_total.is_finite());
                 let mut _weight = state.random().f64() * _total;
                 $(
-                    let Weight { weight, generator } = &self.0.$is;
+                    let Weight { weight, generator } = &self.$is;
                     if _weight < *weight {
                         return orn::$n::Or::$ts(generator.generate(state));
                     } else {
@@ -263,7 +234,7 @@ macro_rules! tuple {
             }
 
             fn constant(&self) -> bool {
-                $c <= 1
+                $(self.$is.constant() &&)* true
             }
         }
     };

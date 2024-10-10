@@ -11,7 +11,6 @@ use crate::{
     fuse::Fuse,
     keep::Keep,
     map::Map,
-    primitive::Range,
     random::{self, Random},
     shrink::Shrinker,
     size::Size,
@@ -19,7 +18,7 @@ use crate::{
 use core::{
     iter::{FromIterator, FusedIterator},
     marker::PhantomData,
-    ops,
+    ops::{self, RangeInclusive},
 };
 
 pub(crate) const COUNT: usize = 1024;
@@ -53,14 +52,6 @@ pub trait FullGenerator {
     type Item;
     type FullGen: Generator<Item = Self::Item>;
     fn full_gen() -> Self::FullGen;
-}
-
-/// When implemented for a type `T`, this allows to retrieve a generate using
-/// the values in `T`, similar to the [`Into<T>`] trait.
-pub trait IntoGenerator {
-    type Item;
-    type IntoGen: Generator<Item = Self::Item>;
-    fn into_gen(self) -> Self::IntoGen;
 }
 
 #[must_use = "generators do nothing until used"]
@@ -182,7 +173,7 @@ pub trait Generator {
 
     /// Combines [`Generator::map`] and [`Generator::flatten`] in a single
     /// [`Generator`] implementation.
-    fn flat_map<G: IntoGenerator, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
+    fn flat_map<G: Generator, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
         Map<Self, F>: Generator<Item = G>,
@@ -210,7 +201,7 @@ pub trait Generator {
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
-        Self::Item: IntoGenerator,
+        Self::Item: Generator,
         Flatten<Self>: Generator,
     {
         Flatten(self)
@@ -243,10 +234,10 @@ pub trait Generator {
     }
 
     /// Same as [`Generator::collect_with`] but with a predefined `count`.
-    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, Range<usize>, F>
+    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, RangeInclusive<usize>, F>
     where
         Self: Sized,
-        Collect<Self, Range<usize>, F>: Generator,
+        Collect<Self, RangeInclusive<usize>, F>: Generator,
     {
         Collect::new(self)
     }
@@ -254,15 +245,15 @@ pub trait Generator {
     /// Generates a variable number of items based on the provided `count`
     /// [`Generator`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
-    fn collect_with<C: IntoGenerator<Item = usize>, F: FromIterator<Self::Item>>(
+    fn collect_with<C: Generator<Item = usize>, F: FromIterator<Self::Item>>(
         self,
         count: C,
-    ) -> Collect<Self, C::IntoGen, F>
+    ) -> Collect<Self, C, F>
     where
         Self: Sized,
-        Collect<Self, C::IntoGen, F>: Generator,
+        Collect<Self, C, F>: Generator,
     {
-        Collect::new_with(self, count.into_gen(), None)
+        Collect::new_with(self, count, None)
     }
 
     /// Maps the current `size` of the generation process to a different one.
@@ -473,15 +464,6 @@ pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f6
         // This size calculation ensures that 25% of samples are fully sized.
         let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
         (size.start + ratio * range, size.end)
-    }
-}
-
-impl<G: Generator> IntoGenerator for G {
-    type IntoGen = G;
-    type Item = G::Item;
-
-    fn into_gen(self) -> Self::IntoGen {
-        self
     }
 }
 

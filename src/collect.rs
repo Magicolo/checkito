@@ -1,11 +1,11 @@
 use crate::{
     all,
     generate::{self, FullGenerator, Generator, State},
-    primitive::{self, Full, Range},
+    primitive::{self, Direction, Full},
     sample::Sample,
     shrink::Shrinker,
 };
-use core::{marker::PhantomData, mem::replace};
+use core::{marker::PhantomData, mem::replace, ops::RangeInclusive};
 
 #[derive(Debug, Default)]
 pub struct Collect<I: ?Sized, C, F: ?Sized> {
@@ -37,14 +37,11 @@ pub(crate) enum Machine {
     Done,
 }
 
-impl<G: Generator, F: FromIterator<G::Item>> Collect<G, Range<usize>, F> {
+impl<G: Generator, F: FromIterator<G::Item>> Collect<G, RangeInclusive<usize>, F> {
     pub(crate) const fn new(generator: G) -> Self {
         Self {
             generator,
-            count: Range {
-                start: 0,
-                end: generate::COUNT,
-            },
+            count: 0..=generate::COUNT,
             minimum: 0,
             _marker: PhantomData,
         }
@@ -70,10 +67,12 @@ impl<S: Shrinker, F: FromIterator<S::Item>> Shrink<S, F> {
         let maximum = shrinkers.len();
         Self {
             shrinkers,
-            machine: Machine::Truncate(primitive::Shrink::new(
-                Range::usize(minimum..=maximum).unwrap(),
-                maximum,
-            )),
+            machine: Machine::Truncate(primitive::Shrink {
+                start: minimum,
+                end: maximum,
+                item: maximum,
+                direction: Direction::None,
+            }),
             minimum,
             _marker: PhantomData,
         }
@@ -199,7 +198,7 @@ impl<S: Shrinker, F: FromIterator<S::Item>> Shrinker for Shrink<S, F> {
 }
 
 impl<G: FullGenerator> FullGenerator for Vec<G> {
-    type FullGen = Collect<G::FullGen, Range<usize>, Self::Item>;
+    type FullGen = Collect<G::FullGen, RangeInclusive<usize>, Self::Item>;
     type Item = Vec<G::Item>;
 
     fn full_gen() -> Self::FullGen {
@@ -208,7 +207,7 @@ impl<G: FullGenerator> FullGenerator for Vec<G> {
 }
 
 impl FullGenerator for String {
-    type FullGen = Collect<Full<char>, Range<usize>, Self::Item>;
+    type FullGen = Collect<Full<char>, RangeInclusive<usize>, Self::Item>;
     type Item = String;
 
     fn full_gen() -> Self::FullGen {

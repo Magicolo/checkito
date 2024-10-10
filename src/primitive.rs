@@ -1,32 +1,17 @@
 use crate::{
     any::Any,
-    generate::{FullGenerator, Generator, IntoGenerator, State},
+    generate::{FullGenerator, Generator, State},
     nudge::Nudge,
     shrink::Shrinker,
 };
 use core::{
     convert::TryInto,
-    fmt,
     marker::PhantomData,
     ops::{self, Bound},
 };
-use std::error;
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Range<T> {
-    pub(crate) start: T,
-    pub(crate) end: T,
-}
 
 #[derive(Copy, Clone, Debug)]
-pub enum Error {
-    Overflow,
-    Empty,
-    Invalid,
-}
-
-#[derive(Copy, Clone, Debug)]
-enum Direction {
+pub(crate) enum Direction {
     None,
     Low,
     High,
@@ -40,109 +25,11 @@ pub struct Special<T: ?Sized>(PhantomData<T>);
 
 #[derive(Clone, Debug)]
 pub struct Shrink<T> {
-    range: Range<T>,
-    item: T,
-    direction: Direction,
+    pub(crate) start: T,
+    pub(crate) end: T,
+    pub(crate) item: T,
+    pub(crate) direction: Direction,
 }
-
-impl<T> Range<T> {
-    pub(crate) fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Range<U> {
-        Range {
-            start: map(self.start),
-            end: map(self.end),
-        }
-    }
-}
-
-impl<T> Shrink<T> {
-    pub(crate) const fn new(range: Range<T>, item: T) -> Self {
-        Self {
-            range,
-            item,
-            direction: Direction::None,
-        }
-    }
-
-    pub(crate) fn map<U, F: FnMut(T) -> U>(self, mut map: F) -> Shrink<U> {
-        let item = map(self.item);
-        Shrink {
-            range: self.range.map(map),
-            item,
-            direction: self.direction,
-        }
-    }
-}
-
-impl From<Range<char>> for Range<u32> {
-    fn from(value: Range<char>) -> Self {
-        value.map(|value| value as u32)
-    }
-}
-
-impl From<Range<u8>> for Range<char> {
-    fn from(value: Range<u8>) -> Self {
-        value.map(|value| value as char)
-    }
-}
-
-impl From<Shrink<char>> for Shrink<u32> {
-    fn from(value: Shrink<char>) -> Self {
-        value.map(|value| value as u32)
-    }
-}
-
-impl From<Shrink<u8>> for Shrink<u32> {
-    fn from(value: Shrink<u8>) -> Self {
-        value.map(|value| value as u32)
-    }
-}
-
-impl From<Shrink<u8>> for Shrink<char> {
-    fn from(value: Shrink<u8>) -> Self {
-        value.map(|value| value as char)
-    }
-}
-
-impl TryFrom<Range<u32>> for Range<char> {
-    type Error = <char as TryFrom<u32>>::Error;
-
-    fn try_from(value: Range<u32>) -> Result<Self, Self::Error> {
-        Ok(Self {
-            start: value.start.try_into()?,
-            end: value.end.try_into()?,
-        })
-    }
-}
-
-impl TryFrom<Shrink<u32>> for Shrink<char> {
-    type Error = <char as TryFrom<u32>>::Error;
-
-    fn try_from(value: Shrink<u32>) -> Result<Self, Self::Error> {
-        Ok(Self {
-            range: value.range.try_into()?,
-            item: value.item.try_into()?,
-            direction: value.direction,
-        })
-    }
-}
-
-impl<T> ops::RangeBounds<T> for Range<T> {
-    fn start_bound(&self) -> Bound<&T> {
-        Bound::Included(&self.start)
-    }
-
-    fn end_bound(&self) -> Bound<&T> {
-        Bound::Included(&self.end)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt::Debug::fmt(self, f)
-    }
-}
-
-impl error::Error for Error {}
 
 impl<T: ?Sized> Special<T> {
     pub(crate) const NEW: Self = Self(PhantomData);
@@ -209,91 +96,124 @@ macro_rules! same {
 }
 
 macro_rules! range {
-    ($i:ident, $t:ty, $r:ty) => {
-        impl TryFrom<$r> for $t {
-            type Error = Error;
+    (CHARACTER, $t:ident, $r:ty) => {
+        impl Generator for $r {
+            type Item = $t;
+            type Shrink = Shrink;
 
-            fn try_from(range: $r) -> Result<Self, Self::Error> {
-                Self::$i(range)
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                let (start, end) = range(self);
+                Shrink((start..=end).generate(state))
+            }
+
+            fn constant(&self) -> bool {
+                let (start, end) = range(self);
+                (start..=end).constant()
             }
         }
+    };
+    (INTEGER, $t:ident, $r:ty) => {
+        impl Generator for $r {
+            type Item = $t;
+            type Shrink = Shrink<$t>;
 
-        impl IntoGenerator for $r {
-            type IntoGen = $t;
-            type Item = $i;
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                let (start, end) = range(self);
+                let (start, end) = shrinked((start, end), state.size());
+                let item = state.random().$t(start..=end);
+                Shrink {
+                    start,
+                    end,
+                    item,
+                    direction: Direction::None,
+                }
+            }
 
-            fn into_gen(self) -> Self::IntoGen {
-                <$t as TryFrom<$r>>::try_from(self).unwrap()
+            fn constant(&self) -> bool {
+                let (start, end) = range(self);
+                start == end
+            }
+        }
+    };
+    (FLOATING, $t:ident, $r:ty) => {
+        impl Generator for $r {
+            type Item = $t;
+            type Shrink = Shrink<$t>;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                let (start, end) = range(self);
+                debug_assert!(start.is_finite() && end.is_finite());
+                let (start, end) = shrinked((start, end), state.size());
+                debug_assert!(start.is_finite() && end.is_finite());
+                let ratio = state.random().$t();
+                debug_assert!(ratio.is_finite() && ratio >= 0 as $t && ratio <= 1 as $t);
+                let difference = end * ratio - start * ratio;
+                let item = (difference + start).clamp(start, end);
+                debug_assert!(item.is_finite());
+                Shrink {
+                    start,
+                    end,
+                    item,
+                    direction: Direction::None,
+                }
+            }
+
+            fn constant(&self) -> bool {
+                let (start, end) = range(self);
+                start == end
             }
         }
     };
 }
 
 macro_rules! ranges {
-    ($i:ident, $t:ty) => {
-        impl TryFrom<ops::RangeFull> for $t {
-            type Error = Error;
-
-            fn try_from(range: ops::RangeFull) -> Result<Self, Self::Error> {
-                Self::$i(range)
-            }
-        }
-
-        range!($i, $t, ops::Range<$i>);
-        range!($i, $t, ops::RangeInclusive<$i>);
-        range!($i, $t, ops::RangeFrom<$i>);
-        range!($i, $t, ops::RangeTo<$i>);
-        range!($i, $t, ops::RangeToInclusive<$i>);
+    ($k: ident, $t:ident) => {
+        range!($k, $t, ops::Range<$t>);
+        range!($k, $t, ops::RangeInclusive<$t>);
+        range!($k, $t, ops::RangeFrom<$t>);
+        range!($k, $t, ops::RangeTo<$t>);
+        range!($k, $t, ops::RangeToInclusive<$t>);
     };
 }
 
 macro_rules! shrinked {
     ($t:ident) => {
-        impl Range<$t> {
-            pub(super) fn shrinked(&self, size: f64) -> Self {
-                fn shrink(range: f64, size: f64) -> f64 {
-                    // This adjustment of the size tries to prevent large ranges (such as `u64`)
-                    // from rushing into huge values as soon as the `size > 0`.
-                    range * size.powf(range.abs().log2() / 12.0)
-                }
+        pub(crate) fn shrinked(pair: ($t, $t), size: f64) -> ($t, $t) {
+            fn shrink(range: f64, size: f64) -> f64 {
+                // This adjustment of the size tries to prevent large ranges (such as `u64`)
+                // from rushing into huge values as soon as the `size > 0`.
+                range * size.powf(range.abs().log2() / 12.0)
+            }
 
-                if self.start >= 0 as $t {
-                    debug_assert!(self.end >= 0 as $t);
-                    let range = (self.end - self.start) as f64;
-                    let shrunk = shrink(range, size);
-                    let end = (self.start as f64 + shrunk) as $t;
-                    Self {
-                        start: self.start,
-                        end: end.max(self.start).min(self.end),
-                    }
-                } else if self.end <= 0 as $t {
-                    debug_assert!(self.start <= 0 as $t);
-                    let range = (self.start - self.end) as f64;
-                    let shrunk = shrink(range, size);
-                    let start = (self.end as f64 + shrunk) as $t;
-                    Self {
-                        start: start.min(self.end).max(self.start),
-                        end: self.end,
-                    }
-                } else {
-                    debug_assert!(self.start < 0 as $t);
-                    debug_assert!(self.end > 0 as $t);
-
-                    let start = self.start as f64;
-                    let end = self.end as f64;
-                    let left = shrink(start, size) * 0.5;
-                    let right = shrink(end, size) * 0.5;
-                    let mut ranges = (left - right, right - left);
-                    if ranges.0 < start {
-                        ranges.1 += start - ranges.0;
-                    } else if ranges.1 > end {
-                        ranges.0 += end - ranges.1;
-                    }
-                    Self {
-                        start: (ranges.0 as $t).min(self.end).max(self.start),
-                        end: (ranges.1 as $t).max(self.start).min(self.end),
-                    }
+            if pair.0 >= 0 as $t {
+                debug_assert!(pair.1 >= 0 as $t);
+                let range = (pair.1 - pair.0) as f64;
+                let shrunk = shrink(range, size);
+                let end = (pair.0 as f64 + shrunk) as $t;
+                (pair.0, end.clamp(pair.0, pair.1))
+            } else if pair.1 <= 0 as $t {
+                debug_assert!(pair.0 <= 0 as $t);
+                let range = (pair.0 - pair.1) as f64;
+                let shrunk = shrink(range, size);
+                let start = (pair.1 as f64 + shrunk) as $t;
+                (start.clamp(pair.0, pair.1), pair.1)
+            } else {
+                debug_assert!(pair.0 < 0 as $t);
+                debug_assert!(pair.1 > 0 as $t);
+                let start = pair.0 as f64;
+                let end = pair.1 as f64;
+                let left = shrink(start, size) * 0.5;
+                let right = shrink(end, size) * 0.5;
+                let mut ranges = (left - right, right - left);
+                if ranges.0 < start {
+                    ranges.1 += start - ranges.0;
+                } else if ranges.1 > end {
+                    ranges.0 += end - ranges.1;
                 }
+                (
+                    (ranges.0 as $t).clamp(pair.0, pair.1),
+                    (ranges.1 as $t).clamp(pair.0, pair.1),
+                )
             }
         }
     };
@@ -304,62 +224,58 @@ macro_rules! shrink {
         // Never change `$s.item` to preserve coherence in calls to `shrinker.item()`.
         match $s.direction {
             Direction::None if $s.item >= 0 as $t => {
-                $s.range.start = $s.range.start.max(0 as $t);
-                if $s.range.start == $s.item {
+                $s.start = $s.start.max(0 as $t);
+                if $s.start == $s.item {
                     None
                 } else {
                     $s.direction = Direction::High;
-                    $s.range.end = $s.item;
+                    $s.end = $s.item;
                     Some(Shrink {
                         direction: $s.direction,
-                        range: Range {
-                            start: $s.range.start,
-                            end: $s.range.start,
-                        },
-                        item: $s.range.start,
+                        start: $s.start,
+                        end: $s.start,
+                        item: $s.start,
                     })
                 }
             }
             Direction::None => {
-                $s.range.end = $s.range.end.min(0 as $t);
-                if $s.range.end == $s.item {
+                $s.end = $s.end.min(0 as $t);
+                if $s.end == $s.item {
                     None
                 } else {
                     $s.direction = Direction::Low;
-                    $s.range.start = $s.item;
+                    $s.start = $s.item;
                     Some(Shrink {
                         direction: $s.direction,
-                        range: Range {
-                            start: $s.range.end,
-                            end: $s.range.end,
-                        },
-                        item: $s.range.end,
+                        start: $s.end,
+                        end: $s.end,
+                        item: $s.end,
                     })
                 }
             }
             Direction::Low => {
-                let delta = $s.range.end / 2 as $t - $s.range.start / 2 as $t;
-                let middle = $s.range.start + delta;
-                if middle == $s.range.start || middle == $s.range.end {
+                let delta = $s.end / 2 as $t - $s.start / 2 as $t;
+                let middle = $s.start + delta;
+                if middle == $s.start || middle == $s.end {
                     None
                 } else {
                     let mut shrinker = $s.clone();
-                    shrinker.range.start = middle;
+                    shrinker.start = middle;
                     shrinker.item = middle;
-                    $s.range.end = middle;
+                    $s.end = middle;
                     Some(shrinker)
                 }
             }
             Direction::High => {
-                let delta = $s.range.end / 2 as $t - $s.range.start / 2 as $t;
-                let middle = $s.range.start + delta;
-                if middle == $s.range.start || middle == $s.range.end {
+                let delta = $s.end / 2 as $t - $s.start / 2 as $t;
+                let middle = $s.start + delta;
+                if middle == $s.start || middle == $s.end {
                     None
                 } else {
                     let mut shrinker = $s.clone();
-                    shrinker.range.end = middle;
+                    shrinker.end = middle;
                     shrinker.item = middle;
-                    $s.range.start = middle;
+                    $s.start = middle;
                     Some(shrinker)
                 }
             }
@@ -367,7 +283,7 @@ macro_rules! shrink {
     }};
 }
 
-pub mod boolean {
+pub mod bool {
     use super::*;
     use core::mem::take;
 
@@ -409,11 +325,9 @@ pub mod boolean {
     same!(bool);
 }
 
-pub mod character {
+pub mod char {
     use super::*;
 
-    #[derive(Copy, Clone, Debug, Default)]
-    pub struct Range(super::Range<u32>);
     #[derive(Clone, Debug)]
     pub struct Shrink(super::Shrink<u32>);
 
@@ -448,66 +362,22 @@ pub mod character {
         }
     }
 
-    impl Range {
-        pub fn char(range: impl ops::RangeBounds<char>) -> Result<Self, Error> {
-            let start = match range.start_bound() {
-                Bound::Included(&bound) => bound as u32,
-                Bound::Excluded(&bound) => (bound as u32).checked_add(1).ok_or(Error::Overflow)?,
-                Bound::Unbounded => 0u32,
-            };
-            let end = match range.end_bound() {
-                Bound::Included(&bound) => bound as u32,
-                Bound::Excluded(&bound) => (bound as u32).checked_sub(1).ok_or(Error::Overflow)?,
-                Bound::Unbounded => char::MAX as u32,
-            };
-            if end < start {
-                Err(Error::Empty)
-            } else {
-                Ok(Self(super::Range { start, end }))
-            }
-        }
+    fn range<R: ops::RangeBounds<char>>(range: &R) -> (u32, u32) {
+        let start = match range.start_bound() {
+            Bound::Included(&bound) => Bound::Included(bound as u32),
+            Bound::Excluded(&bound) => Bound::Excluded(bound as u32),
+            Bound::Unbounded => Bound::Included(0),
+        };
+        let end = match range.end_bound() {
+            Bound::Included(&bound) => Bound::Included(bound as u32),
+            Bound::Excluded(&bound) => Bound::Excluded(bound as u32),
+            Bound::Unbounded => Bound::Included(char::MAX as u32),
+        };
+        number::u32::range(&(start, end))
     }
 
-    impl Full<char> {
-        const fn range() -> Range {
-            Range(super::Range {
-                start: 0,
-                end: char::MAX as u32,
-            })
-        }
-
-        const fn shrink(item: char) -> Shrink {
-            Shrink(super::Shrink::new(Self::range().0, item as u32))
-        }
-
-        const fn special() -> Special<char> {
-            Special::NEW
-        }
-    }
-
-    impl From<super::Shrink<u8>> for Shrink {
-        fn from(value: super::Shrink<u8>) -> Self {
-            Self(value.into())
-        }
-    }
-
-    impl From<super::Shrink<char>> for Shrink {
-        fn from(value: super::Shrink<char>) -> Self {
-            Self(value.into())
-        }
-    }
-
-    impl Generator for Range {
-        type Item = char;
-        type Shrink = Shrink;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink(self.0.generate(state))
-        }
-
-        fn constant(&self) -> bool {
-            self.0.constant()
-        }
+    pub(crate) const fn shrink(item: char) -> Shrink {
+        Shrink(number::u32::shrink(item as u32))
     }
 
     impl Generator for Full<char> {
@@ -516,8 +386,8 @@ pub mod character {
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             match state.random().u8(..) {
-                0..=253 => Self::range().generate(state),
-                254.. => Self::shrink(Self::special().generate(state)),
+                0..250 => (0 as char..=char::MAX).generate(state),
+                250.. => shrink(Special::<char>::NEW.generate(state)),
             }
         }
 
@@ -543,7 +413,7 @@ pub mod character {
 
     full!(char);
     same!(char);
-    ranges!(char, Range);
+    ranges!(CHARACTER, char);
 }
 
 pub mod string {
@@ -556,6 +426,42 @@ pub mod string {
 
 pub mod number {
     use super::*;
+
+    pub trait Number: Sized {
+        type Full: Generator<Item = Self>;
+        type Special: Generator<Item = Self>;
+        type Positive: Generator<Item = Self>;
+        type Negative: Generator<Item = Self>;
+
+        const ZERO: Self;
+        const ONE: Self;
+        const MIN: Self;
+        const MAX: Self;
+        const FULL: Self::Full;
+        const SPECIAL: Self::Special;
+        const POSITIVE: Self::Positive;
+        const NEGATIVE: Self::Negative;
+    }
+
+    macro_rules! number {
+        ($t: ident) => {
+            impl Number for $t {
+                type Full = ops::RangeInclusive<Self>;
+                type Negative = ops::RangeInclusive<Self>;
+                type Positive = ops::RangeInclusive<Self>;
+                type Special = Special<Self>;
+
+                const FULL: Self::Full = Self::MIN..=Self::MAX;
+                const MAX: Self = $t::MAX;
+                const MIN: Self = $t::MIN;
+                const NEGATIVE: Self::Negative = Self::MIN..=Self::ZERO;
+                const ONE: Self = 1 as $t;
+                const POSITIVE: Self::Positive = Self::ZERO..=Self::MAX;
+                const SPECIAL: Self::Special = Special::<$t>::NEW;
+                const ZERO: Self = 0 as $t;
+            }
+        };
+    }
 
     macro_rules! integer {
         ($t:ident) => {
@@ -572,54 +478,8 @@ pub mod number {
                 }
             }
 
-            impl Full<$t> {
-                const fn range() -> Range<$t> {
-                    Range { start: $t::MIN, end: $t::MAX }
-                }
-
-                const fn shrink(item: $t) -> Shrink<$t> {
-                    Shrink::new(Self::range(), item)
-                }
-
-                const fn special() -> Special<$t> {
-                    Special::NEW
-                }
-            }
-
-            impl Range<$t> {
-                pub fn $t(range: impl ops::RangeBounds<$t>) -> Result<Self, Error> {
-                    let start = match range.start_bound() {
-                        Bound::Included(&bound) => bound,
-                        Bound::Excluded(&bound) => bound.checked_add(1 as $t).ok_or(Error::Overflow)?,
-                        Bound::Unbounded => $t::MIN,
-                    };
-                    let end = match range.end_bound() {
-                        Bound::Included(&bound) => bound,
-                        Bound::Excluded(&bound) => bound.checked_sub(1 as $t).ok_or(Error::Overflow)?,
-                        Bound::Unbounded => $t::MAX,
-                    };
-                    if end < start {
-                        Err(Error::Empty)
-                    } else {
-                        Ok(Self { start, end })
-                    }
-                }
-            }
-            shrinked!($t);
-
-            impl Generator for Range<$t> {
-                type Item = $t;
-                type Shrink = Shrink<$t>;
-
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    let range = self.shrinked(state.size());
-                    let item = state.random().$t(range.start..=range.end);
-                    Shrink::new(range, item)
-                }
-
-                fn constant(&self) -> bool {
-                    self.start == self.end
-                }
+            pub(crate) const fn shrink(item: $t) -> Shrink<$t> {
+                Shrink { start: item, end: item, item, direction: Direction::None }
             }
 
             impl Generator for Full<$t> {
@@ -628,8 +488,8 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
-                        0..=254 => Self::range().shrinked(state.size()).generate(state),
-                        255 => Self::shrink(Self::special().generate(state)),
+                        0..250 => ($t::MIN..=$t::MAX).generate(state),
+                        250.. => shrink(Special::<$t>::NEW.generate(state)),
                     }
                 }
 
@@ -650,11 +510,42 @@ pub mod number {
                 }
             }
 
+            shrinked!($t);
+
+            /// - An empty range (0..=0) or invalid range (0..0) will use the `start` value.
+            /// - An reversed range will be flipped.
+            pub fn range<R: ops::RangeBounds<$t>>(range: &R) -> ($t, $t) {
+                let mut start = match range.start_bound() {
+                    Bound::Included(&bound) => (bound, false),
+                    Bound::Excluded(&bound) => (bound, true),
+                    Bound::Unbounded => ($t::MIN, false),
+                };
+                let mut end = match range.end_bound() {
+                    Bound::Included(&bound) => (bound, false),
+                    Bound::Excluded(&bound) => (bound, true),
+                    Bound::Unbounded => ($t::MAX, false),
+                };
+                if start.0 == end.0 {
+                    return (start.0, end.0);
+                }
+                if start.0 > end.0 {
+                    (start, end) = (end, start);
+                }
+                if start.1 {
+                    start.0 = start.0.saturating_add(1 as $t);
+                }
+                if end.1 {
+                    end.0 = end.0.saturating_sub(1 as $t);
+                }
+                (start.0.clamp($t::MIN, end.0), end.0.clamp(start.0, $t::MAX))
+            }
+
             full!($t);
             same!($t);
-            ranges!($t, Range<$t>);
+            ranges!(INTEGER, $t);
+            number!($t);
         };
-        ($($ts:ident),*) => { $(integer!($ts);)* };
+        ($($ts:ident),*) => { $(pub(crate) mod $ts { use super::*; integer!($ts); })* };
     }
 
     macro_rules! floating {
@@ -674,83 +565,11 @@ pub mod number {
                 }
             }
 
-            impl Full<$t> {
-                const fn special() -> Special<$t> {
-                    Special::NEW
-                }
-
-                const fn range() -> Range<$t> {
-                    Range {
-                        start: $t::MIN,
-                        end: $t::MAX,
-                    }
-                }
-
-                fn sub_range() -> Range<$t> {
-                    Range {
-                        start: -1 as $t / $t::EPSILON,
-                        end: 1 as $t / $t::EPSILON
-                    }
-                }
-
-                const fn shrink(item: $t) -> Shrink<$t> {
-                    Shrink::new(Self::range(), item)
-                }
+            pub(crate) const fn shrink(item: $t) -> Shrink<$t> {
+                Shrink { start: item, end: item, item, direction: Direction::None }
             }
 
-            impl Range<$t> {
-                pub fn $t(range: impl ops::RangeBounds<$t>) -> Result<Self, Error> {
-                    let start = match range.start_bound() {
-                        Bound::Included(&bound) => (bound, false),
-                        Bound::Excluded(&bound) => (bound, true),
-                        Bound::Unbounded => ($t::MIN, false),
-                    };
-                    let end = match range.end_bound() {
-                        Bound::Included(&bound) => (bound, false),
-                        Bound::Excluded(&bound) => (bound, true),
-                        Bound::Unbounded => ($t::MAX, false),
-                    };
-
-                    if end.0 < start.0 {
-                        Err(Error::Empty)
-                    } else if (start.1 || end.1) && start.0 == end.0 {
-                        Err(Error::Empty)
-                    } else {
-                        let start = if start.1 {
-                            start.0.nudge(start.0.signum())
-                        } else {
-                            start.0
-                        };
-                        let end = if end.1 {
-                            end.0.nudge(-end.0.signum())
-                        } else {
-                            end.0
-                        };
-                        Ok(Self {
-                            start: start.min(end),
-                            end: end.max(start),
-                        })
-                    }
-                }
-            }
             shrinked!($t);
-
-            impl Generator for Range<$t> {
-                type Item = $t;
-                type Shrink = Shrink<$t>;
-
-                fn generate(&self, state: &mut State) -> Self::Shrink {
-                    let range = self.shrinked(state.size());
-                    let ratio = state.random().$t();
-                    let difference = range.end * ratio - range.start * ratio;
-                    let item = (difference + range.start).max(range.start).min(range.end);
-                    Shrink::new(range, item)
-                }
-
-                fn constant(&self) -> bool {
-                    self.start == self.end
-                }
-            }
 
             impl Generator for Full<$t> {
                 type Item = $t;
@@ -758,11 +577,11 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
-                        0..=93 => Self::sub_range().shrinked(state.size()).generate(state),
-                        94..=187 => Self::sub_range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
-                        188..=219 => Self::range().shrinked(state.size()).generate(state),
-                        220..=251 => Self::range().shrinked(state.size()).map(|value| 1 as $t / value).generate(state),
-                        252.. => Self::shrink(Self::special().generate(state)),
+                        0..90 => ($t::MIN..=$t::MAX).generate(state),
+                        90..180 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
+                        180..215 => (1 as $t / $t::MIN..=1 as $t / $t::MAX).generate(state),
+                        215..250 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
+                        250.. => shrink(Special::<$t>::NEW.generate(state)),
                     }
                 }
 
@@ -787,11 +606,47 @@ pub mod number {
                 }
             }
 
+            pub(crate) fn range<R: ops::RangeBounds<$t>>(range: &R) -> ($t, $t) {
+                let mut start = match range.start_bound() {
+                    Bound::Included(&bound) => (bound, false),
+                    Bound::Excluded(&bound) => (bound, true),
+                    Bound::Unbounded => ($t::MIN, false),
+                };
+                let mut end = match range.end_bound() {
+                    Bound::Included(&bound) => (bound, false),
+                    Bound::Excluded(&bound) => (bound, true),
+                    Bound::Unbounded => ($t::MAX, false),
+                };
+                assert!(start.0.is_finite());
+                assert!(end.0.is_finite());
+
+                if start.0 == end.0 {
+                    return (start.0, end.0);
+                }
+                if start.0 > end.0 {
+                    (start, end) = (end, start);
+                }
+
+                let start = if start.1 {
+                    start.0.nudge(start.0.signum())
+                } else {
+                    start.0
+                };
+                let end = if end.1 {
+                    end.0.nudge(-end.0.signum())
+                } else {
+                    end.0
+                };
+                // `Nudge` can push a value to infinity, so clamp brings it back in valid range.
+                (start.clamp($t::MIN, end), end.clamp(start, $t::MAX))
+            }
+
             full!($t);
             same!($t);
-            ranges!($t, Range<$t>);
+            ranges!(FLOATING, $t);
+            number!($t);
         };
-        ($($ts:ident),*) => { $(floating!($ts);)* };
+        ($($ts:ident),*) => { $(pub mod $ts { use super::*; floating!($ts); })* };
     }
 
     integer!(

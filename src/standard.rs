@@ -1,6 +1,6 @@
 use crate::{
     convert::Convert,
-    generate::{FullGenerator, Generator, IntoGenerator, State},
+    generate::{FullGenerator, Generator, State},
     shrink::Shrinker,
 };
 use core::{marker::PhantomData, mem::take};
@@ -11,23 +11,21 @@ pub mod option {
     use crate::generate::FullGenerator;
 
     #[derive(Clone, Debug)]
-    pub struct IntoGen<G>(pub(crate) Option<G>);
-    #[derive(Clone, Debug)]
-    pub struct FullGen<G>(pub(crate) G);
+    pub struct Generate<G>(pub(crate) G);
 
     #[derive(Clone)]
     pub struct Shrink<S>(bool, Option<S>);
 
     impl<G: FullGenerator> FullGenerator for Option<G> {
-        type FullGen = FullGen<G::FullGen>;
+        type FullGen = Generate<G::FullGen>;
         type Item = Option<G::Item>;
 
         fn full_gen() -> Self::FullGen {
-            FullGen(G::full_gen())
+            Generate(G::full_gen())
         }
     }
 
-    impl<G: Generator> Generator for FullGen<G> {
+    impl<G: Generator> Generator for Generate<G> {
         type Item = Option<G::Item>;
         type Shrink = Shrink<G::Shrink>;
 
@@ -44,30 +42,19 @@ pub mod option {
         }
     }
 
-    impl<G: IntoGenerator> IntoGenerator for Option<G> {
-        type IntoGen = IntoGen<G::IntoGen>;
-        type Item = Option<G::Item>;
-
-        fn into_gen(self) -> Self::IntoGen {
-            IntoGen(self.map(G::into_gen))
-        }
-    }
-
-    impl<G: Generator> Generator for IntoGen<G> {
+    impl<G: Generator> Generator for Option<G> {
         type Item = Option<G::Item>;
         type Shrink = Shrink<G::Shrink>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrink(
                 true,
-                self.0.as_ref().map(|generator| generator.generate(state)),
+                self.as_ref().map(|generator| generator.generate(state)),
             )
         }
 
         fn constant(&self) -> bool {
-            self.0
-                .as_ref()
-                .map_or(true, |generator| generator.constant())
+            self.as_ref().map_or(true, |generator| generator.constant())
         }
     }
 
@@ -92,14 +79,12 @@ pub mod result {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct FullGen<T, E>(T, E);
-    #[derive(Clone, Debug)]
-    pub struct IntoGen<T, E>(Result<T, E>);
+    pub struct Generate<T, E>(T, E);
     #[derive(Clone, Debug)]
     pub struct Shrink<T, E>(Result<T, E>);
 
     impl<T: FullGenerator, E: FullGenerator> FullGenerator for Result<T, E> {
-        type FullGen = FullGen<T::FullGen, E::FullGen>;
+        type FullGen = Generate<T::FullGen, E::FullGen>;
         type Item = Result<T::Item, E::Item>;
 
         fn full_gen() -> Self::FullGen {
@@ -107,7 +92,7 @@ pub mod result {
         }
     }
 
-    impl<T: Generator, E: Generator> Generator for FullGen<T, E> {
+    impl<T: Generator, E: Generator> Generator for Generate<T, E> {
         type Item = Result<T::Item, E::Item>;
         type Shrink = Shrink<T::Shrink, E::Shrink>;
 
@@ -124,31 +109,19 @@ pub mod result {
         }
     }
 
-    impl<T: IntoGenerator, E: IntoGenerator> IntoGenerator for Result<T, E> {
-        type IntoGen = IntoGen<T::IntoGen, E::IntoGen>;
-        type Item = Result<T::Item, E::Item>;
-
-        fn into_gen(self) -> Self::IntoGen {
-            match self {
-                Ok(generator) => IntoGen(Ok(generator.into_gen())),
-                Err(generator) => IntoGen(Err(generator.into_gen())),
-            }
-        }
-    }
-
-    impl<T: Generator, E: Generator> Generator for IntoGen<T, E> {
+    impl<T: Generator, E: Generator> Generator for Result<T, E> {
         type Item = Result<T::Item, E::Item>;
         type Shrink = Shrink<T::Shrink, E::Shrink>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink(match &self.0 {
+            Shrink(match self {
                 Ok(generator) => Ok(generator.generate(state)),
                 Err(generator) => Err(generator.generate(state)),
             })
         }
 
         fn constant(&self) -> bool {
-            match &self.0 {
+            match self {
                 Ok(generator) => generator.constant(),
                 Err(generator) => generator.constant(),
             }

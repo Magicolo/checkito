@@ -33,7 +33,7 @@ pub use check::Check;
 pub use checkito_macro::check;
 #[cfg(feature = "regex")]
 pub use checkito_macro::regex;
-pub use generate::{FullGenerator, Generator, IntoGenerator};
+pub use generate::{FullGenerator, Generator};
 pub use prelude::*;
 pub use prove::Prove;
 #[cfg(feature = "regex")]

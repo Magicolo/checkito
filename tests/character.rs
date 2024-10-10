@@ -7,7 +7,6 @@ use std::{
 };
 
 #[test]
-#[should_panic]
 fn empty_range() {
     assert!(
         char::full_gen()
@@ -59,11 +58,12 @@ macro_rules! collection {
             #[test]
             fn has_same_count() {
                 assert!(
-                    (0..100usize)
-                        .into_gen()
-                        .flat_map(|count| (count, char::full_gen().collect_with::<_, $t>(count)))
-                        .check(|(count, value)| value.$i().count() == count)
-                        .is_none()
+                    Generator::flat_map(0..100usize, |count| (
+                        count,
+                        char::full_gen().collect_with::<_, $t>(count)
+                    ))
+                    .check(|(count, value)| value.$i().count() == count)
+                    .is_none()
                 );
             }
 
@@ -134,7 +134,6 @@ mod check {
     use super::*;
 
     #[check(char::full_gen().flat_map(|value| value..value))]
-    #[should_panic]
     fn empty_range(_: char) {}
 
     #[check(char::full_gen().flat_map(|value| (value, same(value))))]
