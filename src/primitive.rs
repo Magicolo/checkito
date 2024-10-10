@@ -388,7 +388,7 @@ pub mod char {
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             match state.random().u8(..) {
-                0..250 => (0 as char..=char::MAX).generate(state),
+                0..=249 => (0 as char..=char::MAX).generate(state),
                 250.. => shrink(Special::<char>::NEW.generate(state)),
             }
         }
@@ -490,7 +490,7 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
-                        0..250 => ($t::MIN..=$t::MAX).generate(state),
+                        0..=249 => ($t::MIN..=$t::MAX).generate(state),
                         250.. => shrinker(Special::<$t>::NEW.generate(state)),
                     }
                 }
@@ -579,10 +579,10 @@ pub mod number {
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
-                        0..90 => ($t::MIN..=$t::MAX).generate(state),
-                        90..180 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
-                        180..215 => (1 as $t / $t::MIN..=1 as $t / $t::MAX).generate(state),
-                        215..250 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
+                        0..=89 => ($t::MIN..=$t::MAX).generate(state),
+                        90..=179 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
+                        180..=214 => (1 as $t / $t::MIN..=1 as $t / $t::MAX).generate(state),
+                        215..=249 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
                         250.. => shrinker(Special::<$t>::NEW.generate(state)),
                     }
                 }
