@@ -198,19 +198,19 @@ impl<S: Shrinker, F: FromIterator<S::Item>> Shrinker for Shrink<S, F> {
 }
 
 impl<G: FullGenerator> FullGenerator for Vec<G> {
-    type FullGen = Collect<G::FullGen, RangeInclusive<usize>, Self::Item>;
+    type Generator = Collect<G::Generator, RangeInclusive<usize>, Self::Item>;
     type Item = Vec<G::Item>;
 
-    fn full_gen() -> Self::FullGen {
-        Collect::new(G::full_gen())
+    fn generator() -> Self::Generator {
+        Collect::new(G::generator())
     }
 }
 
 impl FullGenerator for String {
-    type FullGen = Collect<Full<char>, RangeInclusive<usize>, Self::Item>;
+    type Generator = Collect<Full<char>, RangeInclusive<usize>, Self::Item>;
     type Item = String;
 
-    fn full_gen() -> Self::FullGen {
-        Collect::new(char::full_gen())
+    fn generator() -> Self::Generator {
+        Collect::new(char::generator())
     }
 }

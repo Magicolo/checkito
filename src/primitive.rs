@@ -56,10 +56,10 @@ impl<T: ?Sized> Copy for Full<T> {}
 macro_rules! full {
     ($t:ty) => {
         impl FullGenerator for $t {
-            type FullGen = Full<$t>;
+            type Generator = Full<$t>;
             type Item = $t;
 
-            fn full_gen() -> Self::FullGen {
+            fn generator() -> Self::Generator {
                 Full::<$t>::NEW
             }
         }
@@ -185,7 +185,9 @@ macro_rules! shrinked {
                 range * size.powf(range.abs().log2() / 12.0)
             }
 
-            if pair.0 >= 0 as $t {
+            if pair.0 == pair.1 {
+                (pair.0, pair.1)
+            } else if pair.0 >= 0 as $t {
                 debug_assert!(pair.1 >= 0 as $t);
                 let range = (pair.1 - pair.0) as f64;
                 let shrunk = shrink(range, size);
@@ -377,7 +379,7 @@ pub mod char {
     }
 
     pub(crate) const fn shrink(item: char) -> Shrink {
-        Shrink(number::u32::shrink(item as u32))
+        Shrink(number::u32::shrinker(item as u32))
     }
 
     impl Generator for Full<char> {
@@ -478,8 +480,8 @@ pub mod number {
                 }
             }
 
-            pub(crate) const fn shrink(item: $t) -> Shrink<$t> {
-                Shrink { start: item, end: item, item, direction: Direction::None }
+            pub(crate) const fn shrinker(item: $t) -> Shrink<$t> {
+                Shrink { start: $t::MIN, end: $t::MAX, item, direction: Direction::None }
             }
 
             impl Generator for Full<$t> {
@@ -489,7 +491,7 @@ pub mod number {
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
                         0..250 => ($t::MIN..=$t::MAX).generate(state),
-                        250.. => shrink(Special::<$t>::NEW.generate(state)),
+                        250.. => shrinker(Special::<$t>::NEW.generate(state)),
                     }
                 }
 
@@ -565,8 +567,8 @@ pub mod number {
                 }
             }
 
-            pub(crate) const fn shrink(item: $t) -> Shrink<$t> {
-                Shrink { start: item, end: item, item, direction: Direction::None }
+            pub(crate) const fn shrinker(item: $t) -> Shrink<$t> {
+                Shrink { start: $t::MIN, end: $t::MAX, item, direction: Direction::None }
             }
 
             shrinked!($t);
@@ -581,7 +583,7 @@ pub mod number {
                         90..180 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
                         180..215 => (1 as $t / $t::MIN..=1 as $t / $t::MAX).generate(state),
                         215..250 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
-                        250.. => shrink(Special::<$t>::NEW.generate(state)),
+                        250.. => shrinker(Special::<$t>::NEW.generate(state)),
                     }
                 }
 

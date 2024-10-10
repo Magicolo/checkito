@@ -31,11 +31,11 @@ pub mod array {
     use core::array;
 
     impl<G: FullGenerator, const N: usize> FullGenerator for [G; N] {
-        type FullGen = [G::FullGen; N];
+        type Generator = [G::Generator; N];
         type Item = [G::Item; N];
 
-        fn full_gen() -> Self::FullGen {
-            array::from_fn(|_| G::full_gen())
+        fn generator() -> Self::Generator {
+            array::from_fn(|_| G::generator())
         }
     }
 
@@ -153,12 +153,12 @@ pub mod vector {
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
         impl<$($t: FullGenerator,)*> FullGenerator for ($($t,)*) {
-            type FullGen = ($($t::FullGen,)*);
+            type Generator = ($($t::Generator,)*);
             type Item = ($($t::Item,)*);
 
             #[allow(clippy::unused_unit)]
-            fn full_gen() -> Self::FullGen {
-                ($($t::full_gen(),)*)
+            fn generator() -> Self::Generator {
+                ($($t::generator(),)*)
             }
         }
 

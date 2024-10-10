@@ -50,8 +50,8 @@ pub struct States {
 /// and for some standard types (such as [`Option<T>`] and [`Result<T, E>`]).
 pub trait FullGenerator {
     type Item;
-    type FullGen: Generator<Item = Self::Item>;
-    fn full_gen() -> Self::FullGen;
+    type Generator: Generator<Item = Self::Item>;
+    fn generator() -> Self::Generator;
 }
 
 #[must_use = "generators do nothing until used"]
@@ -89,7 +89,6 @@ pub trait Generator {
     ///         // Without [`Generator::dampen`], the tree would grow exponentially.
     ///         lazy(node).collect().map(Node::Branch).dampen().boxed(),
     ///     )
-    ///         .into_gen()
     ///         .any()
     ///         .fuse()
     /// }

@@ -65,7 +65,7 @@ fn node() -> impl Generator<Item = Node> {
         // implementation for [`Node`], so the [`with`] solution is preferred.
         with(|| Node::Null),
         // Uses [`bool`]'s canonical [`Generator`] through its [`FullGenerator`] implementation.
-        bool::full_gen().map(Node::Boolean),
+        bool::generator().map(Node::Boolean),
         // [`number`] is a helper [`Generator`] implementation that produces non-infinite and
         // non-NaN numbers.
         number::<f64>().map(Node::Number),

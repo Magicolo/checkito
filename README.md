@@ -159,7 +159,7 @@ fn person_has_valid_name_and_is_major(person: Person) {
 fn has_even_hundred() {
     (0..100, 200..300, 400..500)
         .any()
-        .into::<i32>()
+        .fuse::<i32>()
         .check(|value| assert!((value / 100) % 2 == 0));
 }
 

@@ -3,17 +3,17 @@ use common::*;
 
 #[test]
 fn samples_true() {
-    assert!(bool::full_gen().samples(100).any(|value| value));
+    assert!(bool::generator().samples(100).any(|value| value));
 }
 
 #[test]
 fn samples_false() {
-    assert!(bool::full_gen().samples(100).any(|value| !value));
+    assert!(bool::generator().samples(100).any(|value| !value));
 }
 
 #[test]
 fn first_size_is_0_and_false() {
-    let result = bool::full_gen().check(|_| false);
+    let result = bool::generator().check(|_| false);
     let fail = result.unwrap();
     assert_eq!(fail.state.size(), 0.);
     assert_eq!(fail.cause, Cause::Disprove(()));

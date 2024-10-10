@@ -17,11 +17,11 @@ pub mod option {
     pub struct Shrink<S>(bool, Option<S>);
 
     impl<G: FullGenerator> FullGenerator for Option<G> {
-        type FullGen = Generate<G::FullGen>;
+        type Generator = Generate<G::Generator>;
         type Item = Option<G::Item>;
 
-        fn full_gen() -> Self::FullGen {
-            Generate(G::full_gen())
+        fn generator() -> Self::Generator {
+            Generate(G::generator())
         }
     }
 
@@ -84,10 +84,10 @@ pub mod result {
     pub struct Shrink<T, E>(Result<T, E>);
 
     impl<T: FullGenerator, E: FullGenerator> FullGenerator for Result<T, E> {
-        type FullGen = Generate<T::FullGen, E::FullGen>;
+        type Generator = Generate<T::Generator, E::Generator>;
         type Item = Result<T::Item, E::Item>;
 
-        fn full_gen() -> Self::FullGen {
+        fn generator() -> Self::Generator {
             todo!()
         }
     }
@@ -148,11 +148,11 @@ pub mod result {
 }
 
 impl<G: FullGenerator + ?Sized> FullGenerator for Box<G> {
-    type FullGen = Convert<G::FullGen, Self::Item>;
+    type Generator = Convert<G::Generator, Self::Item>;
     type Item = Box<G::Item>;
 
-    fn full_gen() -> Self::FullGen {
-        Convert(PhantomData, G::full_gen())
+    fn generator() -> Self::Generator {
+        Convert(PhantomData, G::generator())
     }
 }
 

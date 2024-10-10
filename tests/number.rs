@@ -13,20 +13,20 @@ mod range {
                 #[test]
                 fn has_sample() {
                     for i in 1..100 {
-                        <$t>::full_gen().samples(i).next().unwrap();
+                        <$t>::generator().samples(i).next().unwrap();
                     }
                 }
 
                 #[test]
                 fn sample_has_count() {
                     for i in 0..100 {
-                        assert_eq!(<$t>::full_gen().samples(i).len(), i);
+                        assert_eq!(<$t>::generator().samples(i).len(), i);
                     }
                 }
 
                 #[test]
                 fn empty_range() {
-                    assert!(<$t>::full_gen().flat_map(|value| value..value).check(|_| true).is_none());
+                    assert!(number::<$t>().flat_map(|value| value..value).check(|_| true).is_none());
                 }
 
                 #[test]
