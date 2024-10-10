@@ -64,7 +64,9 @@ pub trait Generate {
 
     /// Returns true if the generator will always produce the same item.
     /// This is used in some optimizations to prevent redundant generations.
-    fn constant(&self) -> bool;
+    fn constant(&self) -> bool {
+        false
+    }
 
     /// Wraps `self` in a boxed [`Generate`]. This is notably relevant for
     /// recursive [`Generate`] implementations where the type would

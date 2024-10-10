@@ -54,7 +54,7 @@ pub mod option {
         }
 
         fn constant(&self) -> bool {
-            self.as_ref().map_or(true, |generator| generator.constant())
+            self.as_ref().map_or(true, Generate::constant)
         }
     }
 
@@ -147,50 +147,51 @@ pub mod result {
     }
 }
 
-impl<G: FullGenerate + ?Sized> FullGenerate for Box<G> {
-    type Generator = Convert<G::Generator, Self::Item>;
-    type Item = Box<G::Item>;
+macro_rules! pointer {
+    ($m: ident, $t: ident) => {
+        mod $m {
+            use super::*;
 
-    fn generator() -> Self::Generator {
-        Convert(PhantomData, G::generator())
-    }
+            #[derive(Clone, Debug)]
+            pub struct Shrinker<S: ?Sized>(pub(crate) S);
+
+            impl<G: FullGenerate + ?Sized> FullGenerate for $t<G> {
+                type Generator = Convert<G::Generator, Self::Item>;
+                type Item = $t<G::Item>;
+
+                fn generator() -> Self::Generator {
+                    Convert(PhantomData, G::generator())
+                }
+            }
+
+            impl<G: Generate + ?Sized> Generate for $t<G> {
+                type Item = $t<G::Item>;
+                type Shrink = Shrinker<G::Shrink>;
+
+                fn generate(&self, state: &mut State) -> Self::Shrink {
+                    Shrinker(G::generate(self, state))
+                }
+
+                fn constant(&self) -> bool {
+                    G::constant(self)
+                }
+            }
+
+            impl<S: Shrink> Shrink for Shrinker<S> {
+                type Item = $t<S::Item>;
+
+                fn item(&self) -> Self::Item {
+                    $t::new(self.0.item())
+                }
+
+                fn shrink(&mut self) -> Option<Self> {
+                    Some(Shrinker(self.0.shrink()?))
+                }
+            }
+        }
+    };
 }
 
-impl<G: Generate + ?Sized> Generate for Box<G> {
-    type Item = G::Item;
-    type Shrink = G::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        G::generate(self, state)
-    }
-
-    fn constant(&self) -> bool {
-        G::constant(self)
-    }
-}
-
-impl<G: Generate + ?Sized> Generate for Rc<G> {
-    type Item = G::Item;
-    type Shrink = G::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        G::generate(self, state)
-    }
-
-    fn constant(&self) -> bool {
-        G::constant(self)
-    }
-}
-
-impl<G: Generate + ?Sized> Generate for Arc<G> {
-    type Item = G::Item;
-    type Shrink = G::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        G::generate(self, state)
-    }
-
-    fn constant(&self) -> bool {
-        G::constant(self)
-    }
-}
+pointer!(boxed, Box);
+pointer!(rc, Rc);
+pointer!(arc, Arc);
