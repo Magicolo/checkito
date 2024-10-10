@@ -45,43 +45,43 @@ impl fmt::Debug for Node {
     }
 }
 
-/// For reusability, the json string [`Generator`] implementation is factored
+/// For reusability, the json string [`Generate`] implementation is factored
 /// out here.
 fn string() -> impl Generate<Item = Node> {
     // This somewhat convoluted regular expression produces json-compliant strings.
     regex!(r#"([a-zA-Z0-9]|[#-~ !]|(\\[\\"/bfnrt])|(\\u([0-9a-fA-F]){4}))*"#)
-        // Parse the pattern into a [`Regex`] structure which implements [`Generator`].
+        // Parse the pattern into a [`Regex`] structure which implements [`Generate`].
         // Wraps the generated [`String`] in a [`Node`].
         .map(Node::String)
 }
 
 /// The general pattern for producing [`Node`]s is to generate the inner values
 /// for each enum case and map them to their corresponding [`Node`] constructor
-/// by using the [`Generator::map`] combinator.
+/// by using the [`Generate::map`] combinator.
 fn node() -> impl Generate<Item = Node> {
     (
         // [`with`] builds a generator based on the provided function.
         // An alternative would be to use `Same(Node::Null)`, but that would required a [`Clone`]
         // implementation for [`Node`], so the [`with`] solution is preferred.
         with(|| Node::Null),
-        // Uses [`bool`]'s canonical [`Generator`] through its [`FullGenerator`] implementation.
+        // Uses [`bool`]'s canonical [`Generate`] through its [`FullGenerate`] implementation.
         bool::generator().map(Node::Boolean),
-        // [`number`] is a helper [`Generator`] implementation that produces non-infinite and
+        // [`number`] is a helper [`Generate`] implementation that produces non-infinite and
         // non-NaN numbers.
         number::<f64>().map(Node::Number),
         string(),
-        // [`lazy`] is a helper [`Generator`] implementation that prevents from recursing
+        // [`lazy`] is a helper [`Generate`] implementation that prevents from recursing
         // unconditionally (since it would blow up the stack).
         lazy(node)
-            // [`Generator::collect_with`] will call the previous generator a number of time defined
-            // by the provided [`Generator<Item = usize>`]. [`Generator::dampen`] is used
+            // [`Generate::collect_with`] will call the previous generator a number of time defined
+            // by the provided [`Generate<Item = usize>`]. [`Generate::dampen`] is used
             // to prevent an exponential explosion of nodes by reducing the `size` of the
-            // [`Generator`] it is applied to as recursion goes deeper. When the maximum
-            // depth is reached (see [`Generator::dampen_with`]), the `size` is set to 0.
+            // [`Generate`] it is applied to as recursion goes deeper. When the maximum
+            // depth is reached (see [`Generate::dampen_with`]), the `size` is set to 0.
             .collect_with((..32usize).dampen())
             .map(Node::Array)
-            // [`Generator::boxed`] is used to make the return type finite. Without it, since the
-            // `impl Generator` type refers to itself through the recursive calls to
+            // [`Generate::boxed`] is used to make the return type finite. Without it, since the
+            // `impl Generate` type refers to itself through the recursive calls to
             // [`node`], the type never stabilizes.
             .boxed(),
         (string(), lazy(node))
@@ -90,10 +90,10 @@ fn node() -> impl Generate<Item = Node> {
             .boxed(),
     )
         .any()
-        // To be fully general, [`Generator::any`] applied to tuples produces a value of type
+        // To be fully general, [`Generate::any`] applied to tuples produces a value of type
         // `Or<T1, T2...>` which is an enum that represents each possible item of the tuple.
         // Since the concrete type is actually `Or<Node, Node...>`, the enum can be fused
-        // into a [`Node`], which is what [`Generator::fuse`] does.
+        // into a [`Node`], which is what [`Generate::fuse`] does.
         .fuse()
 }
 

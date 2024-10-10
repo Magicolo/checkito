@@ -76,22 +76,6 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
     }
 }
 
-impl<G: ?Sized> Generate for Any<Any<G>>
-where
-    Any<G>: Generate,
-{
-    type Item = <Any<G> as Generate>::Item;
-    type Shrink = <Any<G> as Generate>::Shrink;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Any::ref_cast(&self.0.0).generate(state)
-    }
-
-    fn constant(&self) -> bool {
-        Any::ref_cast(&self.0.0).constant()
-    }
-}
-
 impl<G: ?Sized> Generate for Any<&G>
 where
     Any<G>: Generate,

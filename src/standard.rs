@@ -11,29 +11,29 @@ pub mod option {
     use crate::generate::FullGenerate;
 
     #[derive(Clone, Debug)]
-    pub struct Generatez<G>(pub(crate) G);
+    pub struct Generator<G>(pub(crate) G);
 
     #[derive(Clone)]
-    pub struct Shrinkz<S>(bool, Option<S>);
+    pub struct Shrinker<S>(bool, Option<S>);
 
     impl<G: FullGenerate> FullGenerate for Option<G> {
-        type Generator = Generatez<G::Generator>;
+        type Generator = Generator<G::Generator>;
         type Item = Option<G::Item>;
 
         fn generator() -> Self::Generator {
-            Generatez(G::generator())
+            Generator(G::generator())
         }
     }
 
-    impl<G: Generate> Generate for Generatez<G> {
+    impl<G: Generate> Generate for Generator<G> {
         type Item = Option<G::Item>;
-        type Shrink = Shrinkz<G::Shrink>;
+        type Shrink = Shrinker<G::Shrink>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             if state.random().bool() {
-                Shrinkz(true, Some(self.0.generate(state)))
+                Shrinker(true, Some(self.0.generate(state)))
             } else {
-                Shrinkz(false, None)
+                Shrinker(false, None)
             }
         }
 
@@ -44,10 +44,10 @@ pub mod option {
 
     impl<G: Generate> Generate for Option<G> {
         type Item = Option<G::Item>;
-        type Shrink = Shrinkz<G::Shrink>;
+        type Shrink = Shrinker<G::Shrink>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrinkz(
+            Shrinker(
                 true,
                 self.as_ref().map(|generator| generator.generate(state)),
             )
@@ -58,7 +58,7 @@ pub mod option {
         }
     }
 
-    impl<S: Shrink> Shrink for Shrinkz<S> {
+    impl<S: Shrink> Shrink for Shrinker<S> {
         type Item = Option<S::Item>;
 
         fn item(&self) -> Self::Item {
@@ -79,12 +79,12 @@ pub mod result {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct Generatez<T, E>(T, E);
+    pub struct Generator<T, E>(T, E);
     #[derive(Clone, Debug)]
-    pub struct Shrinkz<T, E>(Result<T, E>);
+    pub struct Shrinker<T, E>(Result<T, E>);
 
     impl<T: FullGenerate, E: FullGenerate> FullGenerate for Result<T, E> {
-        type Generator = Generatez<T::Generator, E::Generator>;
+        type Generator = Generator<T::Generator, E::Generator>;
         type Item = Result<T::Item, E::Item>;
 
         fn generator() -> Self::Generator {
@@ -92,12 +92,12 @@ pub mod result {
         }
     }
 
-    impl<T: Generate, E: Generate> Generate for Generatez<T, E> {
+    impl<T: Generate, E: Generate> Generate for Generator<T, E> {
         type Item = Result<T::Item, E::Item>;
-        type Shrink = Shrinkz<T::Shrink, E::Shrink>;
+        type Shrink = Shrinker<T::Shrink, E::Shrink>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrinkz(if state.random().bool() {
+            Shrinker(if state.random().bool() {
                 Ok(self.0.generate(state))
             } else {
                 Err(self.1.generate(state))
@@ -111,10 +111,10 @@ pub mod result {
 
     impl<T: Generate, E: Generate> Generate for Result<T, E> {
         type Item = Result<T::Item, E::Item>;
-        type Shrink = Shrinkz<T::Shrink, E::Shrink>;
+        type Shrink = Shrinker<T::Shrink, E::Shrink>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrinkz(match self {
+            Shrinker(match self {
                 Ok(generator) => Ok(generator.generate(state)),
                 Err(generator) => Err(generator.generate(state)),
             })
@@ -128,7 +128,7 @@ pub mod result {
         }
     }
 
-    impl<T: Shrink, E: Shrink> Shrink for Shrinkz<T, E> {
+    impl<T: Shrink, E: Shrink> Shrink for Shrinker<T, E> {
         type Item = Result<T::Item, E::Item>;
 
         fn item(&self) -> Self::Item {

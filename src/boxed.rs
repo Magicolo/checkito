@@ -4,22 +4,22 @@ use crate::{
 };
 use core::any::Any;
 
-pub struct Generatez<I> {
+pub struct Boxed<I> {
     generator: Box<dyn Any>,
-    generate: fn(&dyn Any, &mut State) -> Shrinkz<I>,
+    generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
     constant: fn(&dyn Any) -> bool,
 }
 
-pub struct Shrinkz<I> {
+pub struct Shrinker<I> {
     shrinker: Box<dyn Any>,
     clone: fn(&dyn Any) -> Box<dyn Any>,
     item: fn(&dyn Any) -> I,
     shrink: fn(&mut dyn Any) -> Option<Box<dyn Any>>,
 }
 
-impl<I> Generate for Generatez<I> {
+impl<I> Generate for Boxed<I> {
     type Item = I;
-    type Shrink = Shrinkz<I>;
+    type Shrink = Shrinker<I>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         (self.generate)(self.generator.as_ref(), state)
@@ -30,7 +30,7 @@ impl<I> Generate for Generatez<I> {
     }
 }
 
-impl<I> Generatez<I> {
+impl<I> Boxed<I> {
     pub(crate) fn new<G: Generate<Item = I> + 'static>(generator: G) -> Self
     where
         G::Shrink: 'static,
@@ -49,7 +49,7 @@ impl<I> Generatez<I> {
     }
 }
 
-impl<I> Generatez<I> {
+impl<I> Boxed<I> {
     pub fn downcast<G: Generate + 'static>(self) -> Result<G, Self> {
         match self.generator.downcast::<G>() {
             Ok(generator) => Ok(*generator),
@@ -62,9 +62,9 @@ impl<I> Generatez<I> {
     }
 }
 
-impl Shrinkz<()> {
-    pub(crate) fn new<S: Shrink + 'static>(shrinker: S) -> Shrinkz<S::Item> {
-        Shrinkz {
+impl Shrinker<()> {
+    pub(crate) fn new<S: Shrink + 'static>(shrinker: S) -> Shrinker<S::Item> {
+        Shrinker {
             shrinker: Box::new(shrinker),
             clone: |inner| Box::new(inner.downcast_ref::<S>().unwrap().clone()),
             item: |inner| inner.downcast_ref::<S>().unwrap().item(),
@@ -85,7 +85,7 @@ impl Shrinkz<()> {
     }
 }
 
-impl<I> Clone for Shrinkz<I> {
+impl<I> Clone for Shrinker<I> {
     fn clone(&self) -> Self {
         Self {
             shrinker: (self.clone)(self.shrinker.as_ref()),
@@ -96,7 +96,7 @@ impl<I> Clone for Shrinkz<I> {
     }
 }
 
-impl<I> Shrink for Shrinkz<I> {
+impl<I> Shrink for Shrinker<I> {
     type Item = I;
 
     fn item(&self) -> Self::Item {

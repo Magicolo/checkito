@@ -1,7 +1,7 @@
 use crate::{
     any::Any,
     array::Array,
-    boxed,
+    boxed::Boxed,
     collect::Collect,
     convert::Convert,
     dampen::Dampen,
@@ -42,9 +42,7 @@ pub struct States {
 
 /// When implemented for a type `T`, this allows to retrieve a generator for `T`
 /// that does not require any parameter. It should be implemented for any type
-
-/// that has a canonical way to be generated. To provide a generator with
-/// parameters, see [`IntoGenerator`].
+/// that has a canonical way to be generated.
 ///
 /// For example, this trait is implemented for all non-pointer primitive types
 /// and for some standard types (such as [`Option<T>`] and [`Result<T, E>`]).
@@ -60,7 +58,7 @@ pub trait Generate {
     type Shrink: Shrink<Item = Self::Item>;
 
     /// Primary method of this trait. It generates a [`Shrink`] instance that
-    /// will be able to produce values of type [`Generator::Item`] and shrink
+    /// will be able to produce values of type [`Generate::Item`] and shrink
     /// itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
@@ -68,8 +66,8 @@ pub trait Generate {
     /// This is used in some optimizations to prevent redundant generations.
     fn constant(&self) -> bool;
 
-    /// Wraps `self` in a boxed [`Generator`]. This is notably relevant for
-    /// recursive [`Generator`] implementations where the type would
+    /// Wraps `self` in a boxed [`Generate`]. This is notably relevant for
+    /// recursive [`Generate`] implementations where the type would
     /// otherwise be infinite.
     ///
     /// # Examples
@@ -84,9 +82,9 @@ pub trait Generate {
     /// fn node() -> impl Generate<Item = Node> {
     ///     (
     ///         with(|| Node::Leaf),
-    ///         // Without [`Generator::boxed`], this type would be infinite.
-    ///         // Without [`Generator::lazy`], the stack would overflow.
-    ///         // Without [`Generator::dampen`], the tree would grow exponentially.
+    ///         // Without [`Generate::boxed`], this type would be infinite.
+    ///         // Without [`Generate::lazy`], the stack would overflow.
+    ///         // Without [`Generate::dampen`], the tree would grow exponentially.
     ///         lazy(node).collect().map(Node::Branch).dampen().boxed(),
     ///     )
     ///         .any()
@@ -95,22 +93,22 @@ pub trait Generate {
     ///
     /// fn choose(choose: bool) -> impl Generate<Item = char> {
     ///     if choose {
-    ///         // Without [`Generator::boxed`], the `if/else` branches would not have the same type.
+    ///         // Without [`Generate::boxed`], the `if/else` branches would not have the same type.
     ///         letter().boxed()
     ///     } else {
     ///         digit().boxed()
     ///     }
     /// }
     /// ```
-    fn boxed(self) -> boxed::Generatez<Self::Item>
+    fn boxed(self) -> Boxed<Self::Item>
     where
         Self: Sized + 'static,
-        boxed::Generatez<Self::Item>: Generate,
+        Boxed<Self::Item>: Generate,
     {
-        boxed::Generatez::new(self)
+        Boxed::new(self)
     }
 
-    /// Maps generated [`Generator::Item`] to an arbitrary type `T` using the
+    /// Maps generated [`Generate::Item`] to an arbitrary type `T` using the
     /// provided function `F`.
     fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
     where
@@ -120,7 +118,7 @@ pub trait Generate {
         Map(map, self)
     }
 
-    /// Same as [`Generator::filter_with`] but with a predefined number of
+    /// Same as [`Generate::filter_with`] but with a predefined number of
     /// `retries`.
     fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
     where
@@ -130,12 +128,12 @@ pub trait Generate {
         self.filter_with(COUNT, filter)
     }
 
-    /// Generates many [`Generator::Item`] with an increasingly large `size`
+    /// Generates many [`Generate::Item`] with an increasingly large `size`
     /// until the filter function `F` is satisfied, up to the maximum number
     /// of `retries`.
     ///
-    /// Since this [`Generator`] implementation is not guaranteed to succeed,
-    /// the item type is changed to a [`Option<Generator::Item>`]
+    /// Since this [`Generate`] implementation is not guaranteed to succeed,
+    /// the item type is changed to a [`Option<Generate::Item>`]
     /// where a [`None`] represents the failure to satisfy the filter.
     fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
     where
@@ -145,7 +143,7 @@ pub trait Generate {
         Filter::new(self, filter, retries)
     }
 
-    /// Same as [`Generator::filter_map_with`] but with a predefined number of
+    /// Same as [`Generate::filter_map_with`] but with a predefined number of
     /// `retries`.
     fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
     where
@@ -155,8 +153,8 @@ pub trait Generate {
         self.filter_map_with(COUNT, map)
     }
 
-    /// Combines [`Generator::map`] and [`Generator::filter`] in a single
-    /// [`Generator`] implementation where the map function is considered to
+    /// Combines [`Generate::map`] and [`Generate::filter`] in a single
+    /// [`Generate`] implementation where the map function is considered to
     /// satisfy the filter when a [`Some(T)`] is produced.
     fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
         self,
@@ -170,8 +168,8 @@ pub trait Generate {
         FilterMap::new(self, map, retries)
     }
 
-    /// Combines [`Generator::map`] and [`Generator::flatten`] in a single
-    /// [`Generator`] implementation.
+    /// Combines [`Generate::map`] and [`Generate::flatten`] in a single
+    /// [`Generate`] implementation.
     fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
@@ -181,18 +179,18 @@ pub trait Generate {
         self.map(map).flatten()
     }
 
-    /// Flattens the [`Generator::Item`], assuming that it implements
-    /// [`Generator`]. The resulting item type is `<Generator::Item as
-    /// Generator>::Item`.
+    /// Flattens the [`Generate::Item`], assuming that it implements
+    /// [`Generate`]. The resulting item type is `<Generate::Item as
+    /// Generate>::Item`.
     ///
-    /// Additionally, the call to [`Generator::generate`] to the inner
-    /// [`Generator`] implementation will have its `depth` increased by `1`.
-    /// The `depth` is a value used by other [`Generator`] implementations (such
-    /// as [`Generator::size`] and [`Generator::dampen`]) to alter the `size`
+    /// Additionally, the call to [`Generate::generate`] to the inner
+    /// [`Generate`] implementation will have its `depth` increased by `1`.
+    /// The `depth` is a value used by other [`Generate`] implementations (such
+    /// as [`Generate::size`] and [`Generate::dampen`]) to alter the `size`
     /// of generated items. It tries to represent the recursion depth since it
-    /// is expected that recursive [`Generator`] instances will need to go
+    /// is expected that recursive [`Generate`] instances will need to go
     /// through it. Implementations such as [`lazy`](crate::lazy)
-    /// and [`Generator::flat_map`] use it.
+    /// and [`Generate::flat_map`] use it.
     ///
     /// The `depth` is particularly useful to limit the amount of recursion that
     /// happens for structures that potentially explode exponentially as the
@@ -206,14 +204,14 @@ pub trait Generate {
         Flatten(self)
     }
 
-    /// For a type `T` where [`Any<T>`] implements [`Generator`], the behavior
+    /// For a type `T` where [`Any<T>`] implements [`Generate`], the behavior
     /// of the generation changes from *generate all* of my components to
     /// *generate one* of my components chosen randomly. It is implemented
     /// for tuples, slices, arrays, [`Vec<T>`] and a few other collections.
     ///
     /// The random selection can be controlled by wrapping each element of a
     /// supported collection in a [`any::Weight`](crate::any::Weight), which
-    /// will inform the [`Generator`] implementation to perform a weighted
+    /// will inform the [`Generate`] implementation to perform a weighted
     /// random between elements of the collection.
     fn any(self) -> Any<Self>
     where
@@ -232,7 +230,7 @@ pub trait Generate {
         Array(self)
     }
 
-    /// Same as [`Generator::collect_with`] but with a predefined `count`.
+    /// Same as [`Generate::collect_with`] but with a predefined `count`.
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, RangeInclusive<usize>, F>
     where
         Self: Sized,
@@ -242,7 +240,7 @@ pub trait Generate {
     }
 
     /// Generates a variable number of items based on the provided `count`
-    /// [`Generator`] and then builds a value of type `F` based on its
+    /// [`Generate`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
     fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
         self,
@@ -260,7 +258,7 @@ pub trait Generate {
     /// big* the generated items are based on the generator's constraints. The
     /// generation process will initially try to produce *small* items and
     /// then move on to *bigger* ones. Note that the `size` does not
-    /// guarantee a *small* or *big* generated item since [`Generator`]
+    /// guarantee a *small* or *big* generated item since [`Generate`]
     /// implementations are free to interpret it as they wish, although that
     /// is its intention.
     ///
@@ -283,7 +281,7 @@ pub trait Generate {
         Size(self, map)
     }
 
-    /// Same as [`Generator::dampen_with`] but with predefined arguments.
+    /// Same as [`Generate::dampen_with`] but with predefined arguments.
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
@@ -292,17 +290,17 @@ pub trait Generate {
         self.dampen_with(1.0, 8, 8192)
     }
 
-    /// Dampens the `size` (see [`Generator::size`] for more information about
+    /// Dampens the `size` (see [`Generate::size`] for more information about
     /// `size`) as items are generated.
     /// - The `pressure` can be thought of as *how fast* will the `size` be
-    ///   reduced as the `depth` increases (see [`Generator::flatten`] for more
+    ///   reduced as the `depth` increases (see [`Generate::flatten`] for more
     ///   information about `depth`).
     /// - The `deepest` will set the `size` to `0` when the `depth` is `>=` than
     ///   it.
     /// - The `limit` will set the `size` to `0` after the number of times that
     ///   the `depth` increased is `>=` than it.
     ///
-    /// This [`Generator`] implementation is particularly useful to limit the
+    /// This [`Generate`] implementation is particularly useful to limit the
     /// amount of recursion that happens for structures that are infinite
     /// and potentially explode exponentially as the recursion depth increases
     /// (think of a tree structure).

@@ -11,7 +11,7 @@ pub struct Filter<G: ?Sized, F> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Shrinkz<S, F> {
+pub struct Shrinker<S, F> {
     shrinker: Option<S>,
     filter: F,
 }
@@ -28,7 +28,7 @@ impl<G: Generate, F: Fn(&G::Item) -> bool> Filter<G, F> {
 
 impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<G, F> {
     type Item = Option<G::Item>;
-    type Shrink = Shrinkz<G::Shrink, F>;
+    type Shrink = Shrinker<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
@@ -43,7 +43,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
             }
         }
         state.size = size;
-        Shrinkz {
+        Shrinker {
             shrinker: outer,
             filter: self.filter.clone(),
         }
@@ -54,7 +54,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     }
 }
 
-impl<S: Shrink, F: Fn(&S::Item) -> bool + Clone> Shrink for Shrinkz<S, F> {
+impl<S: Shrink, F: Fn(&S::Item) -> bool + Clone> Shrink for Shrinker<S, F> {
     type Item = Option<S::Item>;
 
     fn item(&self) -> Self::Item {
@@ -67,7 +67,7 @@ impl<S: Shrink, F: Fn(&S::Item) -> bool + Clone> Shrink for Shrinkz<S, F> {
     }
 
     fn shrink(&mut self) -> Option<Self> {
-        Some(Shrinkz {
+        Some(Shrinker {
             filter: self.filter.clone(),
             shrinker: Some(self.shrinker.as_mut()?.shrink()?),
         })

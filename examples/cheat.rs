@@ -37,7 +37,7 @@ fn is_ascii(value: String) {
     assert!(value.is_ascii());
 }
 
-/// The `_` and `..` operators can be used to infer the [`FullGenerator`]
+/// The `_` and `..` operators can be used to infer the [`FullGenerate`]
 /// generator implementation for a type. Specifically, the `..` operator works
 /// the same way as slice match patterns.
 ///
@@ -82,7 +82,7 @@ fn sums_to_9001(left: i32, right: i32) {
 
 /// Generics can be used as inputs to the checking function.
 ///
-/// [`Generator::map`] can be used to map a value to another.
+/// [`Generate::map`] can be used to map a value to another.
 #[check(111119)]
 #[check(Generate::map(10..1000, |value| value * 10 - 1))]
 #[check("a string that ends with 9")]
@@ -96,7 +96,7 @@ pub struct Person {
     pub age: usize,
 }
 /// Use tuples to combine generators and build more complex structured types.
-/// Alternatively implement the [`FullGenerator`] trait for the [`Person`]
+/// Alternatively implement the [`FullGenerate`] trait for the [`Person`]
 /// struct.
 ///
 /// Any generator combinator can be used here; see the other examples in the
@@ -114,7 +114,7 @@ fn person_has_valid_name_and_is_major(person: Person) {
 /// with pretty printing. For some more complex scenarios, it becomes more
 /// convenient to simply call the [`ChecK::check`] manually.
 ///
-/// The [`Generator::any`] combinator chooses from its inputs. The produced
+/// The [`Generate::any`] combinator chooses from its inputs. The produced
 /// `Or<..>` preserves the information about the choice but here, it can be
 /// simply collapsed using `Or<..>::into::<T>()`.
 #[test]

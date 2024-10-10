@@ -90,7 +90,7 @@ pub mod slice {
         }
 
         fn constant(&self) -> bool {
-            self.iter().all(|generator| generator.constant())
+            self.iter().all(Generate::constant)
         }
     }
 
@@ -129,7 +129,7 @@ pub mod vector {
         }
 
         fn constant(&self) -> bool {
-            self.iter().all(|generator| generator.constant())
+            self.iter().all(Generate::constant)
         }
     }
 

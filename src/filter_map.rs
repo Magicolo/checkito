@@ -11,7 +11,7 @@ pub struct FilterMap<G: ?Sized, F> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Shrinkz<S, F> {
+pub struct Shrinker<S, F> {
     shrinker: Option<S>,
     map: F,
 }
@@ -28,7 +28,7 @@ impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
 
 impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for FilterMap<G, F> {
     type Item = Option<T>;
-    type Shrink = Shrinkz<G::Shrink, F>;
+    type Shrink = Shrinker<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
@@ -43,7 +43,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             }
         }
         state.size = size;
-        Shrinkz {
+        Shrinker {
             shrinker: outer,
             map: self.map.clone(),
         }
@@ -54,7 +54,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     }
 }
 
-impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinkz<S, F> {
+impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, F> {
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {

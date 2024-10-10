@@ -7,7 +7,7 @@ use crate::{
 pub struct Flatten<G: ?Sized>(pub(crate) G);
 
 #[derive(Clone, Debug)]
-pub struct Shrinkz<I, O> {
+pub struct Shrinker<I, O> {
     state: State,
     inner: I,
     outer: O,
@@ -15,7 +15,7 @@ pub struct Shrinkz<I, O> {
 
 impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
     type Item = I::Item;
-    type Shrink = Shrinkz<I::Shrink, O::Shrink>;
+    type Shrink = Shrinker<I::Shrink, O::Shrink>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.clone();
@@ -25,7 +25,7 @@ impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
         state.depth += 1;
         let inner = generator.generate(state);
         state.depth -= 1;
-        Shrinkz {
+        Shrinker {
             state: old,
             inner,
             outer,
@@ -37,7 +37,7 @@ impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
     }
 }
 
-impl<I: Generate, O: Shrink<Item = I>> Shrink for Shrinkz<I::Shrink, O> {
+impl<I: Generate, O: Shrink<Item = I>> Shrink for Shrinker<I::Shrink, O> {
     type Item = I::Item;
 
     fn item(&self) -> Self::Item {

@@ -44,7 +44,7 @@ pub struct Shrinks {
     pub errors: bool,
 }
 
-/// The [`Checker`] structure holds a reference to a [`Generator`] instance and
+/// The [`Checker`] structure holds a reference to a [`Generate`] instance and
 /// some configuration options for the checking and shrinking processes.
 #[derive(Debug)]
 pub struct Checker<'a, G: ?Sized> {

@@ -11,11 +11,11 @@ pub trait Shrink: Clone {
     fn item(&self) -> Self::Item;
     fn shrink(&mut self) -> Option<Self>;
 
-    fn boxed(self) -> boxed::Shrinkz<Self::Item>
+    fn boxed(self) -> boxed::Shrinker<Self::Item>
     where
         Self: 'static,
     {
-        boxed::Shrinkz::new(self)
+        boxed::Shrinker::new(self)
     }
 }
 
