@@ -33,11 +33,11 @@ pub use check::Check;
 pub use checkito_macro::check;
 #[cfg(feature = "regex")]
 pub use checkito_macro::regex;
-pub use generate::{FullGenerator, Generator};
+pub use generate::{FullGenerate, Generate};
 pub use prelude::*;
 pub use prove::Prove;
 #[cfg(feature = "regex")]
 pub use regex::Regex;
 pub use same::Same;
 pub use sample::Sample;
-pub use shrink::Shrinker;
+pub use shrink::Shrink;

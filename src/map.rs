@@ -1,12 +1,12 @@
 use crate::{
-    generate::{Generator, State},
-    shrink::Shrinker,
+    generate::{Generate, State},
+    shrink::Shrink,
 };
 
 #[derive(Debug, Default, Clone)]
 pub struct Map<T: ?Sized, F>(pub(crate) F, pub(crate) T);
 
-impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generator for Map<G, F> {
+impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generate for Map<G, F> {
     type Item = T;
     type Shrink = Map<G::Shrink, F>;
 
@@ -19,7 +19,7 @@ impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generator for Map<G,
     }
 }
 
-impl<S: Shrinker, T, F: Fn(S::Item) -> T + Clone> Shrinker for Map<S, F> {
+impl<S: Shrink, T, F: Fn(S::Item) -> T + Clone> Shrink for Map<S, F> {
     type Item = T;
 
     fn item(&self) -> Self::Item {

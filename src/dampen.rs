@@ -1,4 +1,4 @@
-use crate::generate::{Generator, State};
+use crate::generate::{Generate, State};
 
 pub struct Dampen<G: ?Sized> {
     pub(crate) pressure: f64,
@@ -7,7 +7,7 @@ pub struct Dampen<G: ?Sized> {
     pub(crate) generator: G,
 }
 
-impl<G: Generator + ?Sized> Generator for Dampen<G> {
+impl<G: Generate + ?Sized> Generate for Dampen<G> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 

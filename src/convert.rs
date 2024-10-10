@@ -1,6 +1,6 @@
 use crate::{
-    generate::{Generator, State},
-    shrink::Shrinker,
+    generate::{Generate, State},
+    shrink::Shrink,
 };
 use core::marker::PhantomData;
 
@@ -13,7 +13,7 @@ impl<T: Clone, I> Clone for Convert<T, I> {
     }
 }
 
-impl<G: Generator + ?Sized, I: From<G::Item>> Generator for Convert<G, I> {
+impl<G: Generate + ?Sized, I: From<G::Item>> Generate for Convert<G, I> {
     type Item = I;
     type Shrink = Convert<G::Shrink, I>;
 
@@ -26,7 +26,7 @@ impl<G: Generator + ?Sized, I: From<G::Item>> Generator for Convert<G, I> {
     }
 }
 
-impl<S: Shrinker, I: From<S::Item>> Shrinker for Convert<S, I> {
+impl<S: Shrink, I: From<S::Item>> Shrink for Convert<S, I> {
     type Item = I;
 
     fn item(&self) -> Self::Item {

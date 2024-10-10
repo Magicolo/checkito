@@ -1,7 +1,7 @@
 use crate::{
-    generate::Generator,
+    generate::Generate,
     random,
-    shrink::{Shrinker, Shrinkers, shrinker},
+    shrink::{Shrink, Shrinkers, shrinker},
 };
 use core::{iter, ops::Range};
 
@@ -23,7 +23,7 @@ pub struct Sampler<'a, G: ?Sized> {
 #[derive(Debug)]
 pub struct Samples<'a, G: ?Sized>(Shrinkers<'a, G>);
 
-pub trait Sample: Generator {
+pub trait Sample: Generate {
     /// Provides a [`Sampler`] that allows to configure sampling settings and
     /// generate samples.
     fn sampler(&self) -> Sampler<Self> {
@@ -47,7 +47,7 @@ pub trait Sample: Generator {
 
 const COUNT: usize = 100;
 
-impl<G: Generator + ?Sized> Sample for G {}
+impl<G: Generate + ?Sized> Sample for G {}
 
 impl<'a, G: ?Sized> Sampler<'a, G> {
     pub(crate) const fn new(generator: &'a G, seed: u64) -> Self {
@@ -71,7 +71,7 @@ impl<G: ?Sized> Clone for Sampler<'_, G> {
     }
 }
 
-impl<'a, G: Generator + ?Sized> Sampler<'a, G> {
+impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
     pub fn sample(&self, size: f64) -> G::Item {
         shrinker(self.generator, size, Some(self.seed)).item()
     }
@@ -86,19 +86,19 @@ impl<'a, G: Generator + ?Sized> Sampler<'a, G> {
     }
 }
 
-impl<'a, G: Generator + ?Sized> From<&'a G> for Samples<'a, G> {
+impl<'a, G: Generate + ?Sized> From<&'a G> for Samples<'a, G> {
     fn from(value: &'a G) -> Self {
         Samples(Shrinkers::from(value))
     }
 }
 
-impl<G: Generator + ?Sized> Clone for Samples<'_, G> {
+impl<G: Generate + ?Sized> Clone for Samples<'_, G> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<G: Generator + ?Sized> Iterator for Samples<'_, G> {
+impl<G: Generate + ?Sized> Iterator for Samples<'_, G> {
     type Item = G::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -122,7 +122,7 @@ impl<G: Generator + ?Sized> Iterator for Samples<'_, G> {
     }
 }
 
-impl<G: Generator + ?Sized> DoubleEndedIterator for Samples<'_, G> {
+impl<G: Generate + ?Sized> DoubleEndedIterator for Samples<'_, G> {
     fn next_back(&mut self) -> Option<Self::Item> {
         Some(self.0.next_back()?.item())
     }
@@ -132,10 +132,10 @@ impl<G: Generator + ?Sized> DoubleEndedIterator for Samples<'_, G> {
     }
 }
 
-impl<G: Generator + ?Sized> ExactSizeIterator for Samples<'_, G> {
+impl<G: Generate + ?Sized> ExactSizeIterator for Samples<'_, G> {
     fn len(&self) -> usize {
         self.0.len()
     }
 }
 
-impl<G: Generator + ?Sized> iter::FusedIterator for Samples<'_, G> {}
+impl<G: Generate + ?Sized> iter::FusedIterator for Samples<'_, G> {}

@@ -1,18 +1,18 @@
 use crate::{
     all,
-    generate::{Generator, State},
+    generate::{Generate, State},
 };
 use core::array;
 
 #[derive(Clone, Debug, Default)]
 pub struct Array<G: ?Sized, const N: usize>(pub(crate) G);
 
-impl<G: Generator + ?Sized, const N: usize> Generator for Array<G, N> {
+impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     type Item = [G::Item; N];
-    type Shrink = all::Shrink<[G::Shrink; N]>;
+    type Shrink = all::Shrinker<[G::Shrink; N]>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        all::Shrink {
+        all::Shrinker {
             index: 0,
             shrinkers: array::from_fn(|_| self.0.generate(state)),
         }

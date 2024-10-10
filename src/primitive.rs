@@ -1,8 +1,8 @@
 use crate::{
     any::Any,
-    generate::{FullGenerator, Generator, State},
+    generate::{FullGenerate, Generate, State},
     nudge::Nudge,
-    shrink::Shrinker,
+    shrink::Shrink,
 };
 use core::{
     convert::TryInto,
@@ -24,7 +24,7 @@ pub struct Full<T: ?Sized>(PhantomData<T>);
 pub struct Special<T: ?Sized>(PhantomData<T>);
 
 #[derive(Clone, Debug)]
-pub struct Shrink<T> {
+pub struct Shrinker<T> {
     pub(crate) start: T,
     pub(crate) end: T,
     pub(crate) item: T,
@@ -55,7 +55,7 @@ impl<T: ?Sized> Copy for Full<T> {}
 
 macro_rules! full {
     ($t:ty) => {
-        impl FullGenerator for $t {
+        impl FullGenerate for $t {
             type Generator = Full<$t>;
             type Item = $t;
 
@@ -68,7 +68,7 @@ macro_rules! full {
 
 macro_rules! same {
     ($t:ty) => {
-        impl Generator for $t {
+        impl Generate for $t {
             type Item = Self;
             type Shrink = Self;
 
@@ -81,7 +81,7 @@ macro_rules! same {
             }
         }
 
-        impl Shrinker for $t {
+        impl Shrink for $t {
             type Item = Self;
 
             fn item(&self) -> Self::Item {
@@ -97,13 +97,13 @@ macro_rules! same {
 
 macro_rules! range {
     (CHARACTER, $t:ident, $r:ty) => {
-        impl Generator for $r {
+        impl Generate for $r {
             type Item = $t;
-            type Shrink = Shrink;
+            type Shrink = Shrinker;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let (start, end) = range(self);
-                Shrink((start..=end).generate(state))
+                Shrinker((start..=end).generate(state))
             }
 
             fn constant(&self) -> bool {
@@ -113,15 +113,15 @@ macro_rules! range {
         }
     };
     (INTEGER, $t:ident, $r:ty) => {
-        impl Generator for $r {
+        impl Generate for $r {
             type Item = $t;
-            type Shrink = Shrink<$t>;
+            type Shrink = Shrinker<$t>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let (start, end) = range(self);
                 let (start, end) = shrinked((start, end), state.size());
                 let item = state.random().$t(start..=end);
-                Shrink {
+                Shrinker {
                     start,
                     end,
                     item,
@@ -136,9 +136,9 @@ macro_rules! range {
         }
     };
     (FLOATING, $t:ident, $r:ty) => {
-        impl Generator for $r {
+        impl Generate for $r {
             type Item = $t;
-            type Shrink = Shrink<$t>;
+            type Shrink = Shrinker<$t>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let (start, end) = range(self);
@@ -150,7 +150,7 @@ macro_rules! range {
                 let difference = end * ratio - start * ratio;
                 let item = (difference + start).clamp(start, end);
                 debug_assert!(item.is_finite());
-                Shrink {
+                Shrinker {
                     start,
                     end,
                     item,
@@ -232,7 +232,7 @@ macro_rules! shrink {
                 } else {
                     $s.direction = Direction::High;
                     $s.end = $s.item;
-                    Some(Shrink {
+                    Some(Shrinker {
                         direction: $s.direction,
                         start: $s.start,
                         end: $s.start,
@@ -247,7 +247,7 @@ macro_rules! shrink {
                 } else {
                     $s.direction = Direction::Low;
                     $s.start = $s.item;
-                    Some(Shrink {
+                    Some(Shrinker {
                         direction: $s.direction,
                         start: $s.end,
                         end: $s.end,
@@ -290,14 +290,14 @@ pub mod bool {
     use core::mem::take;
 
     #[derive(Copy, Clone, Debug)]
-    pub struct Shrink(bool, bool);
+    pub struct Shrinker(bool, bool);
 
-    impl Generator for Full<bool> {
+    impl Generate for Full<bool> {
         type Item = bool;
-        type Shrink = Shrink;
+        type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink(true, state.random().bool())
+            Shrinker(true, state.random().bool())
         }
 
         fn constant(&self) -> bool {
@@ -305,7 +305,7 @@ pub mod bool {
         }
     }
 
-    impl Shrinker for Shrink {
+    impl Shrink for Shrinker {
         type Item = bool;
 
         fn item(&self) -> Self::Item {
@@ -316,7 +316,7 @@ pub mod bool {
             // A distinct `bool` is required to avoid modifying the `item()` if it would be
             // called after shrink.
             if self.1 && take(&mut self.0) {
-                Some(Shrink(false, false))
+                Some(Shrinker(false, false))
             } else {
                 None
             }
@@ -331,9 +331,9 @@ pub mod char {
     use super::*;
 
     #[derive(Clone, Debug)]
-    pub struct Shrink(super::Shrink<u32>);
+    pub struct Shrinker(super::Shrinker<u32>);
 
-    impl Generator for Special<char> {
+    impl Generate for Special<char> {
         type Item = char;
         type Shrink = char;
 
@@ -378,13 +378,13 @@ pub mod char {
         number::u32::range(&(start, end))
     }
 
-    pub(crate) const fn shrink(item: char) -> Shrink {
-        Shrink(number::u32::shrinker(item as u32))
+    pub(crate) const fn shrink(item: char) -> Shrinker {
+        Shrinker(number::u32::shrinker(item as u32))
     }
 
-    impl Generator for Full<char> {
+    impl Generate for Full<char> {
         type Item = char;
-        type Shrink = Shrink;
+        type Shrink = Shrinker;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             match state.random().u8(..) {
@@ -398,7 +398,7 @@ pub mod char {
         }
     }
 
-    impl Shrinker for Shrink {
+    impl Shrink for Shrinker {
         type Item = char;
 
         fn item(&self) -> Self::Item {
@@ -430,10 +430,10 @@ pub mod number {
     use super::*;
 
     pub trait Number: Sized {
-        type Full: Generator<Item = Self>;
-        type Special: Generator<Item = Self>;
-        type Positive: Generator<Item = Self>;
-        type Negative: Generator<Item = Self>;
+        type Full: Generate<Item = Self>;
+        type Special: Generate<Item = Self>;
+        type Positive: Generate<Item = Self>;
+        type Negative: Generate<Item = Self>;
 
         const ZERO: Self;
         const ONE: Self;
@@ -467,7 +467,7 @@ pub mod number {
 
     macro_rules! integer {
         ($t:ident) => {
-            impl Generator for Special<$t> {
+            impl Generate for Special<$t> {
                 type Item = $t;
                 type Shrink = $t;
 
@@ -480,13 +480,13 @@ pub mod number {
                 }
             }
 
-            pub(crate) const fn shrinker(item: $t) -> Shrink<$t> {
-                Shrink { start: $t::MIN, end: $t::MAX, item, direction: Direction::None }
+            pub(crate) const fn shrinker(item: $t) -> Shrinker<$t> {
+                Shrinker { start: $t::MIN, end: $t::MAX, item, direction: Direction::None }
             }
 
-            impl Generator for Full<$t> {
+            impl Generate for Full<$t> {
                 type Item = $t;
-                type Shrink = Shrink<$t>;
+                type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
@@ -500,7 +500,7 @@ pub mod number {
                 }
             }
 
-            impl Shrinker for Shrink<$t> {
+            impl Shrink for Shrinker<$t> {
                 type Item = $t;
 
                 fn item(&self) -> Self::Item {
@@ -552,7 +552,7 @@ pub mod number {
 
     macro_rules! floating {
         ($t:ident) => {
-            impl Generator for Special<$t> {
+            impl Generate for Special<$t> {
                 type Item = $t;
                 type Shrink = $t;
 
@@ -567,15 +567,15 @@ pub mod number {
                 }
             }
 
-            pub(crate) const fn shrinker(item: $t) -> Shrink<$t> {
-                Shrink { start: $t::MIN, end: $t::MAX, item, direction: Direction::None }
+            pub(crate) const fn shrinker(item: $t) -> Shrinker<$t> {
+                Shrinker { start: $t::MIN, end: $t::MAX, item, direction: Direction::None }
             }
 
             shrinked!($t);
 
-            impl Generator for Full<$t> {
+            impl Generate for Full<$t> {
                 type Item = $t;
-                type Shrink = Shrink<$t>;
+                type Shrink = Shrinker<$t>;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
@@ -592,7 +592,7 @@ pub mod number {
                 }
             }
 
-            impl Shrinker for Shrink<$t> {
+            impl Shrink for Shrinker<$t> {
                 type Item = $t;
 
                 fn item(&self) -> Self::Item {

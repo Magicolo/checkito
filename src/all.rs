@@ -1,16 +1,16 @@
 use crate::{
-    generate::{FullGenerator, Generator, State},
-    shrink::Shrinker,
+    generate::{FullGenerate, Generate, State},
+    shrink::Shrink,
     utility::tuples,
 };
 
 #[derive(Clone, Debug)]
-pub struct Shrink<S: ?Sized> {
+pub struct Shrinker<S: ?Sized> {
     pub(crate) index: usize,
     pub(crate) shrinkers: S,
 }
 
-pub(crate) fn shrink<S: Shrinker, I: AsMut<[S]> + Clone>(
+pub(crate) fn shrink<S: Shrink, I: AsMut<[S]> + Clone>(
     shrinkers: &mut I,
     index: &mut usize,
 ) -> Option<I> {
@@ -30,7 +30,7 @@ pub mod array {
     use super::*;
     use core::array;
 
-    impl<G: FullGenerator, const N: usize> FullGenerator for [G; N] {
+    impl<G: FullGenerate, const N: usize> FullGenerate for [G; N] {
         type Generator = [G::Generator; N];
         type Item = [G::Item; N];
 
@@ -39,23 +39,23 @@ pub mod array {
         }
     }
 
-    impl<G: Generator, const N: usize> Generator for [G; N] {
+    impl<G: Generate, const N: usize> Generate for [G; N] {
         type Item = [G::Item; N];
-        type Shrink = Shrink<[G::Shrink; N]>;
+        type Shrink = Shrinker<[G::Shrink; N]>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink {
+            Shrinker {
                 index: 0,
                 shrinkers: array::from_fn(|index| self[index].generate(state)),
             }
         }
 
         fn constant(&self) -> bool {
-            self.iter().all(Generator::constant)
+            self.iter().all(Generate::constant)
         }
     }
 
-    impl<S: Shrinker, const N: usize> Shrinker for Shrink<[S; N]> {
+    impl<S: Shrink, const N: usize> Shrink for Shrinker<[S; N]> {
         type Item = [S::Item; N];
 
         fn item(&self) -> Self::Item {
@@ -75,12 +75,12 @@ pub mod array {
 pub mod slice {
     use super::*;
 
-    impl<G: Generator> Generator for [G] {
+    impl<G: Generate> Generate for [G] {
         type Item = Box<[G::Item]>;
-        type Shrink = Shrink<Box<[G::Shrink]>>;
+        type Shrink = Shrinker<Box<[G::Shrink]>>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink {
+            Shrinker {
                 index: 0,
                 shrinkers: self
                     .iter()
@@ -94,7 +94,7 @@ pub mod slice {
         }
     }
 
-    impl<S: Shrinker> Shrinker for Shrink<Box<[S]>> {
+    impl<S: Shrink> Shrink for Shrinker<Box<[S]>> {
         type Item = Box<[S::Item]>;
 
         fn item(&self) -> Self::Item {
@@ -114,12 +114,12 @@ pub mod slice {
 pub mod vector {
     use super::*;
 
-    impl<G: Generator> Generator for Vec<G> {
+    impl<G: Generate> Generate for Vec<G> {
         type Item = Vec<G::Item>;
-        type Shrink = Shrink<Vec<G::Shrink>>;
+        type Shrink = Shrinker<Vec<G::Shrink>>;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrink {
+            Shrinker {
                 index: 0,
                 shrinkers: self
                     .iter()
@@ -133,7 +133,7 @@ pub mod vector {
         }
     }
 
-    impl<S: Shrinker> Shrinker for Shrink<Vec<S>> {
+    impl<S: Shrink> Shrink for Shrinker<Vec<S>> {
         type Item = Vec<S::Item>;
 
         fn item(&self) -> Self::Item {
@@ -152,7 +152,7 @@ pub mod vector {
 
 macro_rules! tuple {
     ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
-        impl<$($t: FullGenerator,)*> FullGenerator for ($($t,)*) {
+        impl<$($t: FullGenerate,)*> FullGenerate for ($($t,)*) {
             type Generator = ($($t::Generator,)*);
             type Item = ($($t::Item,)*);
 
@@ -162,12 +162,12 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($t: Generator,)*> Generator for ($($t,)*) {
+        impl<$($t: Generate,)*> Generate for ($($t,)*) {
             type Item = ($($t::Item,)*);
-            type Shrink = Shrink<($($t::Shrink,)*)>;
+            type Shrink = Shrinker<($($t::Shrink,)*)>;
 
             fn generate(&self, _state: &mut State) -> Self::Shrink {
-                Shrink {
+                Shrinker {
                     index: 0,
                     shrinkers: ($($t::generate(&self.$i, _state),)*),
                 }
@@ -178,7 +178,7 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($t: Shrinker,)*> Shrinker for Shrink<($($t,)*)> {
+        impl<$($t: Shrink,)*> Shrink for Shrinker<($($t,)*)> {
             type Item = ($($t::Item,)*);
 
             #[allow(clippy::unused_unit)]

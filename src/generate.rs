@@ -12,7 +12,7 @@ use crate::{
     keep::Keep,
     map::Map,
     random::{self, Random},
-    shrink::Shrinker,
+    shrink::Shrink,
     size::Size,
 };
 use core::{
@@ -48,16 +48,16 @@ pub struct States {
 ///
 /// For example, this trait is implemented for all non-pointer primitive types
 /// and for some standard types (such as [`Option<T>`] and [`Result<T, E>`]).
-pub trait FullGenerator {
+pub trait FullGenerate {
     type Item;
-    type Generator: Generator<Item = Self::Item>;
+    type Generator: Generate<Item = Self::Item>;
     fn generator() -> Self::Generator;
 }
 
 #[must_use = "generators do nothing until used"]
-pub trait Generator {
+pub trait Generate {
     type Item;
-    type Shrink: Shrinker<Item = Self::Item>;
+    type Shrink: Shrink<Item = Self::Item>;
 
     /// Primary method of this trait. It generates a [`Shrink`] instance that
     /// will be able to produce values of type [`Generator::Item`] and shrink
@@ -81,7 +81,7 @@ pub trait Generator {
     ///     Branch(Vec<Node>),
     /// }
     ///
-    /// fn node() -> impl Generator<Item = Node> {
+    /// fn node() -> impl Generate<Item = Node> {
     ///     (
     ///         with(|| Node::Leaf),
     ///         // Without [`Generator::boxed`], this type would be infinite.
@@ -93,7 +93,7 @@ pub trait Generator {
     ///         .fuse()
     /// }
     ///
-    /// fn choose(choose: bool) -> impl Generator<Item = char> {
+    /// fn choose(choose: bool) -> impl Generate<Item = char> {
     ///     if choose {
     ///         // Without [`Generator::boxed`], the `if/else` branches would not have the same type.
     ///         letter().boxed()
@@ -102,12 +102,12 @@ pub trait Generator {
     ///     }
     /// }
     /// ```
-    fn boxed(self) -> boxed::Generate<Self::Item>
+    fn boxed(self) -> boxed::Generatez<Self::Item>
     where
         Self: Sized + 'static,
-        boxed::Generate<Self::Item>: Generator,
+        boxed::Generatez<Self::Item>: Generate,
     {
-        boxed::Generate::new(self)
+        boxed::Generatez::new(self)
     }
 
     /// Maps generated [`Generator::Item`] to an arbitrary type `T` using the
@@ -115,7 +115,7 @@ pub trait Generator {
     fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
     where
         Self: Sized,
-        Map<Self, F>: Generator,
+        Map<Self, F>: Generate,
     {
         Map(map, self)
     }
@@ -125,7 +125,7 @@ pub trait Generator {
     fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generator,
+        Filter<Self, F>: Generate,
     {
         self.filter_with(COUNT, filter)
     }
@@ -140,7 +140,7 @@ pub trait Generator {
     fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generator,
+        Filter<Self, F>: Generate,
     {
         Filter::new(self, filter, retries)
     }
@@ -150,7 +150,7 @@ pub trait Generator {
     fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generator,
+        FilterMap<Self, F>: Generate,
     {
         self.filter_map_with(COUNT, map)
     }
@@ -165,18 +165,18 @@ pub trait Generator {
     ) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generator,
+        FilterMap<Self, F>: Generate,
     {
         FilterMap::new(self, map, retries)
     }
 
     /// Combines [`Generator::map`] and [`Generator::flatten`] in a single
     /// [`Generator`] implementation.
-    fn flat_map<G: Generator, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
+    fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
-        Map<Self, F>: Generator<Item = G>,
-        Flatten<Map<Self, F>>: Generator,
+        Map<Self, F>: Generate<Item = G>,
+        Flatten<Map<Self, F>>: Generate,
     {
         self.map(map).flatten()
     }
@@ -200,8 +200,8 @@ pub trait Generator {
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
-        Self::Item: Generator,
-        Flatten<Self>: Generator,
+        Self::Item: Generate,
+        Flatten<Self>: Generate,
     {
         Flatten(self)
     }
@@ -218,7 +218,7 @@ pub trait Generator {
     fn any(self) -> Any<Self>
     where
         Self: Sized,
-        Any<Self>: Generator,
+        Any<Self>: Generate,
     {
         Any(self)
     }
@@ -227,7 +227,7 @@ pub trait Generator {
     fn array<const N: usize>(self) -> Array<Self, N>
     where
         Self: Sized,
-        Array<Self, N>: Generator,
+        Array<Self, N>: Generate,
     {
         Array(self)
     }
@@ -236,7 +236,7 @@ pub trait Generator {
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, RangeInclusive<usize>, F>
     where
         Self: Sized,
-        Collect<Self, RangeInclusive<usize>, F>: Generator,
+        Collect<Self, RangeInclusive<usize>, F>: Generate,
     {
         Collect::new(self)
     }
@@ -244,13 +244,13 @@ pub trait Generator {
     /// Generates a variable number of items based on the provided `count`
     /// [`Generator`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
-    fn collect_with<C: Generator<Item = usize>, F: FromIterator<Self::Item>>(
+    fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
         self,
         count: C,
     ) -> Collect<Self, C, F>
     where
         Self: Sized,
-        Collect<Self, C, F>: Generator,
+        Collect<Self, C, F>: Generate,
     {
         Collect::new_with(self, count, None)
     }
@@ -278,7 +278,7 @@ pub trait Generator {
     fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
-        Size<Self, F>: Generator,
+        Size<Self, F>: Generate,
     {
         Size(self, map)
     }
@@ -287,7 +287,7 @@ pub trait Generator {
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
-        Dampen<Self>: Generator,
+        Dampen<Self>: Generate,
     {
         self.dampen_with(1.0, 8, 8192)
     }
@@ -309,7 +309,7 @@ pub trait Generator {
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
-        Dampen<Self>: Generator,
+        Dampen<Self>: Generate,
     {
         assert!(pressure.is_finite());
         assert!(pressure >= 0.0);
@@ -326,7 +326,7 @@ pub trait Generator {
     fn keep(self) -> Keep<Self>
     where
         Self: Sized,
-        Keep<Self>: Generator,
+        Keep<Self>: Generate,
     {
         Keep(self)
     }
@@ -334,7 +334,7 @@ pub trait Generator {
     fn fuse<T>(self) -> Fuse<Self, T>
     where
         Self: Sized,
-        Fuse<Self, T>: Generator,
+        Fuse<Self, T>: Generate,
     {
         Fuse(PhantomData, self)
     }
@@ -342,7 +342,7 @@ pub trait Generator {
     fn convert<T>(self) -> Convert<Self, T>
     where
         Self: Sized,
-        Convert<Self, T>: Generator,
+        Convert<Self, T>: Generate,
     {
         Convert(PhantomData, self)
     }
@@ -466,7 +466,7 @@ pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f6
     }
 }
 
-impl<G: Generator + ?Sized> Generator for &G {
+impl<G: Generate + ?Sized> Generate for &G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
@@ -479,7 +479,7 @@ impl<G: Generator + ?Sized> Generator for &G {
     }
 }
 
-impl<G: Generator + ?Sized> Generator for &mut G {
+impl<G: Generate + ?Sized> Generate for &mut G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 

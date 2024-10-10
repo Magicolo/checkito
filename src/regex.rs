@@ -4,9 +4,9 @@ use crate::{
     all,
     any::{self, Any},
     collect::{self},
-    generate::{Generator, State},
+    generate::{Generate, State},
     primitive::char,
-    shrink::Shrinker,
+    shrink::Shrink,
 };
 use core::{fmt, ops::RangeInclusive};
 use regex_syntax::{
@@ -26,12 +26,12 @@ pub enum Regex {
 }
 
 #[derive(Clone)]
-pub enum Shrink {
+pub enum Shrinker {
     Empty,
     Text(String),
-    Range(char::Shrink),
-    All(all::Shrink<Box<[Shrink]>>),
-    Collect(collect::Shrink<Shrink, String>),
+    Range(char::Shrinker),
+    All(all::Shrinker<Box<[Shrinker]>>),
+    Collect(collect::Shrinker<Shrinker, String>),
 }
 
 #[derive(Clone)]
@@ -157,18 +157,18 @@ impl Regex {
     }
 }
 
-impl Generator for Regex {
+impl Generate for Regex {
     type Item = String;
-    type Shrink = Shrink;
+    type Shrink = Shrinker;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         match self {
-            Regex::Empty => Shrink::Empty,
-            Regex::Text(text) => Shrink::Text(text.clone()),
-            Regex::Range(range) => Shrink::Range(range.generate(state)),
-            Regex::Collect(collect) => Shrink::Collect(collect.generate(state)),
-            Regex::Any(any) => any.generate(state).0.unwrap_or(Shrink::Empty),
-            Regex::All(all) => Shrink::All(all.generate(state)),
+            Regex::Empty => Shrinker::Empty,
+            Regex::Text(text) => Shrinker::Text(text.clone()),
+            Regex::Range(range) => Shrinker::Range(range.generate(state)),
+            Regex::Collect(collect) => Shrinker::Collect(collect.generate(state)),
+            Regex::Any(any) => any.generate(state).0.unwrap_or(Shrinker::Empty),
+            Regex::All(all) => Shrinker::All(all.generate(state)),
         }
     }
 
@@ -183,21 +183,21 @@ impl Generator for Regex {
     }
 }
 
-impl Shrinker for Shrink {
+impl Shrink for Shrinker {
     type Item = String;
 
     fn item(&self) -> Self::Item {
-        fn descend(shrinker: &Shrink, buffer: &mut String) {
+        fn descend(shrinker: &Shrinker, buffer: &mut String) {
             match shrinker {
-                Shrink::Empty => {}
-                Shrink::Text(text) => buffer.push_str(text),
-                Shrink::Range(shrinker) => buffer.push(shrinker.item()),
-                Shrink::All(shrinker) => {
+                Shrinker::Empty => {}
+                Shrinker::Text(text) => buffer.push_str(text),
+                Shrinker::Range(shrinker) => buffer.push(shrinker.item()),
+                Shrinker::All(shrinker) => {
                     for shrinker in shrinker.shrinkers.iter() {
                         descend(shrinker, buffer);
                     }
                 }
-                Shrink::Collect(shrinker) => {
+                Shrinker::Collect(shrinker) => {
                     for shrinker in shrinker.shrinkers.iter() {
                         descend(shrinker, buffer);
                     }

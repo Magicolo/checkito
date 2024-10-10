@@ -47,7 +47,7 @@ impl fmt::Debug for Node {
 
 /// For reusability, the json string [`Generator`] implementation is factored
 /// out here.
-fn string() -> impl Generator<Item = Node> {
+fn string() -> impl Generate<Item = Node> {
     // This somewhat convoluted regular expression produces json-compliant strings.
     regex!(r#"([a-zA-Z0-9]|[#-~ !]|(\\[\\"/bfnrt])|(\\u([0-9a-fA-F]){4}))*"#)
         // Parse the pattern into a [`Regex`] structure which implements [`Generator`].
@@ -58,7 +58,7 @@ fn string() -> impl Generator<Item = Node> {
 /// The general pattern for producing [`Node`]s is to generate the inner values
 /// for each enum case and map them to their corresponding [`Node`] constructor
 /// by using the [`Generator::map`] combinator.
-fn node() -> impl Generator<Item = Node> {
+fn node() -> impl Generate<Item = Node> {
     (
         // [`with`] builds a generator based on the provided function.
         // An alternative would be to use `Same(Node::Null)`, but that would required a [`Clone`]

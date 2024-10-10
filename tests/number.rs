@@ -1,5 +1,5 @@
 pub mod common;
-use checkito::shrink::{Shrink, Shrinkers};
+use checkito::shrink::Shrinkers;
 use common::*;
 
 mod range {
@@ -109,7 +109,7 @@ mod range {
                                 (0 as $t..=value, value..=value)
                             }
                         })
-                        .flat_map(|(low, high)| (low, high, Shrink((low..=high))))
+                        .flat_map(|(low, high)| (low, high, shrinker((low..=high))))
                         .check(|(low, high, mut outer)| {
                             while let Some(inner) = outer.shrink() {
                                 outer = inner;

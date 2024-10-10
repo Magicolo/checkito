@@ -84,7 +84,7 @@ fn sums_to_9001(left: i32, right: i32) {
 ///
 /// [`Generator::map`] can be used to map a value to another.
 #[check(111119)]
-#[check(Generator::map(10..1000, |value| value * 10 - 1))]
+#[check(Generate::map(10..1000, |value| value * 10 - 1))]
 #[check("a string that ends with 9")]
 #[check(regex!("[a-z]*9"))]
 fn ends_with_9(value: impl std::fmt::Display) -> bool {

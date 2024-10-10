@@ -1,21 +1,21 @@
 use crate::{
-    Generator, boxed, check,
+    Generate, boxed, check,
     generate::{State, States},
     random,
 };
 use core::{iter, ops};
 
-pub trait Shrinker: Clone {
+pub trait Shrink: Clone {
     type Item;
 
     fn item(&self) -> Self::Item;
     fn shrink(&mut self) -> Option<Self>;
 
-    fn boxed(self) -> boxed::Shrink<Self::Item>
+    fn boxed(self) -> boxed::Shrinkz<Self::Item>
     where
         Self: 'static,
     {
-        boxed::Shrink::new(self)
+        boxed::Shrinkz::new(self)
     }
 }
 
@@ -26,14 +26,14 @@ pub struct Shrinkers<'a, G: ?Sized> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Shrink<T: ?Sized>(pub T);
+pub struct Shrinker<T: ?Sized>(pub(crate) T);
 
-impl<G: Generator + ?Sized> Generator for Shrink<G> {
+impl<G: Generate + ?Sized> Generate for Shrinker<G> {
     type Item = G::Shrink;
-    type Shrink = Shrink<G::Shrink>;
+    type Shrink = Shrinker<G::Shrink>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        Shrink(self.0.generate(state))
+        Shrinker(self.0.generate(state))
     }
 
     fn constant(&self) -> bool {
@@ -41,7 +41,7 @@ impl<G: Generator + ?Sized> Generator for Shrink<G> {
     }
 }
 
-impl<S: Shrinker> Shrinker for Shrink<S> {
+impl<S: Shrink> Shrink for Shrinker<S> {
     type Item = S;
 
     fn item(&self) -> Self::Item {
@@ -53,7 +53,7 @@ impl<S: Shrinker> Shrinker for Shrink<S> {
     }
 }
 
-impl<G: Generator + ?Sized> Clone for Shrinkers<'_, G> {
+impl<G: Generate + ?Sized> Clone for Shrinkers<'_, G> {
     fn clone(&self) -> Self {
         Self {
             generator: self.generator,
@@ -62,13 +62,13 @@ impl<G: Generator + ?Sized> Clone for Shrinkers<'_, G> {
     }
 }
 
-impl<'a, G: Generator + ?Sized> From<&'a G> for Shrinkers<'a, G> {
+impl<'a, G: Generate + ?Sized> From<&'a G> for Shrinkers<'a, G> {
     fn from(value: &'a G) -> Self {
         Shrinkers::new(value, check::COUNT, 0.0..1.0, None)
     }
 }
 
-impl<'a, G: Generator + ?Sized> Shrinkers<'a, G> {
+impl<'a, G: Generate + ?Sized> Shrinkers<'a, G> {
     pub fn new(generator: &'a G, count: usize, size: ops::Range<f64>, seed: Option<u64>) -> Self {
         Shrinkers {
             generator,
@@ -77,7 +77,7 @@ impl<'a, G: Generator + ?Sized> Shrinkers<'a, G> {
     }
 }
 
-pub(crate) fn shrinker<G: Generator + ?Sized>(
+pub(crate) fn shrinker<G: Generate + ?Sized>(
     generator: &G,
     size: f64,
     seed: Option<u64>,
@@ -86,7 +86,7 @@ pub(crate) fn shrinker<G: Generator + ?Sized>(
     generator.generate(&mut state)
 }
 
-impl<G: Generator + ?Sized> Iterator for Shrinkers<'_, G> {
+impl<G: Generate + ?Sized> Iterator for Shrinkers<'_, G> {
     type Item = G::Shrink;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -110,7 +110,7 @@ impl<G: Generator + ?Sized> Iterator for Shrinkers<'_, G> {
     }
 }
 
-impl<G: Generator + ?Sized> DoubleEndedIterator for Shrinkers<'_, G> {
+impl<G: Generate + ?Sized> DoubleEndedIterator for Shrinkers<'_, G> {
     fn next_back(&mut self) -> Option<Self::Item> {
         Some(self.generator.generate(&mut self.states.next_back()?))
     }
@@ -120,10 +120,10 @@ impl<G: Generator + ?Sized> DoubleEndedIterator for Shrinkers<'_, G> {
     }
 }
 
-impl<G: Generator + ?Sized> ExactSizeIterator for Shrinkers<'_, G> {
+impl<G: Generate + ?Sized> ExactSizeIterator for Shrinkers<'_, G> {
     fn len(&self) -> usize {
         self.states.len()
     }
 }
 
-impl<G: Generator + ?Sized> iter::FusedIterator for Shrinkers<'_, G> {}
+impl<G: Generate + ?Sized> iter::FusedIterator for Shrinkers<'_, G> {}

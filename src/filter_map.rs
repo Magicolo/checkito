@@ -1,6 +1,6 @@
 use crate::{
-    generate::{self, Generator, State},
-    shrink::Shrinker,
+    generate::{self, Generate, State},
+    shrink::Shrink,
 };
 
 #[derive(Debug, Default, Clone)]
@@ -11,12 +11,12 @@ pub struct FilterMap<G: ?Sized, F> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Shrink<S, F> {
+pub struct Shrinkz<S, F> {
     shrinker: Option<S>,
     map: F,
 }
 
-impl<G: Generator, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
+impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
     pub const fn new(generator: G, map: F, retries: usize) -> Self {
         Self {
             generator,
@@ -26,9 +26,9 @@ impl<G: Generator, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
     }
 }
 
-impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generator for FilterMap<G, F> {
+impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for FilterMap<G, F> {
     type Item = Option<T>;
-    type Shrink = Shrink<G::Shrink, F>;
+    type Shrink = Shrinkz<G::Shrink, F>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
@@ -43,7 +43,7 @@ impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generator fo
             }
         }
         state.size = size;
-        Shrink {
+        Shrinkz {
             shrinker: outer,
             map: self.map.clone(),
         }
@@ -54,7 +54,7 @@ impl<G: Generator + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generator fo
     }
 }
 
-impl<S: Shrinker, T, F: Fn(S::Item) -> Option<T> + Clone> Shrinker for Shrink<S, F> {
+impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinkz<S, F> {
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {

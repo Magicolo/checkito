@@ -1,12 +1,12 @@
 use crate::{
-    generate::{Generator, State},
-    shrink::Shrinker,
+    generate::{Generate, State},
+    shrink::Shrink,
 };
 
 #[derive(Clone, Debug, Default)]
 pub struct Same<T: ?Sized>(pub(crate) T);
 
-impl<T: Clone> Generator for Same<T> {
+impl<T: Clone> Generate for Same<T> {
     type Item = T;
     type Shrink = Self;
 
@@ -19,7 +19,7 @@ impl<T: Clone> Generator for Same<T> {
     }
 }
 
-impl<T: Clone> Shrinker for Same<T> {
+impl<T: Clone> Shrink for Same<T> {
     type Item = T;
 
     fn item(&self) -> Self::Item {

@@ -58,7 +58,7 @@ macro_rules! collection {
             #[test]
             fn has_same_count() {
                 assert!(
-                    Generator::flat_map(0..100usize, |count| (
+                    Generate::flat_map(0..100usize, |count| (
                         count,
                         char::generator().collect_with::<_, $t>(count)
                     ))

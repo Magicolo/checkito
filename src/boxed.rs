@@ -1,25 +1,25 @@
 use crate::{
-    generate::{Generator, State},
-    shrink::Shrinker,
+    generate::{Generate, State},
+    shrink::Shrink,
 };
 use core::any::Any;
 
-pub struct Generate<I> {
+pub struct Generatez<I> {
     generator: Box<dyn Any>,
-    generate: fn(&dyn Any, &mut State) -> Shrink<I>,
+    generate: fn(&dyn Any, &mut State) -> Shrinkz<I>,
     constant: fn(&dyn Any) -> bool,
 }
 
-pub struct Shrink<I> {
+pub struct Shrinkz<I> {
     shrinker: Box<dyn Any>,
     clone: fn(&dyn Any) -> Box<dyn Any>,
     item: fn(&dyn Any) -> I,
     shrink: fn(&mut dyn Any) -> Option<Box<dyn Any>>,
 }
 
-impl<I> Generator for Generate<I> {
+impl<I> Generate for Generatez<I> {
     type Item = I;
-    type Shrink = Shrink<I>;
+    type Shrink = Shrinkz<I>;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         (self.generate)(self.generator.as_ref(), state)
@@ -30,8 +30,8 @@ impl<I> Generator for Generate<I> {
     }
 }
 
-impl<I> Generate<I> {
-    pub(crate) fn new<G: Generator<Item = I> + 'static>(generator: G) -> Self
+impl<I> Generatez<I> {
+    pub(crate) fn new<G: Generate<Item = I> + 'static>(generator: G) -> Self
     where
         G::Shrink: 'static,
     {
@@ -49,8 +49,8 @@ impl<I> Generate<I> {
     }
 }
 
-impl<I> Generate<I> {
-    pub fn downcast<G: Generator + 'static>(self) -> Result<G, Self> {
+impl<I> Generatez<I> {
+    pub fn downcast<G: Generate + 'static>(self) -> Result<G, Self> {
         match self.generator.downcast::<G>() {
             Ok(generator) => Ok(*generator),
             Err(generator) => Err(Self {
@@ -62,9 +62,9 @@ impl<I> Generate<I> {
     }
 }
 
-impl Shrink<()> {
-    pub(crate) fn new<S: Shrinker + 'static>(shrinker: S) -> Shrink<S::Item> {
-        Shrink {
+impl Shrinkz<()> {
+    pub(crate) fn new<S: Shrink + 'static>(shrinker: S) -> Shrinkz<S::Item> {
+        Shrinkz {
             shrinker: Box::new(shrinker),
             clone: |inner| Box::new(inner.downcast_ref::<S>().unwrap().clone()),
             item: |inner| inner.downcast_ref::<S>().unwrap().item(),
@@ -72,7 +72,7 @@ impl Shrink<()> {
         }
     }
 
-    pub fn downcast<S: Shrinker + 'static>(self) -> Result<S, Self> {
+    pub fn downcast<S: Shrink + 'static>(self) -> Result<S, Self> {
         match self.shrinker.downcast::<S>() {
             Ok(shrinker) => Ok(*shrinker),
             Err(shrinker) => Err(Self {
@@ -85,7 +85,7 @@ impl Shrink<()> {
     }
 }
 
-impl<I> Clone for Shrink<I> {
+impl<I> Clone for Shrinkz<I> {
     fn clone(&self) -> Self {
         Self {
             shrinker: (self.clone)(self.shrinker.as_ref()),
@@ -96,7 +96,7 @@ impl<I> Clone for Shrink<I> {
     }
 }
 
-impl<I> Shrinker for Shrink<I> {
+impl<I> Shrink for Shrinkz<I> {
     type Item = I;
 
     fn item(&self) -> Self::Item {

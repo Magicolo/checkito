@@ -1,6 +1,6 @@
 use crate::{
-    generate::{Generator, State},
-    shrink::Shrinker,
+    generate::{Generate, State},
+    shrink::Shrink,
     utility::tuples,
 };
 use core::marker::PhantomData;
@@ -13,9 +13,9 @@ impl<T: Clone, I: ?Sized> Clone for Fuse<T, I> {
     }
 }
 
-impl<G: Generator + ?Sized, I> Generator for Fuse<G, I>
+impl<G: Generate + ?Sized, I> Generate for Fuse<G, I>
 where
-    Fuse<G::Shrink, I>: Shrinker<Item = I>,
+    Fuse<G::Shrink, I>: Shrink<Item = I>,
 {
     type Item = I;
     type Shrink = Fuse<G::Shrink, I>;
@@ -32,7 +32,7 @@ where
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
     ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
-        impl<I, $($ts: Shrinker,)*> Shrinker for Fuse<orn::$n::Or<$($ts,)*>, I> where $($ts::Item: Into<I>,)* {
+        impl<I, $($ts: Shrink,)*> Shrink for Fuse<orn::$n::Or<$($ts,)*>, I> where $($ts::Item: Into<I>,)* {
             type Item = I;
 
             fn item(&self) -> Self::Item {
