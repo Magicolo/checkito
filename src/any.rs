@@ -32,7 +32,7 @@ impl<T> Weight<T> {
 impl<G: Generate> Weight<G> {
     pub fn new(weight: f64, generator: G) -> Self {
         assert!(weight.is_finite());
-        assert!(weight > f64::EPSILON);
+        assert!(weight >= f64::EPSILON);
         Self { weight, generator }
     }
 }
@@ -58,9 +58,11 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
         let total = items
             .iter()
             .map(|Weight { weight, .. }| weight)
-            .sum::<f64>();
-        assert!(total.is_finite());
+            .sum::<f64>()
+            .min(f64::MAX);
+        debug_assert!(total > 0.0 && total.is_finite());
         let mut random = state.random().f64() * total;
+        debug_assert!(random.is_finite());
         for Weight {
             weight,
             generator: value,
@@ -203,15 +205,16 @@ macro_rules! tuple {
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let _total = $(self.$is.weight +)* 0.0;
-                assert!(_total.is_finite());
-                let mut _weight = state.random().f64() * _total;
+                let _total = ($(self.$is.weight +)* 0.0).min(f64::MAX);
+                debug_assert!(_total > 0.0 && _total.is_finite());
+                let mut _random = state.random().f64() * _total;
+                debug_assert!(_random.is_finite());
                 $(
                     let Weight { weight, generator } = &self.$is;
-                    if _weight < *weight {
+                    if _random < *weight {
                         return orn::$n::Or::$ts(generator.generate(state));
                     } else {
-                        _weight -= weight;
+                        _random -= weight;
                     }
                 )*
                 unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");

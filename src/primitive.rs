@@ -580,9 +580,9 @@ pub mod number {
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     match state.random().u8(..) {
                         0..=89 => ($t::MIN..=$t::MAX).generate(state),
-                        90..=179 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
-                        180..=214 => (1 as $t / $t::MIN..=1 as $t / $t::MAX).generate(state),
-                        215..=249 => (-1 as $t / $t::EPSILON..=1 as $t / $t::EPSILON).generate(state),
+                        90..=179 => (-$t::EPSILON.recip()..=$t::EPSILON.recip()).generate(state),
+                        180..=214 => ($t::MIN.recip()..=$t::MAX.recip()).generate(state),
+                        215..=249 => (-$t::EPSILON..=$t::EPSILON).generate(state),
                         250.. => shrinker(Special::<$t>::NEW.generate(state)),
                     }
                 }
