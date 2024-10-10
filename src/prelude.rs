@@ -1,4 +1,4 @@
-use crate::{any::Any, primitive::number::Number, shrink, Generate, Same};
+use crate::{Generate, Same, any::Any, primitive::number::Number, shrink};
 
 pub const fn same<T>(value: T) -> Same<T> {
     Same(value)
@@ -29,7 +29,7 @@ pub const fn negative<T: Number>() -> impl Generate<Item = T> {
 
 /// Ascii letters.
 pub fn letter() -> impl Generate<Item = char> {
-    ('a'..='z', 'A'..='Z').any().fuse::<char>()
+    ('a'..='z', 'A'..='Z').any().unify::<char>()
 }
 
 /// Ascii digits.

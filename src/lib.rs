@@ -11,7 +11,6 @@ pub mod dampen;
 pub mod filter;
 pub mod filter_map;
 pub mod flatten;
-pub mod fuse;
 pub mod generate;
 pub mod keep;
 pub mod map;
@@ -26,6 +25,7 @@ pub mod sample;
 pub mod shrink;
 pub mod size;
 pub mod standard;
+pub mod unify;
 mod utility;
 
 pub use check::Check;

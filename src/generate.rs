@@ -8,12 +8,12 @@ use crate::{
     filter::Filter,
     filter_map::FilterMap,
     flatten::Flatten,
-    fuse::Fuse,
     keep::Keep,
     map::Map,
     random::{self, Random},
     shrink::Shrink,
     size::Size,
+    unify::Unify,
 };
 use core::{
     iter::{FromIterator, FusedIterator},
@@ -88,7 +88,7 @@ pub trait Generate {
     ///         lazy(node).collect().map(Node::Branch).dampen().boxed(),
     ///     )
     ///         .any()
-    ///         .fuse()
+    ///         .unify()
     /// }
     ///
     /// fn choose(choose: bool) -> impl Generate<Item = char> {
@@ -329,12 +329,12 @@ pub trait Generate {
         Keep(self)
     }
 
-    fn fuse<T>(self) -> Fuse<Self, T>
+    fn unify<T>(self) -> Unify<Self, T>
     where
         Self: Sized,
-        Fuse<Self, T>: Generate,
+        Unify<Self, T>: Generate,
     {
-        Fuse(PhantomData, self)
+        Unify(PhantomData, self)
     }
 
     fn convert<T>(self) -> Convert<Self, T>
