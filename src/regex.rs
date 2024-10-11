@@ -20,7 +20,7 @@ pub enum Regex {
     Empty,
     Text(String),
     Range(RangeInclusive<char>),
-    Collect(Box<collect::Collect<Regex, RangeInclusive<usize>, String>>),
+    Collect(collect::Collect<Box<Regex>, RangeInclusive<usize>, String>),
     Any(any::Any<Box<[Regex]>>),
     All(Box<[Regex]>),
 }
@@ -131,11 +131,11 @@ impl Regex {
                 if low == 1 && high == 1 {
                     return Ok(tree);
                 }
-                Ok(Self::Collect(Box::new(collect::Collect::new_with(
-                    tree,
+                Ok(Self::Collect(collect::Collect::new_with(
+                    Box::new(tree),
                     low as usize..=high as usize,
                     Some(low as _),
-                ))))
+                )))
             }
             HirKind::Class(Class::Unicode(class)) => Self::try_from_iter(
                 class.ranges().iter().map(|range| Ok(Self::from(range))),
@@ -166,9 +166,9 @@ impl Generate for Regex {
             Regex::Empty => Shrinker::Empty,
             Regex::Text(text) => Shrinker::Text(text.clone()),
             Regex::Range(range) => Shrinker::Range(range.generate(state)),
-            Regex::Collect(collect) => Shrinker::Collect(collect.as_ref().generate(state)),
+            Regex::Collect(collect) => Shrinker::Collect(collect.generate(state)),
             Regex::Any(any) => any.generate(state).0.unwrap_or(Shrinker::Empty),
-            Regex::All(all) => Shrinker::All(all.as_ref().generate(state)),
+            Regex::All(all) => Shrinker::All(all.generate(state)),
         }
     }
 

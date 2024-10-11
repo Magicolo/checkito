@@ -5,6 +5,7 @@ use crate::{
 };
 use core::f64;
 use ref_cast::RefCast;
+use std::{rc::Rc, sync::Arc};
 
 #[repr(transparent)]
 #[derive(Clone, Debug, RefCast)]
@@ -78,6 +79,12 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
     }
 }
 
+impl<T: ?Sized, U: AsRef<T> + ?Sized> AsRef<T> for Any<U> {
+    fn as_ref(&self) -> &T {
+        self.0.as_ref()
+    }
+}
+
 impl<G: ?Sized> Generate for Any<&G>
 where
     Any<G>: Generate,
@@ -110,32 +117,6 @@ where
     }
 }
 
-macro_rules! slice {
-    ($t: ty, $i: ident, [$($n: ident)?]) => {
-        impl<G: Generate $(,const $n: usize)?> Generate for Any<$t> {
-            type Item = Option<G::Item>;
-            type Shrink = Shrinker<G::Shrink>;
-
-            fn generate(&self, state: &mut State) -> Self::Shrink {
-                Shrinker($i(&self.0, state).map(|generator| generator.generate(state)))
-            }
-
-            fn constant(&self) -> bool {
-                self.0.iter().all(|generator| generator.constant())
-            }
-        }
-    };
-}
-
-slice!([G], indexed, []);
-slice!([G; N], indexed, [N]);
-slice!(Vec<G>, indexed, []);
-slice!(Box<[G]>, indexed, []);
-slice!([Weight<G>], weighted, []);
-slice!([Weight<G>; N], weighted, [N]);
-slice!(Vec<Weight<G>>, weighted, []);
-slice!(Box<[Weight<G>]>, weighted, []);
-
 impl<S: Shrink> Shrink for Shrinker<S> {
     type Item = Option<S::Item>;
 
@@ -147,6 +128,58 @@ impl<S: Shrink> Shrink for Shrinker<S> {
         Some(Self(self.0.as_mut()?.shrink()))
     }
 }
+
+const fn as_slice<T>(slice: &[T]) -> &[T] {
+    slice
+}
+
+macro_rules! pointer {
+    ($t: ident) => {
+        impl<G: ?Sized> Generate for Any<$t<G>>
+        where
+            Any<G>: Generate,
+        {
+            type Item = <Any<G> as Generate>::Item;
+            type Shrink = <Any<G> as Generate>::Shrink;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                Any::ref_cast(self.0.as_ref()).generate(state)
+            }
+
+            fn constant(&self) -> bool {
+                Any::ref_cast(self.0.as_ref()).constant()
+            }
+        }
+    };
+}
+
+pointer!(Box);
+pointer!(Rc);
+pointer!(Arc);
+
+macro_rules! slice {
+    ($t: ty, $i: ident, [$($n: ident)?]) => {
+        impl<G: Generate $(,const $n: usize)?> Generate for $t {
+            type Item = Option<G::Item>;
+            type Shrink = Shrinker<G::Shrink>;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                Shrinker($i(as_slice(self.as_ref()), state).map(|generator| generator.generate(state)))
+            }
+
+            fn constant(&self) -> bool {
+                as_slice(self.as_ref()).iter().all(|generator| generator.constant())
+            }
+        }
+    };
+}
+
+slice!(Any<[G]>, indexed, []);
+slice!(Any<[G; N]>, indexed, [N]);
+slice!(Any<Vec<G>>, indexed, []);
+slice!([Weight<G>], weighted, []);
+slice!([Weight<G>; N], weighted, [N]);
+slice!(Vec<Weight<G>>, weighted, []);
 
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};

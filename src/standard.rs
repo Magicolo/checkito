@@ -152,9 +152,6 @@ macro_rules! pointer {
         mod $m {
             use super::*;
 
-            #[derive(Clone, Debug)]
-            pub struct Shrinker<S: ?Sized>(pub(crate) S);
-
             impl<G: FullGenerate + ?Sized> FullGenerate for $t<G> {
                 type Generator = Convert<G::Generator, Self::Item>;
                 type Item = $t<G::Item>;
@@ -165,27 +162,15 @@ macro_rules! pointer {
             }
 
             impl<G: Generate + ?Sized> Generate for $t<G> {
-                type Item = $t<G::Item>;
-                type Shrink = Shrinker<G::Shrink>;
+                type Item = G::Item;
+                type Shrink = G::Shrink;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
-                    Shrinker(G::generate(self, state))
+                    G::generate(self, state)
                 }
 
                 fn constant(&self) -> bool {
                     G::constant(self)
-                }
-            }
-
-            impl<S: Shrink> Shrink for Shrinker<S> {
-                type Item = $t<S::Item>;
-
-                fn item(&self) -> Self::Item {
-                    $t::new(self.0.item())
-                }
-
-                fn shrink(&mut self) -> Option<Self> {
-                    Some(Shrinker(self.0.shrink()?))
                 }
             }
         }
