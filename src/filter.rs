@@ -5,25 +5,15 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct Filter<G: ?Sized, F> {
-    filter: F,
-    retries: usize,
-    generator: G,
+    pub(crate) filter: F,
+    pub(crate) retries: usize,
+    pub(crate) generator: G,
 }
 
 #[derive(Clone, Debug)]
 pub struct Shrinker<S, F> {
     shrinker: Option<S>,
     filter: F,
-}
-
-impl<G: Generate, F: Fn(&G::Item) -> bool> Filter<G, F> {
-    pub const fn new(generator: G, filter: F, retries: usize) -> Self {
-        Self {
-            generator,
-            filter,
-            retries,
-        }
-    }
 }
 
 impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<G, F> {

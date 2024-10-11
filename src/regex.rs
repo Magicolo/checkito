@@ -131,7 +131,7 @@ impl Regex {
                 if low == 1 && high == 1 {
                     return Ok(tree);
                 }
-                Ok(Self::Collect(collect::Collect::new_with(
+                Ok(Self::Collect(crate::collect(
                     Box::new(tree),
                     low as usize..=high as usize,
                     Some(low as _),

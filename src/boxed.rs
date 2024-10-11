@@ -33,12 +33,12 @@ impl<I> Generate for Boxed<I> {
 }
 
 impl<I> Boxed<I> {
-    pub(crate) fn new<G: Generate<Item = I> + 'static>(generator: G) -> Self
+    pub(crate) const fn new<G: Generate<Item = I> + 'static>(generator: Box<G>) -> Self
     where
         G::Shrink: 'static,
     {
         Self {
-            generator: Box::new(generator),
+            generator,
             generate: |generator, state| {
                 generator
                     .downcast_ref::<G>()

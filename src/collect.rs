@@ -2,23 +2,16 @@ use crate::{
     all,
     generate::{self, FullGenerate, Generate, State},
     primitive::{self, Direction, Full},
-    sample::Sample,
     shrink::Shrink,
 };
 use core::{marker::PhantomData, mem::replace, ops::RangeInclusive};
 
 #[derive(Debug)]
 pub struct Collect<I: ?Sized, C, F: ?Sized> {
-    _marker: PhantomData<F>,
+    pub(crate) _marker: PhantomData<F>,
     pub(crate) count: C,
-    pub(crate) minimum: usize,
+    pub(crate) minimum: Option<usize>,
     pub(crate) generator: I,
-}
-
-#[derive(Debug)]
-pub struct Generator<G, F: ?Sized> {
-    generators: Vec<G>,
-    _marker: PhantomData<F>,
 }
 
 #[derive(Debug)]
@@ -42,19 +35,7 @@ impl<G: Generate, F: FromIterator<G::Item>> Collect<G, RangeInclusive<usize>, F>
         Self {
             generator,
             count: 0..=generate::COUNT,
-            minimum: 0,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>> Collect<G, C, F> {
-    pub(crate) fn new_with(generator: G, count: C, minimum: Option<usize>) -> Self {
-        let minimum = minimum.unwrap_or_else(|| count.sample(0.0));
-        Self {
-            generator,
-            count,
-            minimum,
+            minimum: Some(0),
             _marker: PhantomData,
         }
     }
@@ -110,30 +91,11 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let count = self.count.generate(state).item();
         let shrinkers = Iterator::map(0..count, |_| self.generator.generate(state));
-        Shrinker::new(shrinkers, Some(self.minimum))
+        Shrinker::new(shrinkers, self.minimum)
     }
 
     fn constant(&self) -> bool {
         self.count.constant() && self.generator.constant()
-    }
-}
-
-impl<G: Generate, F: FromIterator<G::Item> + Extend<G::Item> + Default> Generate
-    for Generator<G, F>
-{
-    type Item = F;
-    type Shrink = Shrinker<G::Shrink, F>;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        let shrinkers = self
-            .generators
-            .iter()
-            .map(|generator| generator.generate(state));
-        Shrinker::new(shrinkers, Some(0))
-    }
-
-    fn constant(&self) -> bool {
-        self.generators.iter().all(G::constant)
     }
 }
 

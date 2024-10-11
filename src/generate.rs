@@ -1,4 +1,5 @@
 use crate::{
+    Sample,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -17,7 +18,6 @@ use crate::{
 };
 use core::{
     iter::{FromIterator, FusedIterator},
-    marker::PhantomData,
     ops::{self, RangeInclusive},
 };
 
@@ -105,29 +105,26 @@ pub trait Generate {
     fn boxed(self) -> Boxed<Self::Item>
     where
         Self: Sized + 'static,
-        Boxed<Self::Item>: Generate,
     {
-        Boxed::new(self)
+        crate::boxed(Box::new(self))
     }
 
     /// Maps generated [`Generate::Item`] to an arbitrary type `T` using the
     /// provided function `F`.
-    fn map<T, F: Fn(Self::Item) -> T>(self, map: F) -> Map<Self, F>
+    fn map<T, F: Fn(Self::Item) -> T + Clone>(self, map: F) -> Map<Self, F>
     where
         Self: Sized,
-        Map<Self, F>: Generate,
     {
-        Map(map, self)
+        crate::map(self, map)
     }
 
     /// Same as [`Generate::filter_with`] but with a predefined number of
     /// `retries`.
-    fn filter<F: Fn(&Self::Item) -> bool>(self, filter: F) -> Filter<Self, F>
+    fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generate,
     {
-        self.filter_with(COUNT, filter)
+        crate::filter(self, filter, COUNT)
     }
 
     /// Generates many [`Generate::Item`] with an increasingly large `size`
@@ -137,48 +134,47 @@ pub trait Generate {
     /// Since this [`Generate`] implementation is not guaranteed to succeed,
     /// the item type is changed to a [`Option<Generate::Item>`]
     /// where a [`None`] represents the failure to satisfy the filter.
-    fn filter_with<F: Fn(&Self::Item) -> bool>(self, retries: usize, filter: F) -> Filter<Self, F>
+    fn filter_with<F: Fn(&Self::Item) -> bool + Clone>(
+        self,
+        retries: usize,
+        filter: F,
+    ) -> Filter<Self, F>
     where
         Self: Sized,
-        Filter<Self, F>: Generate,
     {
-        Filter::new(self, filter, retries)
+        crate::filter(self, filter, retries)
     }
 
     /// Same as [`Generate::filter_map_with`] but with a predefined number of
     /// `retries`.
-    fn filter_map<T, F: Fn(Self::Item) -> Option<T>>(self, map: F) -> FilterMap<Self, F>
+    fn filter_map<T, F: Fn(Self::Item) -> Option<T> + Clone>(self, filter: F) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generate,
     {
-        self.filter_map_with(COUNT, map)
+        crate::filter_map(self, filter, COUNT)
     }
 
     /// Combines [`Generate::map`] and [`Generate::filter`] in a single
     /// [`Generate`] implementation where the map function is considered to
     /// satisfy the filter when a [`Some(T)`] is produced.
-    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T>>(
+    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T> + Clone>(
         self,
         retries: usize,
-        map: F,
+        filter: F,
     ) -> FilterMap<Self, F>
     where
         Self: Sized,
-        FilterMap<Self, F>: Generate,
     {
-        FilterMap::new(self, map, retries)
+        crate::filter_map(self, filter, retries)
     }
 
     /// Combines [`Generate::map`] and [`Generate::flatten`] in a single
     /// [`Generate`] implementation.
-    fn flat_map<G: Generate, F: Fn(Self::Item) -> G>(self, map: F) -> Flatten<Map<Self, F>>
+    fn flat_map<G: Generate, F: Fn(Self::Item) -> G + Clone>(self, map: F) -> Flatten<Map<Self, F>>
     where
         Self: Sized,
-        Map<Self, F>: Generate<Item = G>,
-        Flatten<Map<Self, F>>: Generate,
     {
-        self.map(map).flatten()
+        crate::flat_map(self, map)
     }
 
     /// Flattens the [`Generate::Item`], assuming that it implements
@@ -201,9 +197,8 @@ pub trait Generate {
     where
         Self: Sized,
         Self::Item: Generate,
-        Flatten<Self>: Generate,
     {
-        Flatten(self)
+        crate::flatten(self)
     }
 
     /// For a type `T` where [`Any<T>`] implements [`Generate`], the behavior
@@ -218,27 +213,24 @@ pub trait Generate {
     fn any(self) -> Any<Self>
     where
         Self: Sized,
-        Any<Self>: Generate,
     {
-        Any(self)
+        crate::any(self)
     }
 
     /// Generates `N` items and fills an array with it.
     fn array<const N: usize>(self) -> Array<Self, N>
     where
         Self: Sized,
-        Array<Self, N>: Generate,
     {
-        Array(self)
+        crate::array(self)
     }
 
     /// Same as [`Generate::collect_with`] but with a predefined `count`.
     fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, RangeInclusive<usize>, F>
     where
         Self: Sized,
-        Collect<Self, RangeInclusive<usize>, F>: Generate,
     {
-        Collect::new(self)
+        crate::collect(self, 0..=COUNT, Some(0))
     }
 
     /// Generates a variable number of items based on the provided `count`
@@ -250,9 +242,9 @@ pub trait Generate {
     ) -> Collect<Self, C, F>
     where
         Self: Sized,
-        Collect<Self, C, F>: Generate,
     {
-        Collect::new_with(self, count, None)
+        let minimum = count.sample(0.0);
+        crate::collect(self, count, Some(minimum))
     }
 
     /// Maps the current `size` of the generation process to a different one.
@@ -278,18 +270,16 @@ pub trait Generate {
     fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
-        Size<Self, F>: Generate,
     {
-        Size(self, map)
+        crate::size(self, map)
     }
 
     /// Same as [`Generate::dampen_with`] but with predefined arguments.
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
-        Dampen<Self>: Generate,
     {
-        self.dampen_with(1.0, 8, 8192)
+        crate::dampen(self, 1.0, 8, 8192)
     }
 
     /// Dampens the `size` (see [`Generate::size`] for more information about
@@ -309,16 +299,8 @@ pub trait Generate {
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
-        Dampen<Self>: Generate,
     {
-        assert!(pressure.is_finite());
-        assert!(pressure >= 0.0);
-        Dampen {
-            pressure,
-            deepest,
-            limit,
-            generator: self,
-        }
+        crate::dampen(self, pressure, deepest, limit)
     }
 
     /// Keeps the generated items intact through the shrinking process (i.e.
@@ -326,25 +308,22 @@ pub trait Generate {
     fn keep(self) -> Keep<Self>
     where
         Self: Sized,
-        Keep<Self>: Generate,
     {
-        Keep(self)
+        crate::keep(self)
     }
 
     fn unify<T>(self) -> Unify<Self, T>
     where
         Self: Sized,
-        Unify<Self, T>: Generate,
     {
-        Unify(PhantomData, self)
+        crate::unify(self)
     }
 
-    fn convert<T>(self) -> Convert<Self, T>
+    fn convert<T: From<Self::Item>>(self) -> Convert<Self, T>
     where
         Self: Sized,
-        Convert<Self, T>: Generate,
     {
-        Convert(PhantomData, self)
+        crate::convert(self)
     }
 }
 

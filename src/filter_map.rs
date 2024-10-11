@@ -5,25 +5,15 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct FilterMap<G: ?Sized, F> {
-    map: F,
-    retries: usize,
-    generator: G,
+    pub(crate) filter: F,
+    pub(crate) retries: usize,
+    pub(crate) generator: G,
 }
 
 #[derive(Debug, Clone)]
 pub struct Shrinker<S, F> {
     shrinker: Option<S>,
     map: F,
-}
-
-impl<G: Generate, T, F: Fn(G::Item) -> Option<T>> FilterMap<G, F> {
-    pub const fn new(generator: G, map: F, retries: usize) -> Self {
-        Self {
-            generator,
-            map,
-            retries,
-        }
-    }
 }
 
 impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for FilterMap<G, F> {
@@ -37,7 +27,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
             state.size = generate::size(i, self.retries, size.0..size.1);
             let inner = self.generator.generate(state);
             let item = inner.item();
-            if self.constant() || (self.map)(item).is_some() {
+            if self.constant() || (self.filter)(item).is_some() {
                 outer = Some(inner);
                 break;
             }
@@ -45,7 +35,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
         state.size = size;
         Shrinker {
             shrinker: outer,
-            map: self.map.clone(),
+            map: self.filter.clone(),
         }
     }
 
