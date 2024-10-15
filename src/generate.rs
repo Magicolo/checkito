@@ -3,6 +3,7 @@ use crate::{
     any::Any,
     array::Array,
     boxed::Boxed,
+    check::Sizes,
     collect::Collect,
     convert::Convert,
     dampen::Dampen,
@@ -26,7 +27,7 @@ pub(crate) const COUNT: usize = 1024;
 #[derive(Clone, Debug)]
 pub struct State {
     seed: u64,
-    pub(crate) size: (f64, f64),
+    pub(crate) size: Sizes,
     pub(crate) limit: u32,
     pub(crate) depth: u32,
     random: Random,
@@ -36,7 +37,7 @@ pub struct State {
 pub struct States {
     indices: ops::Range<usize>,
     count: usize,
-    size: ops::Range<f64>,
+    size: Sizes,
     seed: u64,
 }
 
@@ -328,9 +329,9 @@ pub trait Generate {
 }
 
 impl State {
-    pub(crate) fn new(index: usize, count: usize, size: ops::Range<f64>, seed: u64) -> Self {
+    pub(crate) fn new<S: Into<Sizes>>(index: usize, count: usize, size: S, seed: u64) -> Self {
         Self {
-            size: self::size(index, count, size),
+            size: self::size(index, count, size.into()),
             depth: 0,
             limit: 0,
             seed,
@@ -339,7 +340,7 @@ impl State {
     }
 
     pub const fn size(&self) -> f64 {
-        self.size.0
+        self.size.start()
     }
 
     pub const fn seed(&self) -> u64 {
@@ -352,11 +353,11 @@ impl State {
 }
 
 impl States {
-    pub fn new(count: usize, size: ops::Range<f64>, seed: Option<u64>) -> Self {
+    pub fn new<S: Into<Sizes>>(count: usize, size: S, seed: Option<u64>) -> Self {
         Self {
             indices: 0..count,
             count,
-            size,
+            size: size.into(),
             seed: seed.unwrap_or_else(random::seed),
         }
     }
@@ -369,7 +370,7 @@ impl Iterator for States {
         Some(State::new(
             self.indices.next()?,
             self.count,
-            self.size.clone(),
+            self.size,
             self.seed,
         ))
     }
@@ -386,7 +387,7 @@ impl Iterator for States {
         Some(State::new(
             self.indices.nth(n)?,
             self.count,
-            self.size.clone(),
+            self.size,
             self.seed,
         ))
     }
@@ -395,7 +396,7 @@ impl Iterator for States {
         Some(State::new(
             self.indices.next()?,
             self.count,
-            self.size.clone(),
+            self.size,
             self.seed,
         ))
     }
@@ -412,7 +413,7 @@ impl DoubleEndedIterator for States {
         Some(State::new(
             self.indices.next_back()?,
             self.count,
-            self.size.clone(),
+            self.size,
             self.seed,
         ))
     }
@@ -421,7 +422,7 @@ impl DoubleEndedIterator for States {
         Some(State::new(
             self.indices.nth_back(n)?,
             self.count,
-            self.size.clone(),
+            self.size,
             self.seed,
         ))
     }
@@ -429,19 +430,15 @@ impl DoubleEndedIterator for States {
 
 impl FusedIterator for States {}
 
-pub(crate) fn size(index: usize, count: usize, mut size: ops::Range<f64>) -> (f64, f64) {
-    size.start = size.start.clamp(0.0, 1.0);
-    size.end = size.end.clamp(0.0, 1.0);
-
+pub(crate) fn size(index: usize, count: usize, size: Sizes) -> Sizes {
+    let (start, end) = (size.start(), size.end());
     if count <= 1 {
-        (size.end, size.end)
+        Sizes::from(end)
     } else {
-        let range = size.end - size.start;
-        assert!(range >= 0.0);
-        assert!(index <= count);
+        let range = end - start;
         // This size calculation ensures that 25% of samples are fully sized.
-        let ratio = (index as f64 / count as f64 * 1.25).clamp(0.0, 1.0);
-        (size.start + ratio * range, size.end)
+        let ratio = index as f64 / count as f64 * 1.25;
+        Sizes::from(start + ratio * range..=end)
     }
 }
 

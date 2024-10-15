@@ -24,7 +24,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
         let mut outer = None;
         let size = state.size;
         for i in 0..self.retries {
-            state.size = generate::size(i, self.retries, size.0..size.1);
+            state.size = generate::size(i, self.retries, size);
             let inner = self.generator.generate(state);
             let item = inner.item();
             if self.constant() || (self.filter)(&item) {

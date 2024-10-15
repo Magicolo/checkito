@@ -1,19 +1,21 @@
-use crate::generate::{Generate, State};
+use crate::{
+    check::Sizes,
+    generate::{Generate, State},
+};
 
 #[derive(Debug, Clone)]
-pub struct Size<G, F = fn(f64) -> f64>(pub(crate) G, pub(crate) F);
+pub struct Size<G, F>(pub(crate) G, pub(crate) F);
 
-impl<G: Generate, F: Fn(f64) -> f64> Generate for Size<G, F> {
+impl<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S> Generate for Size<G, F> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let old = state.size.0;
-        let new = self.1(old).clamp(0.0, 1.0);
-        assert!(new.is_finite());
-        state.size.0 = new;
+        let old = state.size;
+        let new = self.1(old).into();
+        state.size = new;
         let shrinker = self.0.generate(state);
-        state.size.0 = old;
+        state.size = old;
         shrinker
     }
 

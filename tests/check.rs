@@ -112,8 +112,10 @@ fn compiles_with_generate_seed() {}
 #[check(generate.size = 0.25)]
 fn compiles_with_generate_size_constant() {}
 
-#[check(generate.size = 0.25..0.75)]
+#[check(generate.size = 0.25..=0.75)]
 fn compiles_with_generate_size_range() {}
+#[check(generate.size = ..)]
+fn compiles_with_generate_size_full_range() {}
 
 #[check(generate.items = false)]
 fn compiles_with_generate_items() {}

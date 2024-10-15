@@ -1,6 +1,19 @@
-use crate::{Generate, generate::State, prove::Prove, random, shrink::Shrink};
-use core::{fmt, mem::replace, ops::Range, panic::AssertUnwindSafe};
+use crate::{Generate, generate::State, nudge::Nudge, prove::Prove, random, shrink::Shrink};
+use core::{
+    fmt,
+    mem::replace,
+    ops::{
+        Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
+    },
+    panic::AssertUnwindSafe,
+};
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
+
+#[derive(Clone, Copy, Debug)]
+pub struct Sizes {
+    start: f64,
+    end: f64,
+}
 
 /// Bounds the generation process.
 #[derive(Clone, Debug)]
@@ -12,7 +25,7 @@ pub struct Generates {
     /// Range of sizes that will be gradually traversed while generating values.
     ///
     /// Defaults to `0.0..1.0`.
-    pub size: Range<f64>,
+    pub size: Sizes,
     /// Maximum number of items that will be generated.
     ///
     /// Setting this to `0` will cause the [`Checks`] to do nothing.
@@ -87,6 +100,60 @@ pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     machine: Machine<G::Shrink, E>,
     check: F,
 }
+
+impl Sizes {
+    pub const fn start(&self) -> f64 {
+        self.start
+    }
+
+    pub const fn end(&self) -> f64 {
+        self.end
+    }
+}
+
+impl From<RangeFull> for Sizes {
+    fn from(_: RangeFull) -> Self {
+        Sizes::from(0.0..=1.0)
+    }
+}
+
+impl From<f64> for Sizes {
+    fn from(value: f64) -> Self {
+        Sizes::from(value..=value)
+    }
+}
+
+macro_rules! range {
+    ($range: ident) => {
+        impl From<$range<f64>> for Sizes {
+            fn from(value: $range<f64>) -> Self {
+                let start = match value.start_bound() {
+                    Bound::Included(&value) => value,
+                    Bound::Excluded(&value) => value.nudge(-1.0),
+                    Bound::Unbounded => 0.0,
+                }
+                .clamp(0.0, 1.0);
+                let end = match value.end_bound() {
+                    Bound::Included(&value) => value,
+                    Bound::Excluded(&value) => value.nudge(1.0),
+                    Bound::Unbounded => f64::MAX,
+                }
+                .clamp(0.0, 1.0);
+                assert!(start.is_finite() && end.is_finite() && start <= end);
+                Self {
+                    start: start.clamp(0.0, 1.0),
+                    end: end.clamp(0.0, 1.0),
+                }
+            }
+        }
+    };
+}
+
+range!(Range);
+range!(RangeInclusive);
+range!(RangeTo);
+range!(RangeToInclusive);
+range!(RangeFrom);
 
 enum Machine<S, E> {
     Generate {
@@ -186,7 +253,7 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
                 items: true,
                 count: COUNT,
                 seed,
-                size: 0.0..1.0,
+                size: (0.0..=1.0).into(),
             },
             shrink: Shrinks {
                 count: usize::MAX,
@@ -230,7 +297,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     let mut state = State::new(
                         index,
                         self.checker.generate.count,
-                        self.checker.generate.size.clone(),
+                        self.checker.generate.size,
                         self.checker.generate.seed,
                     );
                     let shrinker = self.checker.generator.generate(&mut state);
@@ -474,17 +541,7 @@ pub mod help {
     use core::{
         any::type_name,
         fmt::{self, Arguments},
-        ops::Range,
-        time::Duration,
     };
-
-    pub trait IntoRange<T> {
-        fn range(self) -> Range<T>;
-    }
-
-    pub trait IntoDuration {
-        fn duration(self) -> Duration;
-    }
 
     struct Colors {
         red: &'static str,
@@ -674,52 +731,6 @@ pub mod help {
         }
         hook::end();
     }
-
-    impl<T> IntoRange<T> for Range<T> {
-        fn range(self) -> Range<T> {
-            self
-        }
-    }
-
-    macro_rules! range {
-        ($($from: ty),*) => {
-            $(
-                impl IntoRange<$from> for $from {
-                    fn range(self) -> Range<$from> {
-                        self..self
-                    }
-                }
-            )*
-        };
-    }
-    range!(
-        u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, char, bool
-    );
-
-    impl IntoDuration for f32 {
-        fn duration(self) -> Duration {
-            Duration::from_secs_f32(self)
-        }
-    }
-
-    impl IntoDuration for f64 {
-        fn duration(self) -> Duration {
-            Duration::from_secs_f64(self)
-        }
-    }
-
-    macro_rules! duration {
-        ($($from: ty),*) => {
-            $(
-                impl IntoDuration for $from {
-                    fn duration(self) -> Duration {
-                        Duration::from_secs(self as _)
-                    }
-                }
-            )*
-        };
-    }
-    duration!(u8, u16, u32, u64, u128, usize);
 }
 
 mod hook {
@@ -794,7 +805,7 @@ mod environment {
 
         pub fn update<G>(checker: &mut Checker<'_, G>) {
             if let Some(value) = size() {
-                checker.generate.size = value..value;
+                checker.generate.size = (value..=value).into();
             }
             if let Some(value) = count() {
                 checker.generate.count = value;

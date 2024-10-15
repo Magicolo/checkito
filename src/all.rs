@@ -26,7 +26,7 @@ pub(crate) fn shrink<S: Shrink, I: AsMut<[S]> + Clone>(
     }
 }
 
-pub mod array {
+mod array {
     use super::*;
     use core::array;
 
@@ -72,7 +72,7 @@ pub mod array {
     }
 }
 
-pub mod slice {
+mod slice {
     use super::*;
 
     impl<G: Generate> Generate for [G] {
@@ -111,7 +111,7 @@ pub mod slice {
     }
 }
 
-pub mod vector {
+mod vector {
     use super::*;
 
     impl<G: Generate> Generate for Vec<G> {

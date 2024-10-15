@@ -303,7 +303,7 @@ impl Parse for Check {
                                 continue;
                             }
                             Key::GenerateSize => {
-                                quote_spanned!(right.span() => ::checkito::check::help::IntoRange::<f64>::range(#right))
+                                quote_spanned!(right.span() => ::checkito::check::Sizes::from(#right))
                             }
                             _ => right.to_token_stream(),
                         };

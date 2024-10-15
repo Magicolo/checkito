@@ -1,9 +1,10 @@
 use crate::{
-    Generate, boxed, check,
+    Generate, boxed,
+    check::{self, Sizes},
     generate::{State, States},
     random,
 };
-use core::{iter, ops};
+use core::iter;
 
 pub trait Shrink: Clone {
     type Item;
@@ -64,12 +65,12 @@ impl<G: Generate + ?Sized> Clone for Shrinkers<'_, G> {
 
 impl<'a, G: Generate + ?Sized> From<&'a G> for Shrinkers<'a, G> {
     fn from(value: &'a G) -> Self {
-        Shrinkers::new(value, check::COUNT, 0.0..1.0, None)
+        Shrinkers::new(value, check::COUNT, .., None)
     }
 }
 
 impl<'a, G: Generate + ?Sized> Shrinkers<'a, G> {
-    pub fn new(generator: &'a G, count: usize, size: ops::Range<f64>, seed: Option<u64>) -> Self {
+    pub fn new<S: Into<Sizes>>(generator: &'a G, count: usize, size: S, seed: Option<u64>) -> Self {
         Shrinkers {
             generator,
             states: States::new(count, size, seed),
@@ -82,7 +83,7 @@ pub(crate) fn shrinker<G: Generate + ?Sized>(
     size: f64,
     seed: Option<u64>,
 ) -> G::Shrink {
-    let mut state = State::new(0, 1, size..size, seed.unwrap_or_else(random::seed));
+    let mut state = State::new(0, 1, size, seed.unwrap_or_else(random::seed));
     generator.generate(&mut state)
 }
 
