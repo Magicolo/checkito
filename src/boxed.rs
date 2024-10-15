@@ -2,21 +2,31 @@ use crate::{
     generate::{Generate, State},
     shrink::Shrink,
 };
-use core::any::Any;
+use core::{any::Any, fmt};
 
-#[derive(Debug)]
 pub struct Boxed<I> {
     generator: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
     constant: fn(&dyn Any) -> bool,
 }
 
-#[derive(Debug)]
 pub struct Shrinker<I> {
     shrinker: Box<dyn Any>,
     clone: fn(&dyn Any) -> Box<dyn Any>,
     item: fn(&dyn Any) -> I,
     shrink: fn(&mut dyn Any) -> Option<Box<dyn Any>>,
+}
+
+impl<I> fmt::Debug for Boxed<I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Boxed").field(&self.generator).finish()
+    }
+}
+
+impl<I> fmt::Debug for Shrinker<I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Shrinker").field(&self.shrinker).finish()
+    }
 }
 
 impl<I> Generate for Boxed<I> {
@@ -33,12 +43,12 @@ impl<I> Generate for Boxed<I> {
 }
 
 impl<I> Boxed<I> {
-    pub(crate) const fn new<G: Generate<Item = I> + 'static>(generator: Box<G>) -> Self
+    pub(crate) fn new<G: Generate<Item = I> + 'static>(generator: G) -> Self
     where
         G::Shrink: 'static,
     {
         Self {
-            generator,
+            generator: Box::new(generator),
             generate: |generator, state| {
                 generator
                     .downcast_ref::<G>()
