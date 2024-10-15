@@ -195,8 +195,14 @@ fn panics_with_option_unwrap(_: usize) {}
 mod regex {
     use super::*;
 
-    #[check(regex!("[0-9]{5}"))]
+    #[check(regex("[0-9]{5}", None).unwrap())]
     fn compiles_with_regex_input(value: String) {
+        assert!(value.len() >= 5);
+        assert!(value.chars().all(|value| value.is_numeric()));
+    }
+
+    #[check(regex!("[0-9]{5}"))]
+    fn compiles_with_regex_macro_input(value: String) {
         assert!(value.len() >= 5);
         assert!(value.chars().all(|value| value.is_numeric()));
     }

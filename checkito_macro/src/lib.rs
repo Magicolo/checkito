@@ -10,9 +10,12 @@ mod regex;
 pub fn regex(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use quote::quote;
     use syn::parse_macro_input;
-    let regex::Regex(string) = parse_macro_input!(input);
-    let token = string.token();
-    quote!(::checkito::regex::Regex::new(#token, None).unwrap()).into()
+    let regex::Regex(pattern, repeats) = parse_macro_input!(input);
+    let repeats = match repeats {
+        Some(repeats) => quote!({ #repeats }.into()),
+        None => quote!(None),
+    };
+    quote!(::checkito::regex(#pattern, #repeats).unwrap()).into()
 }
 
 #[cfg(feature = "check")]

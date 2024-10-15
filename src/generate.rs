@@ -1,5 +1,5 @@
 use crate::{
-    Sample,
+    COLLECT, RETRIES, Sample,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -21,9 +21,6 @@ use core::{
     iter::{FromIterator, FusedIterator},
     ops::{self, RangeInclusive},
 };
-
-pub(crate) const COLLECT: usize = 1024;
-pub(crate) const RETRIES: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct State {

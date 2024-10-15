@@ -41,3 +41,8 @@ pub use regex::Regex;
 pub use same::Same;
 pub use sample::Sample;
 pub use shrink::Shrink;
+
+const COLLECT: usize = 1024;
+const RETRIES: usize = 256;
+#[cfg(feature = "regex")]
+const REPEATS: u32 = 64;

@@ -129,6 +129,14 @@ pub const fn convert<G: Generate, T: From<G::Item>>(generator: G) -> Convert<G, 
     Convert(PhantomData, generator)
 }
 
+#[cfg(feature = "regex")]
+use crate::regex::{Error, Regex};
+#[cfg(feature = "regex")]
+#[inline]
+pub fn regex(pattern: &str, repeats: Option<u32>) -> Result<Regex, Error> {
+    Regex::new(pattern, repeats)
+}
+
 /// From `MIN..=MAX`.
 #[inline]
 pub const fn number<T: Number>() -> impl Generate<Item = T> {

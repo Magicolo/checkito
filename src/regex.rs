@@ -1,7 +1,7 @@
 #![cfg(feature = "regex")]
 
 use crate::{
-    all,
+    REPEATS, all,
     any::{self, Any},
     collect::{self},
     generate::{Generate, State},
@@ -43,9 +43,9 @@ impl fmt::Debug for Error {
 }
 
 impl Regex {
-    pub fn new(pattern: &str, repeats: Option<u32>) -> Result<Self, Error> {
+    pub(crate) fn new(pattern: &str, repeats: Option<u32>) -> Result<Self, Error> {
         let hir = Parser::new().parse(pattern)?;
-        Ok(Regex::from_hir(hir, repeats.unwrap_or(64)))
+        Ok(Regex::from_hir(hir, repeats.unwrap_or(REPEATS)))
     }
 }
 

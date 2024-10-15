@@ -1,6 +1,6 @@
 use crate::{
-    all,
-    generate::{self, FullGenerate, Generate, State},
+    COLLECT, all,
+    generate::{FullGenerate, Generate, State},
     primitive::{self, Direction, Full},
     shrink::Shrink,
 };
@@ -34,7 +34,7 @@ impl<G: Generate, F: FromIterator<G::Item>> Collect<G, RangeInclusive<usize>, F>
     pub(crate) const fn new(generator: G) -> Self {
         Self {
             generator,
-            count: 0..=generate::COLLECT,
+            count: 0..=COLLECT,
             minimum: Some(0),
             _marker: PhantomData,
         }
