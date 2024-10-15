@@ -66,13 +66,15 @@ fn is_in_range(value: usize) -> bool {
     value <= 100
 }
 
-/// Regexes can be used and validated at compile-time with the [`regex!`] macro.
+/// Regexes can be used and validated either dynamically using the [`regex`]
+/// generator or at compile-time with the [`regex!`] macro.
 ///
 /// Usual panicking assertions can be used in the body of the checking function
 /// since a panic is considered a failed property.
-#[check(regex!("[a-zA-Z0-9_]*"))]
-fn is_ascii(value: String) {
-    assert!(value.is_ascii());
+#[check(regex("{", None).ok(), regex!("[a-zA-Z0-9_]*"))]
+fn is_ascii(invalid: Option<String>, valid: String) {
+    assert!(invalid.is_none());
+    assert!(valid.is_ascii());
 }
 
 /// The `_` and `..` operators can be used to infer the [`FullGenerate`]
