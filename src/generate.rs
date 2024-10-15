@@ -22,7 +22,8 @@ use core::{
     ops::{self, RangeInclusive},
 };
 
-pub(crate) const COUNT: usize = 1024;
+pub(crate) const COLLECT: usize = 1024;
+pub(crate) const RETRIES: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -125,7 +126,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::filter(self, filter, COUNT)
+        crate::filter(self, filter, RETRIES)
     }
 
     /// Generates many [`Generate::Item`] with an increasingly large `size`
@@ -152,7 +153,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::filter_map(self, filter, COUNT)
+        crate::filter_map(self, filter, RETRIES)
     }
 
     /// Combines [`Generate::map`] and [`Generate::filter`] in a single
@@ -231,7 +232,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::collect(self, 0..=COUNT, Some(0))
+        crate::collect(self, 0..=COLLECT, Some(0))
     }
 
     /// Generates a variable number of items based on the provided `count`
@@ -268,7 +269,7 @@ pub trait Generate {
     ///
     /// Useful to nullify the sizing of items (`self.size(|_, _| 1.0)` will
     /// always produces items of full `size`) or to attenuate the `size`.
-    fn size<F: Fn(f64) -> f64>(self, map: F) -> Size<Self, F>
+    fn size<S: Into<Sizes>, F: Fn(Sizes) -> S>(self, map: F) -> Size<Self, F>
     where
         Self: Sized,
     {

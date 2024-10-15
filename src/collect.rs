@@ -34,7 +34,7 @@ impl<G: Generate, F: FromIterator<G::Item>> Collect<G, RangeInclusive<usize>, F>
     pub(crate) const fn new(generator: G) -> Self {
         Self {
             generator,
-            count: 0..=generate::COUNT,
+            count: 0..=generate::COLLECT,
             minimum: Some(0),
             _marker: PhantomData,
         }

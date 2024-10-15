@@ -13,7 +13,6 @@ use regex_syntax::{
     Parser,
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
 };
-use std::string::FromUtf8Error;
 
 #[derive(Debug, Clone)]
 pub enum Regex {
@@ -35,13 +34,7 @@ pub enum Shrinker {
 }
 
 #[derive(Clone)]
-pub struct Error(Inner);
-
-#[derive(Clone)]
-enum Inner {
-    Regex(Box<regex_syntax::Error>),
-    Utf8(FromUtf8Error),
-}
+pub struct Error(Box<regex_syntax::Error>);
 
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -49,31 +42,16 @@ impl fmt::Debug for Error {
     }
 }
 
-impl fmt::Debug for Inner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Inner::Regex(error) => write!(f, "Regex({error})"),
-            Inner::Utf8(error) => write!(f, "Utf8({error})"),
-        }
-    }
-}
-
 impl Regex {
     pub fn new(pattern: &str, repeats: Option<u32>) -> Result<Self, Error> {
         let hir = Parser::new().parse(pattern)?;
-        Regex::try_from_hir(hir, repeats.unwrap_or(64))
+        Ok(Regex::from_hir(hir, repeats.unwrap_or(64)))
     }
 }
 
 impl From<regex_syntax::Error> for Error {
     fn from(value: regex_syntax::Error) -> Self {
-        Error(Inner::Regex(Box::new(value)))
-    }
-}
-
-impl From<FromUtf8Error> for Error {
-    fn from(value: FromUtf8Error) -> Self {
-        Error(Inner::Utf8(value))
+        Error(Box::new(value))
     }
 }
 
@@ -94,63 +72,66 @@ impl Regex {
         matches!(self, Self::Empty)
     }
 
-    fn try_from_iter(
-        results: impl IntoIterator<Item = Result<Regex, Error>>,
+    fn from_iter(
+        trees: impl IntoIterator<Item = Regex>,
         merge: impl FnOnce(Box<[Regex]>) -> Regex,
-    ) -> Result<Regex, Error> {
-        let mut trees = Vec::new();
+    ) -> Regex {
+        let mut buffer = Vec::new();
         let mut last = None;
-        for result in results {
-            match result? {
-                Self::Empty => {}
-                tree => trees.extend(last.replace(tree)),
+        for tree in trees {
+            if !tree.is_empty() {
+                buffer.extend(last.replace(tree));
             }
         }
-        Ok(match last {
-            Some(tree) if trees.is_empty() => tree,
+        match last {
+            Some(tree) if buffer.is_empty() => tree,
             Some(tree) => {
-                trees.push(tree);
-                merge(trees.into_boxed_slice())
+                buffer.push(tree);
+                merge(buffer.into_boxed_slice())
             }
             None => Self::Empty,
-        })
+        }
     }
 
-    fn try_from_hir(hir: Hir, repeats: u32) -> Result<Self, Error> {
+    fn from_hir(hir: Hir, repeats: u32) -> Self {
         match hir.into_kind() {
-            HirKind::Empty | HirKind::Look(_) => Ok(Self::Empty),
-            HirKind::Literal(literal) => Ok(Self::Text(String::from_utf8(literal.0.to_vec())?)),
-            HirKind::Capture(Capture { sub, .. }) => Self::try_from_hir(*sub, repeats),
+            HirKind::Empty | HirKind::Look(_) => Self::Empty,
+            HirKind::Literal(literal) => {
+                String::from_utf8(literal.0.to_vec()).map_or(Self::Empty, Self::Text)
+            }
+            HirKind::Capture(Capture { sub, .. }) => Self::from_hir(*sub, repeats),
             HirKind::Repetition(Repetition { min, max, sub, .. }) => {
-                let tree = Self::try_from_hir(*sub, repeats / 2)?;
+                let tree = Self::from_hir(*sub, repeats / 2);
                 if tree.is_empty() {
-                    return Ok(Self::Empty);
+                    return Self::Empty;
                 }
                 let low = min;
                 let high = max.unwrap_or(repeats.max(low));
                 if low == 1 && high == 1 {
-                    return Ok(tree);
+                    return tree;
                 }
-                Ok(Self::Collect(crate::collect(
+                Self::Collect(crate::collect(
                     Box::new(tree),
                     low as usize..=high as usize,
                     Some(low as _),
-                )))
+                ))
             }
-            HirKind::Class(Class::Unicode(class)) => Self::try_from_iter(
-                class.ranges().iter().map(|range| Ok(Self::from(range))),
-                |trees| Self::Any(Any(trees)),
-            ),
-            HirKind::Class(Class::Bytes(class)) => Self::try_from_iter(
-                class.ranges().iter().map(|range| Ok(Self::from(range))),
-                |trees| Self::Any(Any(trees)),
-            ),
-            HirKind::Concat(hirs) => Self::try_from_iter(
-                hirs.into_iter().map(|hir| Self::try_from_hir(hir, repeats)),
+            HirKind::Class(Class::Unicode(class)) => {
+                Self::from_iter(class.ranges().iter().map(Self::from), |trees| {
+                    Self::Any(Any(trees))
+                })
+            }
+            HirKind::Class(Class::Bytes(class)) => {
+                Self::from_iter(class.ranges().iter().map(Self::from), |trees| {
+                    Self::Any(Any(trees))
+                })
+            }
+            HirKind::Concat(hirs) => Self::from_iter(
+                hirs.into_iter().map(|hir| Self::from_hir(hir, repeats)),
                 Self::All,
             ),
-            HirKind::Alternation(hirs) => Self::try_from_iter(
-                hirs.into_iter().map(|hir| Self::try_from_hir(hir, repeats)),
+            HirKind::Alternation(hirs) => Self::from_iter(
+                hirs.into_iter().map(|hir| Self::from_hir(hir, repeats)),
                 |trees| Self::Any(Any(trees)),
             ),
         }

@@ -1,7 +1,7 @@
 use crate::{
-    Generate, Same, any::Any, array::Array, boxed::Boxed, collect::Collect, convert::Convert,
-    dampen::Dampen, filter::Filter, filter_map::FilterMap, flatten::Flatten, keep::Keep, map::Map,
-    primitive::number::Number, shrink::Shrinker, size::Size, unify::Unify,
+    Generate, Same, any::Any, array::Array, boxed::Boxed, check::Sizes, collect::Collect,
+    convert::Convert, dampen::Dampen, filter::Filter, filter_map::FilterMap, flatten::Flatten,
+    keep::Keep, map::Map, primitive::number::Number, shrink::Shrinker, size::Size, unify::Unify,
 };
 use core::marker::PhantomData;
 
@@ -97,7 +97,10 @@ pub const fn collect<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::
 }
 
 #[inline]
-pub const fn size<G: Generate, F: Fn(f64) -> f64>(generator: G, map: F) -> Size<G, F> {
+pub const fn size<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S>(
+    generator: G,
+    map: F,
+) -> Size<G, F> {
     Size(generator, map)
 }
 
