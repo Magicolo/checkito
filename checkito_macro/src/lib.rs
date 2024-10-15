@@ -11,6 +11,7 @@ pub fn regex(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use quote::quote;
     use syn::parse_macro_input;
     let regex::Regex(pattern, repeats) = parse_macro_input!(input);
+    let pattern = pattern.token();
     let repeats = match repeats {
         Some(repeats) => quote!({ #repeats }.into()),
         None => quote!(None),
