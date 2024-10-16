@@ -23,12 +23,14 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
         let size = state.size;
-        for i in 0..self.retries {
+        for i in 0..=self.retries {
             state.size = generate::size(i, self.retries, size);
             let inner = self.generator.generate(state);
             let item = inner.item();
-            if self.constant() || (self.filter)(&item) {
+            if (self.filter)(&item) {
                 outer = Some(inner);
+                break;
+            } else if self.constant() {
                 break;
             }
         }
@@ -40,7 +42,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     }
 
     fn constant(&self) -> bool {
-        self.retries == 0 || self.generator.constant()
+        self.generator.constant()
     }
 }
 

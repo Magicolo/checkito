@@ -118,7 +118,7 @@ fn person_has_valid_name_and_is_major(person: Person) {
 ///
 /// The [`Generate::any`] combinator chooses from its inputs. The produced
 /// `Or<..>` preserves the information about the choice but here, it can be
-/// simply collapsed using `Or<..>::into::<T>()`.
+/// simply collapsed using `unify<T>()`.
 #[test]
 fn has_even_hundred() {
     (0..100, 200..300, 400..500)
