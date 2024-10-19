@@ -735,14 +735,22 @@ pub mod help {
 
 mod hook {
     use core::cell::Cell;
-    use std::panic::{self, PanicInfo};
+    use std::panic;
 
-    type Handle = Box<dyn Fn(&PanicInfo) + 'static + Sync + Send>;
+    #[allow(deprecated)]
+    type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
     pub fn begin() {
         HOOK.with(|cell| cell.set(Some(panic::take_hook())));
-        panic::set_hook(Box::new(handle));
+        panic::set_hook(Box::new(|panic| {
+            HOOK.with(|cell| {
+                if let Some(hook) = cell.replace(None) {
+                    hook(panic);
+                    cell.set(Some(hook));
+                }
+            });
+        }));
     }
 
     pub fn silent<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
@@ -767,15 +775,6 @@ mod hook {
     pub fn panic() -> ! {
         end();
         panic!();
-    }
-
-    fn handle(panic: &PanicInfo) {
-        HOOK.with(|cell| {
-            if let Some(hook) = cell.replace(None) {
-                hook(panic);
-                cell.set(Some(hook));
-            }
-        });
     }
 }
 
