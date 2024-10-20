@@ -150,13 +150,13 @@ fn person_has_valid_name_and_is_major(person: Person) {
     assert!(person.age >= 18);
 }
 
-/// The `#[check]` attribute essentially expands to a check to [`Check::check`]
-/// with pretty printing. For some more complex scenarios, it becomes more
-/// convenient to simply call the [`ChecK::check`] manually.
+/// The `#[check]` attribute essentially expands to a call to [`Check::check`]
+/// with pretty printing. For some more complex scenarios, it may become more
+/// convenient to simply call the [`Check::check`] manually.
 ///
 /// The [`Generate::any`] combinator chooses from its inputs. The produced
 /// `Or<..>` preserves the information about the choice but here, it can be
-/// simply collapsed using `unify<T>()`.
+/// simply collapsed using [`Generate::unify<T>`].
 #[test]
 fn has_even_hundred() {
     (0..100, 200..300, 400..500)
