@@ -594,21 +594,21 @@ pub mod help {
             check,
             color,
             verbose,
-            |prefix, item| {
+            |prefix, pass| {
                 println!(
                     "{prefix} {{ item: {:?}, size: {}, proof: {:?} }}",
-                    &item.item,
-                    item.size(),
-                    &item.proof,
+                    &pass.item,
+                    pass.size(),
+                    &pass.proof,
                 )
             },
-            |prefix, error| {
+            |prefix, fail| {
                 eprintln!(
                     "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
-                    &error.item,
-                    error.seed(),
-                    error.size(),
-                    error.message(),
+                    &fail.item,
+                    fail.seed(),
+                    fail.size(),
+                    fail.message(),
                 )
             },
         );
@@ -632,8 +632,8 @@ pub mod help {
             check,
             color,
             verbose,
-            |prefix, item| println!("{prefix} {item:?}"),
-            |prefix, error| eprintln!("{prefix} {error:?}"),
+            |prefix, pass| println!("{prefix} {pass:?}"),
+            |prefix, fail| eprintln!("{prefix} {fail:?}"),
         );
     }
 
@@ -651,20 +651,20 @@ pub mod help {
             check,
             color,
             verbose,
-            |prefix, item| {
+            |prefix, pass| {
                 println!(
                     "{prefix} {{ type: {}, seed: {}, size: {} }}",
                     type_name::<G::Item>(),
-                    item.seed(),
-                    item.size(),
+                    pass.seed(),
+                    pass.size(),
                 )
             },
-            |prefix, error| {
+            |prefix, fail| {
                 eprintln!(
                     "{prefix} {{ type: {}, seed: {}, size: {} }}",
                     type_name::<G::Item>(),
-                    error.seed(),
-                    error.size(),
+                    fail.seed(),
+                    fail.size(),
                 )
             },
         );
@@ -737,6 +737,7 @@ mod hook {
     use core::cell::Cell;
     use std::panic;
 
+    /// For pre rust 1.81 support, use the deprecated type [`panic::PanicInfo`].
     #[allow(deprecated)]
     type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
