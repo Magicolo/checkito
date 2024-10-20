@@ -13,38 +13,50 @@ jobs:
       image: ghcr.io/magicolo/rust
     steps:
     - uses: actions/checkout@v4
-    - run: cargo hack build --release --lib --bins --benches --tests --verbose --feature-powerset
-    - run: cargo hack build --release --examples --verbose
+    - run: |
+        cargo hack build --release --lib --bins --benches --tests --verbose --feature-powerset
+        cargo hack build --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
+        cargo hack build --release --examples --verbose
     - working-directory: checkito_macro
-      run: cargo hack build --release --all-targets --verbose --feature-powerset
+      run: |
+        cargo hack build --release --all-targets --verbose --feature-powerset
+        cargo hack build --release --all-targets --verbose --feature-powerset --rust-version
   test:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
     - uses: actions/checkout@v4
-    - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
-    - run: cargo hack test --release --examples --verbose
-    - run: cargo hack test --release --doc --verbose --feature-powerset
+    - run: |
+        cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
+        cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
+        cargo hack test --release --doc --verbose --feature-powerset
+        cargo hack test --release --examples --verbose
     - working-directory: checkito_macro
-      run: cargo hack test --release --all-targets --verbose --feature-powerset
+      run: |
+        cargo hack test --release --all-targets --verbose --feature-powerset
+        cargo hack test --release --all-targets --verbose --feature-powerset --rust-version
   clippy:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
     - uses: actions/checkout@v4
-    - run: cargo hack clippy --release --lib --bins --benches --tests --verbose --feature-powerset -- --deny warnings
-    - run: cargo hack clippy --release --examples --verbose -- --deny warnings
+    - run: |
+        cargo hack clippy --release --lib --bins --benches --tests --verbose --feature-powerset -- --deny warnings
+        cargo hack clippy --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version -- --deny warnings
+        cargo hack clippy --release --examples --verbose -- --deny warnings
     - working-directory: checkito_macro
-      run: cargo hack clippy --release --all-targets --verbose --feature-powerset -- --deny warnings
+      run: |
+        cargo hack clippy --release --all-targets --verbose --feature-powerset -- --deny warnings
+        cargo hack clippy --release --all-targets --verbose --feature-powerset --rust-version -- --deny warnings
   doc:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
     - uses: actions/checkout@v4
-    - run: cargo hack doc --release --verbose --feature-powerset
+    - run: cargo hack doc --no-deps --release --verbose --feature-powerset
     - working-directory: checkito_macro
       run: cargo hack doc --no-deps --release --verbose --feature-powerset
   semver:

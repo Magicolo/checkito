@@ -20,7 +20,7 @@ regex = ["regex-syntax/unicode"]
 check = []
 
 [dependencies]
-syn = { version = "2.0.79", features = [
+syn = { version = "2.0.82", features = [
     "proc-macro",
     "parsing",
     "full",
