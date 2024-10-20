@@ -73,8 +73,8 @@ pub const fn filter_map<G: Generate, T, F: Fn(G::Item) -> Option<T> + Clone>(
 }
 
 #[inline]
-pub fn boxed<G: Generate + 'static>(generator: G) -> Boxed<G::Item> {
-    Boxed::new(Box::new(generator))
+pub fn boxed<G: Generate + 'static>(generator: Box<G>) -> Boxed<G::Item> {
+    Boxed::new(generator)
 }
 
 #[inline]

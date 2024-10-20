@@ -20,7 +20,7 @@ macro_rules! generators {
                 is_generator::<$type>(flatten(same(same($value))));
                 is_generator::<Option<$type>>(filter($value, |_| true, 1));
                 is_generator::<Option<$type>>(filter_map($value, Some, 1));
-                is_generator::<$type>(boxed($value));
+                is_generator::<$type>(boxed(Box::new($value)));
                 is_generator::<[$type; 1]>(array::<_, 1>($value));
                 is_generator::<Vec<$type>>(collect($value, 1usize, None));
                 is_generator::<$type>(size($value, |_| 1.0));
