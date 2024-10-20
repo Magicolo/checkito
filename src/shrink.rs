@@ -1,5 +1,5 @@
 use crate::{
-    Generate, boxed,
+    Generate,
     check::{self, Sizes},
     generate::{State, States},
     random,
@@ -8,16 +8,8 @@ use core::iter;
 
 pub trait Shrink: Clone {
     type Item;
-
     fn item(&self) -> Self::Item;
     fn shrink(&mut self) -> Option<Self>;
-
-    fn boxed(self) -> boxed::Shrinker<Self::Item>
-    where
-        Self: 'static,
-    {
-        boxed::Shrinker::new(self)
-    }
 }
 
 #[derive(Debug)]
