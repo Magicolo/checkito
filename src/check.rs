@@ -742,8 +742,9 @@ mod hook {
     use core::cell::Cell;
     use std::panic;
 
-    /// For pre rust 1.81 support, use the deprecated type [`panic::PanicInfo`].
-    #[allow(deprecated)]
+    #[rustversion::since(1.81)]
+    type Handle = Box<dyn Fn(&panic::PanicHookInfo) + 'static + Sync + Send>;
+    #[rustversion::before(1.81)]
     type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
