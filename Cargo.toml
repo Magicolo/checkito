@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "3.2.0"
+version = "3.2.1"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 readme = "README.md"
