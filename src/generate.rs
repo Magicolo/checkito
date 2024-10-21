@@ -1,5 +1,5 @@
 use crate::{
-    COLLECT, RETRIES, Sample,
+    COLLECT, RETRIES,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -12,7 +12,9 @@ use crate::{
     flatten::Flatten,
     keep::Keep,
     map::Map,
+    prelude,
     random::{self, Random},
+    sample::Sample,
     shrink::Shrink,
     size::Size,
     unify::Unify,
@@ -105,7 +107,7 @@ pub trait Generate {
     where
         Self: Sized + 'static,
     {
-        crate::boxed(Box::new(self))
+        prelude::boxed(Box::new(self))
     }
 
     /// Maps generated [`Generate::Item`] to an arbitrary type `T` using the
@@ -114,7 +116,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::map(self, map)
+        prelude::map(self, map)
     }
 
     /// Same as [`Generate::filter_with`] but with a predefined number of
@@ -123,7 +125,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::filter(self, filter, RETRIES)
+        prelude::filter(self, filter, RETRIES)
     }
 
     /// Generates many [`Generate::Item`] with an increasingly large `size`
@@ -141,7 +143,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::filter(self, filter, retries)
+        prelude::filter(self, filter, retries)
     }
 
     /// Same as [`Generate::filter_map_with`] but with a predefined number of
@@ -150,7 +152,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::filter_map(self, filter, RETRIES)
+        prelude::filter_map(self, filter, RETRIES)
     }
 
     /// Combines [`Generate::map`] and [`Generate::filter`] in a single
@@ -164,7 +166,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::filter_map(self, filter, retries)
+        prelude::filter_map(self, filter, retries)
     }
 
     /// Combines [`Generate::map`] and [`Generate::flatten`] in a single
@@ -173,7 +175,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::flat_map(self, map)
+        prelude::flat_map(self, map)
     }
 
     /// Flattens the [`Generate::Item`], assuming that it implements
@@ -186,7 +188,7 @@ pub trait Generate {
     /// as [`Generate::size`] and [`Generate::dampen`]) to alter the `size`
     /// of generated items. It tries to represent the recursion depth since it
     /// is expected that recursive [`Generate`] instances will need to go
-    /// through it. Implementations such as [`lazy`](crate::lazy)
+    /// through it. Implementations such as [`lazy`](lazy)
     /// and [`Generate::flat_map`] use it.
     ///
     /// The `depth` is particularly useful to limit the amount of recursion that
@@ -197,7 +199,7 @@ pub trait Generate {
         Self: Sized,
         Self::Item: Generate,
     {
-        crate::flatten(self)
+        prelude::flatten(self)
     }
 
     /// For a type `T` where [`Any<T>`] implements [`Generate`], the behavior
@@ -206,14 +208,14 @@ pub trait Generate {
     /// for tuples, slices, arrays, [`Vec<T>`] and a few other collections.
     ///
     /// The random selection can be controlled by wrapping each element of a
-    /// supported collection in a [`any::Weight`](crate::any::Weight), which
+    /// supported collection in a [`any::Weight`](any::Weight), which
     /// will inform the [`Generate`] implementation to perform a weighted
     /// random between elements of the collection.
     fn any(self) -> Any<Self>
     where
         Self: Sized,
     {
-        crate::any(self)
+        prelude::any(self)
     }
 
     /// Generates `N` items and fills an array with it.
@@ -221,7 +223,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::array(self)
+        prelude::array(self)
     }
 
     /// Same as [`Generate::collect_with`] but with a predefined `count`.
@@ -229,7 +231,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::collect(self, 0..=COLLECT, Some(0))
+        prelude::collect(self, 0..=COLLECT, Some(0))
     }
 
     /// Generates a variable number of items based on the provided `count`
@@ -243,7 +245,7 @@ pub trait Generate {
         Self: Sized,
     {
         let minimum = count.sample(0.0);
-        crate::collect(self, count, Some(minimum))
+        prelude::collect(self, count, Some(minimum))
     }
 
     /// Maps the current `size` of the generation process to a different one.
@@ -270,7 +272,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::size(self, map)
+        prelude::size(self, map)
     }
 
     /// Same as [`Generate::dampen_with`] but with predefined arguments.
@@ -278,7 +280,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::dampen(self, 1.0, 8, 8192)
+        prelude::dampen(self, 1.0, 8, 8192)
     }
 
     /// Dampens the `size` (see [`Generate::size`] for more information about
@@ -299,7 +301,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::dampen(self, pressure, deepest, limit)
+        prelude::dampen(self, pressure, deepest, limit)
     }
 
     /// Keeps the generated items intact through the shrinking process (i.e.
@@ -308,21 +310,21 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        crate::keep(self)
+        prelude::keep(self)
     }
 
     fn unify<T>(self) -> Unify<Self, T>
     where
         Self: Sized,
     {
-        crate::unify(self)
+        prelude::unify(self)
     }
 
     fn convert<T: From<Self::Item>>(self) -> Convert<Self, T>
     where
         Self: Sized,
     {
-        crate::convert(self)
+        prelude::convert(self)
     }
 }
 

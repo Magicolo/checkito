@@ -1,4 +1,10 @@
-use crate::{Generate, generate::State, nudge::Nudge, prove::Prove, random, shrink::Shrink};
+use crate::{
+    generate::{Generate, State},
+    nudge::Nudge,
+    prove::Prove,
+    random,
+    shrink::Shrink,
+};
 use core::{
     fmt,
     mem::replace,
@@ -536,8 +542,7 @@ impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
 #[doc(hidden)]
 pub mod help {
-    use super::{Check, Checker, Fail, Pass, Result, environment, hook};
-    use crate::{Generate, Prove};
+    use super::{Check, Checker, Fail, Generate, Pass, Prove, Result, environment, hook};
     use core::{
         any::type_name,
         fmt::{self, Arguments},

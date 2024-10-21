@@ -1,7 +1,6 @@
 use crate::{
-    Generate,
     check::{self, Sizes},
-    generate::{State, States},
+    generate::{Generate, State, States},
     random,
 };
 use core::iter;

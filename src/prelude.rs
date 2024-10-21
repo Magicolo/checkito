@@ -1,7 +1,8 @@
 use crate::{
-    Generate, Same, any::Any, array::Array, boxed::Boxed, check::Sizes, collect::Collect,
-    convert::Convert, dampen::Dampen, filter::Filter, filter_map::FilterMap, flatten::Flatten,
-    keep::Keep, map::Map, primitive::number::Number, shrink::Shrinker, size::Size, unify::Unify,
+    any::Any, array::Array, boxed::Boxed, check::Sizes, collect::Collect, convert::Convert,
+    dampen::Dampen, filter::Filter, filter_map::FilterMap, flatten::Flatten, generate::Generate,
+    keep::Keep, map::Map, primitive::number::Number, same::Same, shrink::Shrinker, size::Size,
+    unify::Unify,
 };
 use core::marker::PhantomData;
 

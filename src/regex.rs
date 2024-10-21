@@ -5,6 +5,7 @@ use crate::{
     any::{self, Any},
     collect::{self},
     generate::{Generate, State},
+    prelude::collect,
     primitive::char,
     shrink::Shrink,
 };
@@ -110,7 +111,7 @@ impl Regex {
                 if low == 1 && high == 1 {
                     return tree;
                 }
-                Self::Collect(crate::collect(
+                Self::Collect(collect(
                     Box::new(tree),
                     low as usize..=high as usize,
                     Some(low as _),
