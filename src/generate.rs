@@ -157,7 +157,7 @@ pub trait Generate {
 
     /// Combines [`Generate::map`] and [`Generate::filter`] in a single
     /// [`Generate`] implementation where the map function is considered to
-    /// satisfy the filter when a [`Some(T)`] is produced.
+    /// satisfy the filter when a [`Some<T>`] is produced.
     fn filter_map_with<T, F: Fn(Self::Item) -> Option<T> + Clone>(
         self,
         retries: usize,
@@ -188,7 +188,7 @@ pub trait Generate {
     /// as [`Generate::size`] and [`Generate::dampen`]) to alter the `size`
     /// of generated items. It tries to represent the recursion depth since it
     /// is expected that recursive [`Generate`] instances will need to go
-    /// through it. Implementations such as [`lazy`](lazy)
+    /// through it. Implementations such as [`lazy`](prelude::lazy)
     /// and [`Generate::flat_map`] use it.
     ///
     /// The `depth` is particularly useful to limit the amount of recursion that
@@ -202,13 +202,14 @@ pub trait Generate {
         prelude::flatten(self)
     }
 
-    /// For a type `T` where [`Any<T>`] implements [`Generate`], the behavior
-    /// of the generation changes from *generate all* of my components to
-    /// *generate one* of my components chosen randomly. It is implemented
-    /// for tuples, slices, arrays, [`Vec<T>`] and a few other collections.
+    /// For a type `T` where [`Any<T>`](crate::any::Any) implements
+    /// [`Generate`], the behavior of the generation changes from *generate
+    /// all* of my components to *generate one* of my components chosen
+    /// randomly. It is implemented for tuples, slices, arrays, [`Vec<T>`]
+    /// and a few other collections.
     ///
     /// The random selection can be controlled by wrapping each element of a
-    /// supported collection in a [`any::Weight`](any::Weight), which
+    /// supported collection in a [`any::Weight`](crate::any::Weight), which
     /// will inform the [`Generate`] implementation to perform a weighted
     /// random between elements of the collection.
     fn any(self) -> Any<Self>
