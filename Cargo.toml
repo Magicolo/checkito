@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
-rust-version = "1.65.0"
+rust-version = "1.65"
 
 [badges]
 github = { repository = "Magicolo/checkito", workflow = "test" }

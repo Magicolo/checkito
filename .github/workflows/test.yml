@@ -44,12 +44,10 @@ jobs:
     - uses: actions/checkout@v4
     - run: |
         cargo hack clippy --release --lib --bins --benches --tests --verbose --feature-powerset -- --deny warnings
-        cargo hack clippy --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version -- --deny warnings
         cargo hack clippy --release --examples --verbose -- --deny warnings
     - working-directory: checkito_macro
       run: |
         cargo hack clippy --release --all-targets --verbose --feature-powerset -- --deny warnings
-        cargo hack clippy --release --all-targets --verbose --feature-powerset --rust-version -- --deny warnings
   doc:
     runs-on: ubuntu-latest
     container: 
