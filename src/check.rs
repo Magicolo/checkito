@@ -601,8 +601,9 @@ pub mod help {
             verbose,
             |prefix, pass| {
                 println!(
-                    "{prefix} {{ item: {:?}, size: {}, proof: {:?} }}",
+                    "{prefix} {{ item: {:?}, seed: {}, size: {}, proof: {:?} }}",
                     &pass.item,
+                    pass.seed(),
                     pass.size(),
                     &pass.proof,
                 )
