@@ -21,7 +21,7 @@ check = ["checkito_macro/check"]
 regex = ["regex-syntax/unicode", "checkito_macro/regex"]
 
 [dependencies]
-orn = { version = "0.5.2" }
+orn = { version = "0.6.0" }
 fastrand = { version = "2.1.1" }
 ref-cast = { version = "1.0.23" }
 rustversion = { version = "1.0.18" }
