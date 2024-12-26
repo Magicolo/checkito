@@ -88,7 +88,7 @@ pub mod result {
         type Item = Result<T::Item, E::Item>;
 
         fn generator() -> Self::Generator {
-            todo!()
+            Generator(T::generator(), E::generator())
         }
     }
 
