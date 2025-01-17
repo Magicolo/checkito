@@ -21,10 +21,10 @@ check = ["checkito_macro/check"]
 regex = ["regex-syntax/unicode", "checkito_macro/regex"]
 
 [dependencies]
-orn = { version = "0.6.0" }
-fastrand = { version = "2.1.1" }
+orn = { version = "0.6.1" }
+fastrand = { version = "2.3.0" }
 ref-cast = { version = "1.0.23" }
-rustversion = { version = "1.0.18" }
+rustversion = { version = "1.0.19" }
 checkito_macro = { version = "0.4.2", path = "checkito_macro", default-features = false, optional = true }
 regex-syntax = { version = "0.8.5", default-features = false, optional = true }
 

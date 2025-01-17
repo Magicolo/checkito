@@ -20,11 +20,11 @@ regex = ["regex-syntax/unicode"]
 check = []
 
 [dependencies]
-syn = { version = "2.0.82", features = [
+syn = { version = "2.0.96", features = [
     "proc-macro",
     "parsing",
     "full",
     "printing",
 ], default-features = false }
-quote = { version = "1.0.37", default-features = false }
+quote = { version = "1.0.38", default-features = false }
 regex-syntax = { version = "0.8.5", default-features = false, optional = true }
