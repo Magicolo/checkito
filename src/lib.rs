@@ -14,17 +14,16 @@ pub mod flatten;
 pub mod generate;
 pub mod keep;
 pub mod map;
-pub mod nudge;
 mod prelude;
 pub mod primitive;
 pub mod prove;
-pub mod random;
 pub mod regex;
 pub mod same;
 pub mod sample;
 pub mod shrink;
 pub mod size;
 pub mod standard;
+pub mod state;
 pub mod unify;
 mod utility;
 

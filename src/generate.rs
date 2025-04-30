@@ -3,7 +3,6 @@ use crate::{
     any::Any,
     array::Array,
     boxed::Boxed,
-    check::Sizes,
     collect::Collect,
     convert::Convert,
     dampen::Dampen,
@@ -13,33 +12,13 @@ use crate::{
     keep::Keep,
     map::Map,
     prelude,
-    random::{self, Random},
     sample::Sample,
     shrink::Shrink,
     size::Size,
+    state::{Sizes, State},
     unify::Unify,
 };
-use core::{
-    iter::{FromIterator, FusedIterator},
-    ops::{self, RangeInclusive},
-};
-
-#[derive(Clone, Debug)]
-pub struct State {
-    seed: u64,
-    pub(crate) size: Sizes,
-    pub(crate) limit: u32,
-    pub(crate) depth: u32,
-    random: Random,
-}
-
-#[derive(Debug, Clone)]
-pub struct States {
-    indices: ops::Range<usize>,
-    count: usize,
-    size: Sizes,
-    seed: u64,
-}
+use core::{iter::FromIterator, ops::RangeInclusive};
 
 /// When implemented for a type `T`, this allows to retrieve a generator for `T`
 /// that does not require any parameter. It should be implemented for any type
@@ -58,15 +37,25 @@ pub trait Generate {
     type Item;
     type Shrink: Shrink<Item = Self::Item>;
 
+    /// The static cardinality of the generated values. This value can be
+    /// thought as the following: for the set of all generators of type
+    /// [`Self`], how large is the set of all possible [`Self::Item`] that they
+    /// could generate. If the cardinality of that set can not be determined
+    /// or is too large to fit in a [`usize`], set it to [`None`].
+    const CARDINALITY: Option<usize>;
+
     /// Primary method of this trait. It generates a [`Shrink`] instance that
     /// will be able to produce values of type [`Generate::Item`] and shrink
     /// itself.
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
-    /// Returns true if the generator will always produce the same item.
-    /// This is used in some optimizations to prevent redundant generations.
-    fn constant(&self) -> bool {
-        false
+    /// Returns the dynamic cardinality of the generated values. This value can
+    /// be thought as the following: for this specific generator of type
+    /// [`Self`], how large is the set of all possible [`Self::Item`] that it
+    /// could generate. If the cardinality of that set can not be determined
+    /// or is too large to fit in a [`usize`], set it to [`None`].
+    fn cardinality(&self) -> Option<usize> {
+        Self::CARDINALITY
     }
 
     /// Wraps `self` in a boxed [`Generate`]. This is notably relevant for
@@ -245,6 +234,8 @@ pub trait Generate {
     where
         Self: Sized,
     {
+        // TODO: Find a more reliable way to determine the minimum (and perhaps the
+        // maximum); use a `Bound` trait?
         let minimum = count.sample(0.0);
         prelude::collect(self, count, Some(minimum))
     }
@@ -329,130 +320,18 @@ pub trait Generate {
     }
 }
 
-impl State {
-    pub(crate) fn new<S: Into<Sizes>>(index: usize, count: usize, size: S, seed: u64) -> Self {
-        Self {
-            size: self::size(index, count, size.into()),
-            depth: 0,
-            limit: 0,
-            seed,
-            random: Random::new(seed.wrapping_add(index as _)),
-        }
-    }
-
-    pub const fn size(&self) -> f64 {
-        self.size.start()
-    }
-
-    pub const fn seed(&self) -> u64 {
-        self.seed
-    }
-
-    pub fn random(&mut self) -> &mut Random {
-        &mut self.random
-    }
-}
-
-impl States {
-    pub fn new<S: Into<Sizes>>(count: usize, size: S, seed: Option<u64>) -> Self {
-        Self {
-            indices: 0..count,
-            count,
-            size: size.into(),
-            seed: seed.unwrap_or_else(random::seed),
-        }
-    }
-}
-
-impl Iterator for States {
-    type Item = State;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(State::new(
-            self.indices.next()?,
-            self.count,
-            self.size,
-            self.seed,
-        ))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.indices.size_hint()
-    }
-
-    fn count(self) -> usize {
-        self.indices.count()
-    }
-
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        Some(State::new(
-            self.indices.nth(n)?,
-            self.count,
-            self.size,
-            self.seed,
-        ))
-    }
-
-    fn last(mut self) -> Option<Self::Item> {
-        Some(State::new(
-            self.indices.next()?,
-            self.count,
-            self.size,
-            self.seed,
-        ))
-    }
-}
-
-impl ExactSizeIterator for States {
-    fn len(&self) -> usize {
-        self.indices.len()
-    }
-}
-
-impl DoubleEndedIterator for States {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        Some(State::new(
-            self.indices.next_back()?,
-            self.count,
-            self.size,
-            self.seed,
-        ))
-    }
-
-    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
-        Some(State::new(
-            self.indices.nth_back(n)?,
-            self.count,
-            self.size,
-            self.seed,
-        ))
-    }
-}
-
-impl FusedIterator for States {}
-
-pub(crate) fn size(index: usize, count: usize, size: Sizes) -> Sizes {
-    let (start, end) = (size.start(), size.end());
-    if count <= 1 {
-        Sizes::from(end)
-    } else {
-        let range = end - start;
-        // This size calculation ensures that 25% of samples are fully sized.
-        let ratio = index as f64 / count as f64 * 1.25;
-        Sizes::from(start + ratio * range..=end)
-    }
-}
-
 impl<G: Generate + ?Sized> Generate for &G {
     type Item = G::Item;
     type Shrink = G::Shrink;
+
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
 
-    fn constant(&self) -> bool {
-        G::constant(self)
+    fn cardinality(&self) -> Option<usize> {
+        G::cardinality(self)
     }
 }
 
@@ -460,11 +339,13 @@ impl<G: Generate + ?Sized> Generate for &mut G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
 
-    fn constant(&self) -> bool {
-        G::constant(self)
+    fn cardinality(&self) -> Option<usize> {
+        G::cardinality(self)
     }
 }
