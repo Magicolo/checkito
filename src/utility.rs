@@ -63,6 +63,7 @@ pub(crate) mod f32 {
     const TINY_BITS: u32 = 0x1;
     const NEG_TINY_BITS: u32 = TINY_BITS | SIGN_MASK;
 
+    #[inline]
     pub const fn to_bits(value: f32) -> u32 {
         let bits = f32::to_bits(value);
         if bits & SIGN_MASK != 0 {
@@ -74,12 +75,12 @@ pub(crate) mod f32 {
 
     #[inline]
     pub const fn from_bits(bits: u32) -> f32 {
-        let value = if bits & SIGN_MASK != 0 {
+        let bits = if bits & SIGN_MASK != 0 {
             bits & !SIGN_MASK
         } else {
             !bits
         };
-        f32::from_bits(value)
+        f32::from_bits(bits)
     }
 
     pub const fn cardinality(start: f32, end: f32) -> u128 {
@@ -164,12 +165,12 @@ pub(crate) mod f64 {
 
     #[inline]
     pub const fn from_bits(bits: u64) -> f64 {
-        let value = if bits & SIGN_MASK != 0 {
+        let bits = if bits & SIGN_MASK != 0 {
             bits & !SIGN_MASK
         } else {
             !bits
         };
-        f64::from_bits(value)
+        f64::from_bits(bits)
     }
 
     #[inline]

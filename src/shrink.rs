@@ -1,7 +1,7 @@
 use crate::{
-    check::{self, Sizes},
-    generate::{Generate, State, States},
-    random,
+    check::{self},
+    generate::Generate,
+    state::{self, Sizes, State, States},
 };
 use core::iter;
 
@@ -24,12 +24,14 @@ impl<G: Generate + ?Sized> Generate for Shrinker<G> {
     type Item = G::Shrink;
     type Shrink = Shrinker<G::Shrink>;
 
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Shrinker(self.0.generate(state))
     }
 
-    fn constant(&self) -> bool {
-        self.0.constant()
+    fn cardinality(&self) -> Option<usize> {
+        self.0.cardinality()
     }
 }
 
@@ -74,7 +76,7 @@ pub(crate) fn shrinker<G: Generate + ?Sized>(
     size: f64,
     seed: Option<u64>,
 ) -> G::Shrink {
-    let mut state = State::new(0, 1, size, seed.unwrap_or_else(random::seed));
+    let mut state = State::random(0, 1, size.into(), seed.unwrap_or_else(state::seed));
     generator.generate(&mut state)
 }
 

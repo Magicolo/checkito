@@ -1,7 +1,4 @@
-use crate::{
-    all,
-    generate::{Generate, State},
-};
+use crate::{all, generate::Generate, state::State, utility::cardinality};
 use core::array;
 
 #[derive(Clone, Debug)]
@@ -11,6 +8,8 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     type Item = [G::Item; N];
     type Shrink = all::Shrinker<[G::Shrink; N]>;
 
+    const CARDINALITY: Option<usize> = cardinality::all_repeat_static::<N>(G::CARDINALITY);
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         all::Shrinker {
             index: 0,
@@ -18,7 +17,7 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
         }
     }
 
-    fn constant(&self) -> bool {
-        N == 0 || self.0.constant()
+    fn cardinality(&self) -> Option<usize> {
+        cardinality::all_repeat_static::<N>(self.0.cardinality())
     }
 }

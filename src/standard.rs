@@ -1,7 +1,9 @@
 use crate::{
     convert::Convert,
-    generate::{FullGenerate, Generate, State},
+    generate::{FullGenerate, Generate},
     shrink::Shrink,
+    state::State,
+    utility::cardinality,
 };
 use core::{marker::PhantomData, mem::take};
 use std::{rc::Rc, sync::Arc};
@@ -29,22 +31,26 @@ pub mod option {
         type Item = Option<G::Item>;
         type Shrink = Shrinker<G::Shrink>;
 
+        const CARDINALITY: Option<usize> = cardinality::any_sum(G::CARDINALITY, Some(1));
+
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            if state.random().bool() {
+            if state.with().size(1.0).bool() {
                 Shrinker(true, Some(self.0.generate(state)))
             } else {
                 Shrinker(false, None)
             }
         }
 
-        fn constant(&self) -> bool {
-            false
+        fn cardinality(&self) -> Option<usize> {
+            cardinality::any_sum(self.0.cardinality(), Some(1))
         }
     }
 
     impl<G: Generate> Generate for Option<G> {
         type Item = Option<G::Item>;
         type Shrink = Shrinker<G::Shrink>;
+
+        const CARDINALITY: Option<usize> = cardinality::any_sum(G::CARDINALITY, Some(1));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker(
@@ -53,8 +59,8 @@ pub mod option {
             )
         }
 
-        fn constant(&self) -> bool {
-            self.as_ref().map_or(true, Generate::constant)
+        fn cardinality(&self) -> Option<usize> {
+            self.as_ref().map_or(Some(1), Generate::cardinality)
         }
     }
 
@@ -96,22 +102,26 @@ pub mod result {
         type Item = Result<T::Item, E::Item>;
         type Shrink = Shrinker<T::Shrink, E::Shrink>;
 
+        const CARDINALITY: Option<usize> = cardinality::any_sum(T::CARDINALITY, E::CARDINALITY);
+
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrinker(if state.random().bool() {
+            Shrinker(if state.with().size(1.0).bool() {
                 Ok(self.0.generate(state))
             } else {
                 Err(self.1.generate(state))
             })
         }
 
-        fn constant(&self) -> bool {
-            false
+        fn cardinality(&self) -> Option<usize> {
+            cardinality::any_sum(self.0.cardinality(), self.1.cardinality())
         }
     }
 
     impl<T: Generate, E: Generate> Generate for Result<T, E> {
         type Item = Result<T::Item, E::Item>;
         type Shrink = Shrinker<T::Shrink, E::Shrink>;
+
+        const CARDINALITY: Option<usize> = cardinality::any_sum(T::CARDINALITY, E::CARDINALITY);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker(match self {
@@ -120,10 +130,10 @@ pub mod result {
             })
         }
 
-        fn constant(&self) -> bool {
+        fn cardinality(&self) -> Option<usize> {
             match self {
-                Ok(generator) => generator.constant(),
-                Err(generator) => generator.constant(),
+                Ok(generator) => generator.cardinality(),
+                Err(generator) => generator.cardinality(),
             }
         }
     }
@@ -165,12 +175,14 @@ macro_rules! pointer {
                 type Item = G::Item;
                 type Shrink = G::Shrink;
 
+                const CARDINALITY: Option<usize> = G::CARDINALITY;
+
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     G::generate(self, state)
                 }
 
-                fn constant(&self) -> bool {
-                    G::constant(self)
+                fn cardinality(&self) -> Option<usize> {
+                    G::cardinality(self)
                 }
             }
         }

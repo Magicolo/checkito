@@ -1,7 +1,4 @@
-use crate::{
-    check::Sizes,
-    generate::{Generate, State},
-};
+use crate::{generate::Generate, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Dampen<G: ?Sized> {
@@ -15,20 +12,17 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let old = state.size;
-        let new = if state.depth as usize >= self.deepest || state.limit as usize >= self.limit {
-            0.0
-        } else {
-            old.start() / (state.depth as f64 * self.pressure).max(1.0)
-        };
-        state.size = Sizes::from(new..=old.end());
-        let shrinker = self.generator.generate(state);
-        state.size = old;
-        shrinker
+        self.generator.generate(
+            state
+                .dampen(self.deepest, self.limit, self.pressure)
+                .as_mut(),
+        )
     }
 
-    fn constant(&self) -> bool {
-        self.generator.constant()
+    fn cardinality(&self) -> Option<usize> {
+        self.generator.cardinality()
     }
 }

@@ -4,10 +4,11 @@ use crate::{
     REPEATS, all,
     any::{self, Any},
     collect::{self},
-    generate::{Generate, State},
+    generate::Generate,
     prelude::collect,
     primitive::char,
     shrink::Shrink,
+    state::State,
 };
 use core::{fmt, ops::RangeInclusive};
 use regex_syntax::{
@@ -143,6 +144,8 @@ impl Generate for Regex {
     type Item = String;
     type Shrink = Shrinker;
 
+    const CARDINALITY: Option<usize> = None;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         match self {
             Regex::Empty => Shrinker::Empty,
@@ -154,13 +157,13 @@ impl Generate for Regex {
         }
     }
 
-    fn constant(&self) -> bool {
+    fn cardinality(&self) -> Option<usize> {
         match self {
-            Regex::Empty | Regex::Text(_) => true,
-            Regex::Range(range) => range.constant(),
-            Regex::Collect(collect) => collect.constant(),
-            Regex::Any(any) => any.constant(),
-            Regex::All(all) => all.constant(),
+            Regex::Empty | Regex::Text(_) => Some(1),
+            Regex::Range(range) => range.cardinality(),
+            Regex::Collect(collect) => collect.cardinality(),
+            Regex::Any(any) => any.cardinality(),
+            Regex::All(all) => all.cardinality(),
         }
     }
 }

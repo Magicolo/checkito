@@ -1,7 +1,4 @@
-use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
-};
+use crate::{generate::Generate, shrink::Shrink, state::State, utility::cardinality};
 
 #[derive(Clone, Debug)]
 pub struct Flatten<G: ?Sized>(pub(crate) G);
@@ -17,14 +14,13 @@ impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
     type Item = I::Item;
     type Shrink = Shrinker<I::Shrink, O::Shrink>;
 
+    const CARDINALITY: Option<usize> = cardinality::all_product(O::CARDINALITY, I::CARDINALITY);
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.clone();
         let outer = self.0.generate(state);
         let generator = outer.item();
-        state.limit += 1;
-        state.depth += 1;
-        let inner = generator.generate(state);
-        state.depth -= 1;
+        let inner = generator.generate(state.descend().as_mut());
         Shrinker {
             state: old,
             inner,
@@ -32,8 +28,8 @@ impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
         }
     }
 
-    fn constant(&self) -> bool {
-        false
+    fn cardinality(&self) -> Option<usize> {
+        cardinality::all_product(self.0.cardinality(), I::CARDINALITY)
     }
 }
 

@@ -1,13 +1,10 @@
-use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
-};
+use crate::{generate::Generate, shrink::Shrink, state::State};
 use core::{any::Any, fmt};
 
 pub struct Boxed<I> {
     generator: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
-    constant: fn(&dyn Any) -> bool,
+    cardinality: fn(&dyn Any) -> Option<usize>,
 }
 
 pub struct Shrinker<I> {
@@ -33,12 +30,14 @@ impl<I> Generate for Boxed<I> {
     type Item = I;
     type Shrink = Shrinker<I>;
 
+    const CARDINALITY: Option<usize> = None;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         (self.generate)(self.generator.as_ref(), state)
     }
 
-    fn constant(&self) -> bool {
-        (self.constant)(self.generator.as_ref())
+    fn cardinality(&self) -> Option<usize> {
+        (self.cardinality)(self.generator.as_ref())
     }
 }
 
@@ -51,7 +50,7 @@ impl<I> Boxed<I> {
         Self {
             generator,
             generate: generate::<G>,
-            constant: constant::<G>,
+            cardinality: cardinality::<G>,
         }
     }
 
@@ -73,7 +72,7 @@ impl<I> Boxed<I> {
             Err(generator) => Err(Self {
                 generator,
                 generate: self.generate,
-                constant: self.constant,
+                cardinality: self.cardinality,
             }),
         }
     }
@@ -139,8 +138,8 @@ where
     ))
 }
 
-fn constant<G: Generate + 'static>(generator: &dyn Any) -> bool {
-    generator.downcast_ref::<G>().unwrap().constant()
+fn cardinality<G: Generate + 'static>(generator: &dyn Any) -> Option<usize> {
+    generator.downcast_ref::<G>().unwrap().cardinality()
 }
 
 fn clone<S: Shrink + 'static>(shrinker: &dyn Any) -> Box<dyn Any> {

@@ -1,6 +1,6 @@
 use crate::{
-    check::Sizes,
-    generate::{Generate, State},
+    generate::Generate,
+    state::{Sizes, State},
 };
 
 #[derive(Debug, Clone)]
@@ -10,16 +10,14 @@ impl<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S> Generate for Size<G, F> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let old = state.size;
-        let new = self.1(old).into();
-        state.size = new;
-        let shrinker = self.0.generate(state);
-        state.size = old;
-        shrinker
+        let sizes = self.1(state.sizes()).into();
+        self.0.generate(state.with().sizes(sizes).as_mut())
     }
 
-    fn constant(&self) -> bool {
-        self.0.constant()
+    fn cardinality(&self) -> Option<usize> {
+        self.0.cardinality()
     }
 }

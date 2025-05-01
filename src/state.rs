@@ -7,7 +7,10 @@ use std::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct Sizes(Range<f64>);
+pub struct Sizes {
+    range: Range<f64>,
+    scale: f64,
+}
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -70,6 +73,11 @@ impl State {
     }
 
     #[inline]
+    pub const fn scale(&self) -> f64 {
+        self.sizes.scale
+    }
+
+    #[inline]
     pub const fn sizes(&self) -> Sizes {
         self.sizes
     }
@@ -105,13 +113,13 @@ impl State {
     #[inline]
     pub const fn dampen(&mut self, deepest: usize, limit: usize, pressure: f64) -> With {
         let with = self.with();
-        let old = with.state.sizes;
+        let old = with.state.sizes();
         let new = if with.state.depth >= deepest || with.state.limit >= limit {
             0.0
         } else {
             old.start() / utility::f64::max(with.state.depth as f64 * pressure, 1.0)
         };
-        with.state.sizes = Sizes::new(new, old.end());
+        with.state.sizes = Sizes::new(new, old.end(), old.scale());
         with
     }
 
@@ -131,20 +139,27 @@ impl State {
 impl<'a> With<'a> {
     pub(crate) const fn new(state: &'a mut State) -> Self {
         Self {
-            sizes: state.sizes,
-            depth: state.depth,
+            sizes: state.sizes(),
+            depth: state.depth(),
             state,
         }
     }
 
     #[inline]
     pub const fn size(self, size: f64) -> Self {
-        self.sizes(Sizes::new(size, size))
+        let scale = self.sizes.scale();
+        self.sizes(Sizes::new(size, size, scale))
     }
 
     #[inline]
     pub const fn sizes(self, sizes: Sizes) -> Self {
         self.state.sizes = sizes;
+        self
+    }
+
+    #[inline]
+    pub const fn scale(self, scale: f64) -> Self {
+        self.state.sizes.scale = scale;
         self
     }
 
@@ -289,7 +304,7 @@ macro_rules! integer {
                 }
 
                 #[inline]
-                fn shrink(range: $positive, size: f64) -> $positive {
+                fn shrink(range: $positive, size: f64, scale: f64) -> $positive {
                     if range == 0 || size <= 0.0 {
                         0
                     } else if size >= 1.0 {
@@ -298,19 +313,19 @@ macro_rules! integer {
                         // This adjustment of the size tries to prevent large ranges (such as `u64`)
                         // from rushing into huge values as soon as the `size > 0`.
                         let log = $positive::BITS - 1 - range.leading_zeros();
-                        let power = size.powf(log as f64 / 12.0).recip();
-                        divide(range, power as $positive)
+                        let power = size.powf(log as f64 / scale).recip();
+                        divide(range, power as _)
                     }
                 }
 
                 fn generate(state: &mut State, Range(start, end): Range<$integer>) -> $integer {
+                    let size = state.size();
+                    let scale = state.scale();
                     match &mut state.mode {
                         Mode::Random(..) | Mode::Exhaustive(..) if start == end => start,
                         Mode::Random(random) => {
-                            let size = state.sizes.start();
-                            let range = $positive::wrapping_sub(end as _, start as _);
-                            let shrunk = shrink(range, size);
-                            let value = random.$positive(0..=shrunk) as $integer;
+                            let range = shrink($positive::wrapping_sub(end as _, start as _), size, scale);
+                            let value = random.$positive(0..=range) as $integer;
                             #[allow(unused_comparisons)]
                             if start >= 0 {
                                 debug_assert!(end > 0);
@@ -322,11 +337,12 @@ macro_rules! integer {
                                 debug_assert!(start < 0);
                                 debug_assert!(end > 0);
                                 // Centers the range around zero as much as possible.
-                                let center = (shrunk / 2) as $integer;
+                                let center = (range / 2) as $integer;
                                 let shift = (start + center).max(0) + (end - center).min(0);
                                 value.wrapping_add(shift).wrapping_sub(center)
                             }
                         }
+                        // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
                         Mode::Exhaustive(index) => {
                             // The `saturating_add(1)` will cause the ranges `u128::MIN..=u128::MAX` and `i128::MIN..=i128::MAX` to never produce the values `u128::MAX` or `-1i128`.
                             // Considering that it would take `u128::MAX` iterations to reach that value, the inaccuracy is tolerated.
@@ -353,48 +369,54 @@ macro_rules! floating {
             #[inline]
             pub fn $number<R: Into<Range<$number>>>(&mut self, range: R) -> $number {
                 #[inline]
-                fn shrink(range: $number, size: f64) -> $number {
+                fn shrink(range: $number, size: f64, scale: f64) -> $number {
                     if range == 0.0 || size <= 0.0 {
                         0.0
                     } else if size >= 1.0 {
                         range
                     } else {
                         let log = range.abs().log2();
-                        let power = size.powf(log as f64 / 12.0);
+                        let power = size.powf(log as f64 / scale);
                         range * power as $number
                     }
                 }
 
                 fn generate(state: &mut State, Range(start, end): Range<$number>) -> $number {
+                    assert!(start.is_finite() && end.is_finite());
+
+                    let size = state.size();
+                    let scale = state.scale();
                     match &mut state.mode {
                         Mode::Random(..) | Mode::Exhaustive(..) if start == end => start,
                         Mode::Random(random) => {
-                            let size = state.sizes.start();
-                            let range = end - start;
-                            let shrunk = shrink(range as _, size);
-                            let value = random.$number() * shrunk;
-                            #[allow(unused_comparisons)]
                             if start >= 0.0 {
                                 debug_assert!(end > 0.0);
-                                start + value
+                                start + random.$number() * shrink(end - start, size, scale)
                             } else if end <= 0.0 {
                                 debug_assert!(start < 0.0);
-                                end - value
+                                end - random.$number() * shrink(end - start, size, scale)
                             } else {
                                 debug_assert!(start < 0.0);
                                 debug_assert!(end > 0.0);
-                                // Centers the range around zero as much as possible.
-                                let center = (shrunk / 2.0);
-                                let shift = (start + center).max(0.0) + (end - center).min(0.0);
-                                value + shift - center
+                                // Chooses either the positive or negative range based on the ratio between the 2.
+                                let (small, big) = if -start < end { (start, end) } else { (end, start) };
+                                let ratio = (small / big).abs().clamp(1e-3, 1e3);
+                                let random = random.$number() * (1.0 + ratio);
+                                if random <= 1.0 {
+                                    random * shrink(big, size, scale)
+                                } else {
+                                    (random - 1.0) / ratio * shrink(small, size, scale)
+                                }
                             }
-                            .clamp(start, end)
                         }
-                        Mode::Exhaustive(_) => {
+                        // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
+                        Mode::Exhaustive(index) => {
                             let start = utility::$number::to_bits(start);
                             let end = utility::$number::to_bits(end);
-                            let bits = state.$bits(Range(start, end));
-                            utility::$number::from_bits(bits)
+                            let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
+                            let index = replace(index, *index / range) % range;
+                            let bits = u128::wrapping_add(start as _, index);
+                            utility::$number::from_bits(bits as _)
                         }
                     }
                 }
@@ -406,7 +428,6 @@ macro_rules! floating {
         $(floating!($number, $bits);)*
     }
 }
-
 ranges!(
     char,
     |value: char| char::from_u32(u32::saturating_add(value as _, 1))
@@ -429,7 +450,7 @@ integer!(
     [isize, usize]
 );
 
-floating!([f32, u32], [f64, u64]);
+floating!([f32, i32], [f64, i64]);
 
 impl States {
     pub fn new<S: Into<Sizes>>(count: usize, size: S, seed: Option<u64>) -> Self {
@@ -510,98 +531,138 @@ impl DoubleEndedIterator for States {
 impl FusedIterator for States {}
 
 impl Sizes {
+    const SCALE: f64 = 6.0;
+
     #[inline]
-    pub(crate) const fn new(start: f64, end: f64) -> Self {
+    pub(crate) const fn new(start: f64, end: f64, scale: f64) -> Self {
         assert!(start.is_finite() && end.is_finite() && start <= end);
-        Self(Range(
-            utility::f64::clamp(start, 0.0, 1.0),
-            utility::f64::clamp(end, 0.0, 1.0),
-        ))
+        assert!(scale.is_finite() && scale >= 1.0);
+
+        Self {
+            range: Range(
+                utility::f64::clamp(start, 0.0, 1.0),
+                utility::f64::clamp(end, 0.0, 1.0),
+            ),
+            scale: utility::f64::clamp(scale, 1.0, f64::MAX),
+        }
     }
 
     #[inline]
     pub(crate) const fn from_ratio(index: usize, count: usize, size: Self) -> Self {
         let (start, end) = (size.start(), size.end());
         if count <= 1 {
-            Self::new(end, end)
+            Self::new(end, end, Self::SCALE)
         } else {
             let range = end - start;
             // This size calculation ensures that 25% of samples are fully sized.
             let ratio = index as f64 / count as f64 * 1.25;
-            Self::new(utility::f64::clamp(start + ratio * range, 0.0, end), end)
+            let size = utility::f64::clamp(start + ratio * range, 0.0, end);
+            Self::new(size, end, Self::SCALE)
         }
     }
 
     #[inline]
+    pub const fn scale(&self) -> f64 {
+        self.scale
+    }
+
+    #[inline]
     pub const fn start(&self) -> f64 {
-        self.0.0
+        self.range.0
     }
 
     #[inline]
     pub const fn end(&self) -> f64 {
-        self.0.1
+        self.range.1
     }
 }
 
 impl Default for Sizes {
     fn default() -> Self {
-        Self::new(0.0, 1.0)
+        Self::new(0.0, 1.0, Self::SCALE)
     }
 }
 
 impl<R: Into<Range<f64>>> From<R> for Sizes {
     fn from(value: R) -> Self {
         let range = value.into();
-        Self::new(range.start(), range.end())
+        Self::new(range.start(), range.end(), Self::SCALE)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::cmp::Ordering;
 
     #[test]
     fn random_is_exhaustive() {
-        fn check<T: PartialOrd>(count: usize, generate: impl Fn(&mut State) -> T) {
+        fn check<T: Ord>(count: usize, generate: impl Fn(&mut State) -> T) {
+            check_with(count, generate, T::cmp);
+        }
+
+        fn check_with<T>(
+            count: usize,
+            generate: impl Fn(&mut State) -> T,
+            compare: impl Fn(&T, &T) -> Ordering,
+        ) {
             let mut state = State::random(1, 1, 1.0.into(), 0);
-            let mut values = (0..count * 100)
+            let mut values = (0..count * 25)
                 .map(|_| generate(&mut state))
                 .collect::<Vec<_>>();
-            values.sort_by(|left, right| T::partial_cmp(left, right).unwrap());
-            values.dedup();
+            values.sort_by(&compare);
+            values.dedup_by(|left, right| compare(left, right) == Ordering::Equal);
             assert_eq!(values.len(), count);
         }
+
         check(2, |state| state.bool());
         check(26, |state| state.char('a'..='z'));
         check(8, |state| state.char('1'..'9'));
         check(256, |state| state.u8(..));
         check(256, |state| state.i8(..));
         check(65536, |state| state.u16(..));
-        check(65536, |state| state.i16(..));
+        check(32768, |state| state.i16(..0));
         check(1000, |state| state.isize(isize::MIN..isize::MIN + 1000));
         check(1001, |state| state.u128(u128::MAX - 1000..=u128::MAX));
-        check(16385, |state| state.f32(-1000.0..=-999.0));
+        check_with(16385, |state| state.f32(-1000.0..=-999.0), compare_f32);
+        check_with(1430, |state| state.f32(-1e-42..=1e-42), compare_f32);
     }
 
     #[test]
     fn exhaustive_is_exhaustive() {
-        fn check<T: PartialOrd>(count: usize, generate: impl Fn(&mut State) -> T) {
+        fn check<T: Ord>(count: usize, generate: impl Fn(&mut State) -> T) {
+            check_with(count, generate, T::cmp);
+        }
+
+        fn check_with<T>(
+            count: usize,
+            generate: impl Fn(&mut State) -> T,
+            compare: impl Fn(&T, &T) -> Ordering,
+        ) {
             let mut values = (0..count)
                 .map(|i| generate(&mut State::exhaustive(i as _)))
                 .collect::<Vec<_>>();
-            values.sort_by(|left, right| T::partial_cmp(left, right).unwrap());
-            values.dedup();
+            values.sort_by(&compare);
+            values.dedup_by(|left, right| compare(left, right) == Ordering::Equal);
             assert_eq!(values.len(), count);
         }
+
         check(2, |state| state.bool());
         check(26, |state| state.char('a'..='z'));
         check(8, |state| state.char('1'..'9'));
         check(256, |state| state.u8(..));
         check(256, |state| state.i8(..));
         check(65536, |state| state.u16(..));
-        check(65536, |state| state.i16(..));
+        check(32768, |state| state.i16(..0));
         check(1000, |state| state.isize(isize::MIN..isize::MIN + 1000));
         check(1001, |state| state.u128(u128::MAX - 1000..=u128::MAX));
-        check(16385, |state| state.f32(-1000.0..=-999.0));
+        check_with(16385, |state| state.f32(-1000.0..=-999.0), compare_f32);
+        check_with(1430, |state| state.f32(-1e-42..=1e-42), compare_f32);
+    }
+
+    fn compare_f32(left: &f32, right: &f32) -> Ordering {
+        let left = utility::f32::to_bits(*left);
+        let right = utility::f32::to_bits(*right);
+        u32::cmp(&left, &right)
     }
 }

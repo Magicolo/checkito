@@ -1,7 +1,4 @@
-use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
-};
+use crate::{generate::Generate, shrink::Shrink, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Same<T: ?Sized>(pub(crate) T);
@@ -10,12 +7,10 @@ impl<T: Clone> Generate for Same<T> {
     type Item = T;
     type Shrink = Self;
 
+    const CARDINALITY: Option<usize> = Some(1);
+
     fn generate(&self, _: &mut State) -> Self::Shrink {
         self.clone()
-    }
-
-    fn constant(&self) -> bool {
-        true
     }
 }
 

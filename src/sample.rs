@@ -1,7 +1,7 @@
 use crate::{
     generate::Generate,
-    random,
     shrink::{Shrink, Shrinkers, shrinker},
+    state,
 };
 use core::{iter, ops::Range};
 
@@ -27,7 +27,7 @@ pub trait Sample: Generate {
     /// Provides a [`Sampler`] that allows to configure sampling settings and
     /// generate samples.
     fn sampler(&self) -> Sampler<Self> {
-        Sampler::new(self, random::seed())
+        Sampler::new(self, state::seed())
     }
 
     /// Generates `count` random values the are progressively larger in size.

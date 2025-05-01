@@ -1,8 +1,4 @@
-use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
-    utility::tuples,
-};
+use crate::{generate::Generate, shrink::Shrink, state::State, utility::tuples};
 use core::marker::PhantomData;
 
 #[derive(Debug)]
@@ -21,12 +17,14 @@ where
     type Item = I;
     type Shrink = Unify<G::Shrink, I>;
 
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Unify(PhantomData, self.1.generate(state))
     }
 
-    fn constant(&self) -> bool {
-        self.1.constant()
+    fn cardinality(&self) -> Option<usize> {
+        self.1.cardinality()
     }
 }
 

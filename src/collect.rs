@@ -1,8 +1,9 @@
 use crate::{
     COLLECT, all,
-    generate::{FullGenerate, Generate, State},
+    generate::{FullGenerate, Generate},
     primitive::{self, Direction, Full},
     shrink::Shrink,
+    state::State,
 };
 use core::{marker::PhantomData, mem::replace, ops::RangeInclusive};
 
@@ -82,11 +83,38 @@ impl<I: Clone, F> Clone for Shrinker<I, F> {
     }
 }
 
+// TODO:
+// trait Bound<T> {
+//     const LOWER: T;
+//     const UPPER: T;
+//     fn lower(&self) -> T;
+//     fn upper(&self) -> T;
+// }
+
+// struct Constant<const N: usize>;
+// struct Range<const L: usize, const U: usize>;
+// impl<const N: usize> Bound<usize> for Constant<N> {
+//     const LOWER: usize = N;
+//     const UPPER: usize = N;
+// }
+// impl<const L: usize, const U: usize> Bound<usize> for Range<L, U> {
+//     const LOWER: usize = L;
+//     const UPPER: usize = U;
+// }
+// impl Bound<usize> for usize {
+//     const LOWER: usize = 0;
+//     const UPPER: usize = usize::MAX;
+// }
+
 impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> Generate
     for Collect<G, C, F>
 {
     type Item = F;
     type Shrink = Shrinker<G::Shrink, F>;
+
+    // TODO: If the largest value of the set `C::Item` can be known statically, then
+    // the cardinality can be estimated.
+    const CARDINALITY: Option<usize> = None;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let count = self.count.generate(state).item();
@@ -94,8 +122,11 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> 
         Shrinker::new(shrinkers, self.minimum)
     }
 
-    fn constant(&self) -> bool {
-        self.count.constant() && self.generator.constant()
+    fn cardinality(&self) -> Option<usize> {
+        // TODO: If the largest value of the set `C::Item` can be known dynamically,
+        // then the cardinality can be estimated. Otherwise, unless `C::cardinality() ==
+        // 0`, the values in the set `C::Item` can not be known.
+        None
     }
 }
 

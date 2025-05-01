@@ -1,25 +1,11 @@
 use crate::{
-    generate::{Generate, State},
-    nudge::Nudge,
+    generate::Generate,
     prove::Prove,
-    random,
     shrink::Shrink,
+    state::{self, Sizes, State},
 };
-use core::{
-    fmt,
-    mem::replace,
-    ops::{
-        Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
-    },
-    panic::AssertUnwindSafe,
-};
+use core::{fmt, mem::replace, panic::AssertUnwindSafe};
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
-
-#[derive(Clone, Copy, Debug)]
-pub struct Sizes {
-    start: f64,
-    end: f64,
-}
 
 /// Bounds the generation process.
 #[derive(Clone, Debug)]
@@ -107,63 +93,11 @@ pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     check: F,
 }
 
-impl Sizes {
-    pub const fn start(&self) -> f64 {
-        self.start
-    }
-
-    pub const fn end(&self) -> f64 {
-        self.end
-    }
-}
-
-impl From<RangeFull> for Sizes {
-    fn from(_: RangeFull) -> Self {
-        Sizes::from(0.0..=1.0)
-    }
-}
-
-impl From<f64> for Sizes {
-    fn from(value: f64) -> Self {
-        Sizes::from(value..=value)
-    }
-}
-
-macro_rules! range {
-    ($range: ident) => {
-        impl From<$range<f64>> for Sizes {
-            fn from(value: $range<f64>) -> Self {
-                let start = match value.start_bound() {
-                    Bound::Included(&value) => value,
-                    Bound::Excluded(&value) => value.nudge(-1.0),
-                    Bound::Unbounded => 0.0,
-                }
-                .clamp(0.0, 1.0);
-                let end = match value.end_bound() {
-                    Bound::Included(&value) => value,
-                    Bound::Excluded(&value) => value.nudge(1.0),
-                    Bound::Unbounded => f64::MAX,
-                }
-                .clamp(0.0, 1.0);
-                assert!(start.is_finite() && end.is_finite() && start <= end);
-                Self {
-                    start: start.clamp(0.0, 1.0),
-                    end: end.clamp(0.0, 1.0),
-                }
-            }
-        }
-    };
-}
-
-range!(Range);
-range!(RangeInclusive);
-range!(RangeTo);
-range!(RangeToInclusive);
-range!(RangeFrom);
-
 enum Machine<S, E> {
     Generate {
         index: usize,
+        count: usize,
+        exhaustive: bool,
     },
     Shrink {
         indices: (usize, usize),
@@ -176,7 +110,7 @@ enum Machine<S, E> {
 
 pub trait Check: Generate {
     fn checker(&self) -> Checker<Self> {
-        Checker::new(self, random::seed())
+        Checker::new(self, state::seed())
     }
 
     fn checks<P: Prove, F: FnMut(Self::Item) -> P>(&self, check: F) -> Checks<Self, P::Error, F> {
@@ -282,9 +216,20 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
+        let (count, exhaustive) = match self.generator.cardinality() {
+            Some(cardinality) => (
+                cardinality.min(self.generate.count),
+                cardinality <= self.generate.count,
+            ),
+            None => (self.generate.count, false),
+        };
         Checks {
             checker: self.clone(),
-            machine: Machine::Generate { index: 0 },
+            machine: Machine::Generate {
+                index: 0,
+                count,
+                exhaustive,
+            },
             check,
         }
     }
@@ -298,23 +243,31 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match replace(&mut self.machine, Machine::Done) {
-                Machine::Generate { index } if index >= self.checker.generate.count => break None,
-                Machine::Generate { index } => {
-                    let mut state = State::new(
-                        index,
-                        self.checker.generate.count,
-                        self.checker.generate.size,
-                        self.checker.generate.seed,
-                    );
+                Machine::Generate { index, count, .. } if index >= count => break None,
+                Machine::Generate {
+                    index,
+                    count,
+                    exhaustive,
+                    ..
+                } => {
+                    let mut state = if exhaustive {
+                        State::exhaustive(index)
+                    } else {
+                        State::random(
+                            index,
+                            count,
+                            self.checker.generate.size,
+                            self.checker.generate.seed,
+                        )
+                    };
                     let shrinker = self.checker.generator.generate(&mut state);
-                    let result = handle(shrinker.item(), &mut self.check);
-                    match result {
+                    match handle(shrinker.item(), &mut self.check) {
                         Ok(proof) => {
-                            if self.checker.generator.constant() {
-                                self.machine = Machine::Done;
-                            } else {
-                                self.machine = Machine::Generate { index: index + 1 };
-                            }
+                            self.machine = Machine::Generate {
+                                index: index + 1,
+                                count,
+                                exhaustive,
+                            };
                             if self.checker.generate.items {
                                 break Some(Result::Pass(Pass {
                                     item: shrinker.item(),
@@ -541,7 +494,7 @@ impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
 impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
 #[doc(hidden)]
-pub mod help {
+pub mod run {
     use super::{Check, Checker, Fail, Generate, Pass, Prove, Result, environment, hook};
     use core::{
         any::type_name,

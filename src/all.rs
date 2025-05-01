@@ -1,7 +1,8 @@
 use crate::{
-    generate::{FullGenerate, Generate, State},
+    generate::{FullGenerate, Generate},
     shrink::Shrink,
-    utility::tuples,
+    state::State,
+    utility::{cardinality, tuples},
 };
 
 #[derive(Clone, Debug)]
@@ -28,6 +29,7 @@ pub(crate) fn shrink<S: Shrink, I: AsMut<[S]> + Clone>(
 
 mod array {
     use super::*;
+    use crate::array::Array;
     use core::array;
 
     impl<G: FullGenerate, const N: usize> FullGenerate for [G; N] {
@@ -43,6 +45,8 @@ mod array {
         type Item = [G::Item; N];
         type Shrink = Shrinker<[G::Shrink; N]>;
 
+        const CARDINALITY: Option<usize> = Array::<G, N>::CARDINALITY;
+
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker {
                 index: 0,
@@ -50,8 +54,10 @@ mod array {
             }
         }
 
-        fn constant(&self) -> bool {
-            self.iter().all(Generate::constant)
+        fn cardinality(&self) -> Option<usize> {
+            self.iter()
+                .map(G::cardinality)
+                .fold(Some(1), cardinality::all_product)
         }
     }
 
@@ -79,6 +85,8 @@ mod slice {
         type Item = Box<[G::Item]>;
         type Shrink = Shrinker<Box<[G::Shrink]>>;
 
+        const CARDINALITY: Option<usize> = None;
+
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker {
                 index: 0,
@@ -89,8 +97,10 @@ mod slice {
             }
         }
 
-        fn constant(&self) -> bool {
-            self.iter().all(Generate::constant)
+        fn cardinality(&self) -> Option<usize> {
+            self.iter()
+                .map(G::cardinality)
+                .fold(Some(1), cardinality::all_product)
         }
     }
 
@@ -118,6 +128,8 @@ mod vector {
         type Item = Vec<G::Item>;
         type Shrink = Shrinker<Vec<G::Shrink>>;
 
+        const CARDINALITY: Option<usize> = None;
+
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker {
                 index: 0,
@@ -128,8 +140,10 @@ mod vector {
             }
         }
 
-        fn constant(&self) -> bool {
-            self.iter().all(Generate::constant)
+        fn cardinality(&self) -> Option<usize> {
+            self.iter()
+                .map(G::cardinality)
+                .fold(Some(1), cardinality::all_product)
         }
     }
 
@@ -166,6 +180,12 @@ macro_rules! tuple {
             type Item = ($($t::Item,)*);
             type Shrink = Shrinker<($($t::Shrink,)*)>;
 
+            const CARDINALITY: Option<usize> = {
+                let cardinality = Some(1);
+                $(let cardinality = cardinality::all_product(cardinality, $t::CARDINALITY);)*
+                cardinality
+            };
+
             fn generate(&self, _state: &mut State) -> Self::Shrink {
                 Shrinker {
                     index: 0,
@@ -173,8 +193,10 @@ macro_rules! tuple {
                 }
             }
 
-            fn constant(&self) -> bool {
-                $($t::constant(&self.$i) &&)* true
+            fn cardinality(&self) -> Option<usize> {
+                let cardinality = Some(1);
+                $(let cardinality = cardinality::all_product(cardinality, $t::CARDINALITY);)*
+                cardinality
             }
         }
 

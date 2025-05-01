@@ -1,7 +1,4 @@
-use crate::{
-    generate::{Generate, State},
-    shrink::Shrink,
-};
+use crate::{generate::Generate, shrink::Shrink, state::State};
 use core::marker::PhantomData;
 
 #[derive(Debug)]
@@ -17,12 +14,14 @@ impl<G: Generate + ?Sized, I: From<G::Item>> Generate for Convert<G, I> {
     type Item = I;
     type Shrink = Convert<G::Shrink, I>;
 
+    const CARDINALITY: Option<usize> = G::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Convert(PhantomData, self.1.generate(state))
     }
 
-    fn constant(&self) -> bool {
-        self.1.constant()
+    fn cardinality(&self) -> Option<usize> {
+        self.1.cardinality()
     }
 }
 

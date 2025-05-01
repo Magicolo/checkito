@@ -1,7 +1,8 @@
 use crate::{
-    generate::{Generate, State},
+    generate::Generate,
     shrink::Shrink,
-    utility::tuples,
+    state::State,
+    utility::{cardinality, tuples},
 };
 use core::f64;
 use ref_cast::RefCast;
@@ -39,8 +40,8 @@ impl<G: Generate> Weight<G> {
 }
 
 impl<G: Generate + ?Sized> Weight<G> {
-    fn constant(&self) -> bool {
-        self.generator.constant()
+    fn cardinality(&self) -> Option<usize> {
+        self.generator.cardinality()
     }
 }
 
@@ -48,7 +49,7 @@ fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
     if items.is_empty() {
         None
     } else {
-        items.get(state.random().usize(0..items.len()))
+        items.get(state.with().size(1.0).usize(0..items.len()))
     }
 }
 
@@ -62,7 +63,7 @@ fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
             .sum::<f64>()
             .min(f64::MAX);
         debug_assert!(total > 0.0 && total.is_finite());
-        let mut random = state.random().f64() * total;
+        let mut random = state.with().size(1.0).f64(0.0..=total);
         debug_assert!(random.is_finite());
         for Weight {
             weight,
@@ -92,12 +93,14 @@ where
     type Item = <Any<G> as Generate>::Item;
     type Shrink = <Any<G> as Generate>::Shrink;
 
+    const CARDINALITY: Option<usize> = Any::<G>::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Any::ref_cast(self.0).generate(state)
     }
 
-    fn constant(&self) -> bool {
-        Any::ref_cast(self.0).constant()
+    fn cardinality(&self) -> Option<usize> {
+        Any::ref_cast(self.0).cardinality()
     }
 }
 
@@ -108,12 +111,14 @@ where
     type Item = <Any<G> as Generate>::Item;
     type Shrink = <Any<G> as Generate>::Shrink;
 
+    const CARDINALITY: Option<usize> = Any::<G>::CARDINALITY;
+
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Any::ref_cast(self.0).generate(state)
     }
 
-    fn constant(&self) -> bool {
-        Any::ref_cast(self.0).constant()
+    fn cardinality(&self) -> Option<usize> {
+        Any::ref_cast(self.0).cardinality()
     }
 }
 
@@ -142,12 +147,14 @@ macro_rules! pointer {
             type Item = <Any<G> as Generate>::Item;
             type Shrink = <Any<G> as Generate>::Shrink;
 
+            const CARDINALITY: Option<usize> = Any::<G>::CARDINALITY;
+
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Any::ref_cast(self.0.as_ref()).generate(state)
             }
 
-            fn constant(&self) -> bool {
-                Any::ref_cast(self.0.as_ref()).constant()
+            fn cardinality(&self) -> Option<usize> {
+                Any::ref_cast(self.0.as_ref()).cardinality()
             }
         }
     };
@@ -159,18 +166,33 @@ pointer!(Arc);
 
 macro_rules! slice {
     ($t: ty, $i: ident, [$($n: ident)?]) => {
-        impl<G: Generate $(,const $n: usize)?> Generate for $t {
+        impl<G: Generate $(, const $n: usize)?> Generate for $t {
             type Item = Option<G::Item>;
             type Shrink = Shrinker<G::Shrink>;
 
+            slice!(STATIC, G $(, $n)?);
+
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                Shrinker($i(as_slice(self.as_ref()), state).map(|generator| generator.generate(state)))
+                Shrinker(
+                    $i(as_slice(self.as_ref()), state).map(|generator| generator.generate(state)),
+                )
             }
 
-            fn constant(&self) -> bool {
-                as_slice(self.as_ref()).iter().all(|generator| generator.constant())
+            fn cardinality(&self) -> Option<usize> {
+                as_slice(self.as_ref())
+                    .iter()
+                    .map(|generator| generator.cardinality())
+                    .fold(Some(0), cardinality::any_sum)
+                    // TODO: Use a `min`?
+                    .or(Self::CARDINALITY)
             }
         }
+    };
+    (STATIC, $g: ident) => {
+        const CARDINALITY: Option<usize> = $g::CARDINALITY;
+    };
+    (STATIC, $g: ident, $n: ident) => {
+        const CARDINALITY: Option<usize> = if $n == 0 { Some(0) } else { $g::CARDINALITY };
     };
 }
 
@@ -188,15 +210,21 @@ macro_rules! tuple {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
+            const CARDINALITY: Option<usize> = {
+                let cardinality = Some(0);
+                $(let cardinality = cardinality::any_sum(cardinality, $ts::CARDINALITY);)*
+                cardinality
+            };
+
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 match self {
                     $(Self::$ts(generator) => orn::$n::Or::$ts(generator.generate(state)),)*
                 }
             }
 
-            fn constant(&self) -> bool {
+            fn cardinality(&self) -> Option<usize> {
                 match self {
-                    $(Self::$ts(generator) => generator.constant(),)*
+                    $(Self::$ts(generator) => generator.cardinality(),)*
                 }
             }
         }
@@ -221,15 +249,24 @@ macro_rules! tuple {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
+            const CARDINALITY: Option<usize> = {
+                let cardinality = Some(0);
+                $(let cardinality = cardinality::any_sum(cardinality, $ts::CARDINALITY);)*
+                cardinality
+            };
+
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.random().u8(..$c) {
+                let value = state.with().size(1.0).u8(..$c);
+                match value {
                     $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
                     _ => unreachable!(),
                 }
             }
 
-            fn constant(&self) -> bool {
-                $(self.0.$is.constant() &&)* true
+            fn cardinality(&self) -> Option<usize> {
+                let cardinality = Some(0);
+                $(let cardinality = cardinality::any_sum(cardinality, self.0.$is.cardinality());)*
+                cardinality
             }
         }
 
@@ -237,10 +274,16 @@ macro_rules! tuple {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
+            const CARDINALITY: Option<usize> = {
+                let cardinality = Some(0);
+                $(let cardinality = cardinality::any_sum(cardinality, $ts::CARDINALITY);)*
+                cardinality
+            };
+
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let _total = ($(self.$is.weight +)* 0.0).min(f64::MAX);
                 debug_assert!(_total > 0.0 && _total.is_finite());
-                let mut _random = state.random().f64() * _total;
+                let mut _random = state.with().size(1.0).f64(0.0..=_total);
                 debug_assert!(_random.is_finite());
                 $(
                     let Weight { weight, generator } = &self.$is;
@@ -253,8 +296,10 @@ macro_rules! tuple {
                 unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");
             }
 
-            fn constant(&self) -> bool {
-                $(self.$is.constant() &&)* true
+            fn cardinality(&self) -> Option<usize> {
+                let cardinality = Some(0);
+                $(let cardinality = cardinality::any_sum(cardinality, self.$is.cardinality());)*
+                cardinality
             }
         }
     };
