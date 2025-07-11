@@ -7,13 +7,13 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> T + Clone> Generate for Map<G, F
     type Item = T;
     type Shrink = Map<G::Shrink, F>;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Map(self.0.clone(), self.1.generate(state))
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.1.cardinality()
     }
 }

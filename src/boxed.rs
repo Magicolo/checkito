@@ -4,7 +4,7 @@ use core::{any::Any, fmt};
 pub struct Boxed<I> {
     generator: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
-    cardinality: fn(&dyn Any) -> Option<usize>,
+    cardinality: fn(&dyn Any) -> Option<u128>,
 }
 
 pub struct Shrinker<I> {
@@ -30,13 +30,13 @@ impl<I> Generate for Boxed<I> {
     type Item = I;
     type Shrink = Shrinker<I>;
 
-    const CARDINALITY: Option<usize> = None;
+    const CARDINALITY: Option<u128> = None;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         (self.generate)(self.generator.as_ref(), state)
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         (self.cardinality)(self.generator.as_ref())
     }
 }
@@ -138,7 +138,7 @@ where
     ))
 }
 
-fn cardinality<G: Generate + 'static>(generator: &dyn Any) -> Option<usize> {
+fn cardinality<G: Generate + 'static>(generator: &dyn Any) -> Option<u128> {
     generator.downcast_ref::<G>().unwrap().cardinality()
 }
 

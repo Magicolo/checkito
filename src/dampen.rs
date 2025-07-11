@@ -12,7 +12,7 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         self.generator.generate(
@@ -22,7 +22,7 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
         )
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.generator.cardinality()
     }
 }

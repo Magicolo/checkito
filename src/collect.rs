@@ -114,7 +114,7 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> 
 
     // TODO: If the largest value of the set `C::Item` can be known statically, then
     // the cardinality can be estimated.
-    const CARDINALITY: Option<usize> = None;
+    const CARDINALITY: Option<u128> = None;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let count = self.count.generate(state).item();
@@ -122,7 +122,7 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize>, F: FromIterator<G::Item>> 
         Shrinker::new(shrinkers, self.minimum)
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         // TODO: If the largest value of the set `C::Item` can be known dynamically,
         // then the cardinality can be estimated. Otherwise, unless `C::cardinality() ==
         // 0`, the values in the set `C::Item` can not be known.

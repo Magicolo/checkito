@@ -17,13 +17,13 @@ where
     type Item = I;
     type Shrink = Unify<G::Shrink, I>;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Unify(PhantomData, self.1.generate(state))
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.1.cardinality()
     }
 }

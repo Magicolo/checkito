@@ -8,7 +8,7 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     type Item = [G::Item; N];
     type Shrink = all::Shrinker<[G::Shrink; N]>;
 
-    const CARDINALITY: Option<usize> = cardinality::all_repeat_static::<N>(G::CARDINALITY);
+    const CARDINALITY: Option<u128> = cardinality::all_repeat_static::<N>(G::CARDINALITY);
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         all::Shrinker {
@@ -17,7 +17,7 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
         }
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         cardinality::all_repeat_static::<N>(self.0.cardinality())
     }
 }

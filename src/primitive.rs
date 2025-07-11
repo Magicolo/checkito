@@ -71,7 +71,7 @@ macro_rules! same {
             type Item = Self;
             type Shrink = Self;
 
-            const CARDINALITY: Option<usize> = Some(1);
+            const CARDINALITY: Option<u128> = Some(1);
 
             fn generate(&self, _: &mut State) -> Self::Shrink {
                 <$t as Clone>::clone(self)
@@ -98,13 +98,13 @@ macro_rules! range {
             type Item = $t;
             type Shrink = $s;
 
-            const CARDINALITY: Option<usize> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $t::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Range::from(self).generate(state)
             }
 
-            fn cardinality(&self) -> Option<usize> {
+            fn cardinality(&self) -> Option<u128> {
                 Range::from(self).cardinality()
             }
         }
@@ -126,7 +126,7 @@ macro_rules! ranges {
             type Item = $t;
             type Shrink = Shrinker<$t>;
 
-            const CARDINALITY: Option<usize> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $t::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker {
@@ -137,8 +137,8 @@ macro_rules! ranges {
                 }
             }
 
-            fn cardinality(&self) -> Option<usize> {
-                usize::checked_sub(self.end() as _, self.start() as _)
+            fn cardinality(&self) -> Option<u128> {
+                u128::checked_sub(self.end() as _, self.start() as _)
             }
         }
     };
@@ -149,7 +149,7 @@ macro_rules! ranges {
             type Item = $t;
             type Shrink = Shrinker<$t>;
 
-            const CARDINALITY: Option<usize> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $t::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 debug_assert!(self.start().is_finite() && self.end().is_finite());
@@ -161,7 +161,7 @@ macro_rules! ranges {
                 }
             }
 
-            fn cardinality(&self) -> Option<usize> {
+            fn cardinality(&self) -> Option<u128> {
                 Some(utility::$t::cardinality(self.start(), self.end()) as _)
             }
         }
@@ -173,7 +173,7 @@ macro_rules! ranges {
             type Item = $t;
             type Shrink = Shrinker;
 
-            const CARDINALITY: Option<usize> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $t::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker(super::Shrinker {
@@ -184,8 +184,8 @@ macro_rules! ranges {
                 })
             }
 
-            fn cardinality(&self) -> Option<usize> {
-                usize::checked_sub(self.end() as _, self.start() as _)
+            fn cardinality(&self) -> Option<u128> {
+                u128::checked_sub(self.end() as _, self.start() as _)
             }
         }
     };
@@ -266,7 +266,7 @@ pub mod bool {
         type Item = bool;
         type Shrink = Shrinker;
 
-        const CARDINALITY: Option<usize> = Some(2);
+        const CARDINALITY: Option<u128> = Some(2);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker(true, state.bool())
@@ -341,13 +341,13 @@ pub mod char {
         type Item = char;
         type Shrink = char;
 
-        const CARDINALITY: Option<usize> = SpecialType::CARDINALITY;
+        const CARDINALITY: Option<u128> = SpecialType::CARDINALITY;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             SPECIAL.generate(state).into()
         }
 
-        fn cardinality(&self) -> Option<usize> {
+        fn cardinality(&self) -> Option<u128> {
             SPECIAL.cardinality()
         }
     }
@@ -356,7 +356,7 @@ pub mod char {
         type Item = char;
         type Shrink = Shrinker;
 
-        const CARDINALITY: Option<usize> = usize::checked_sub(char::MAX as _, 0 as char as _);
+        const CARDINALITY: Option<u128> = u128::checked_sub(char::MAX as _, 0 as char as _);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
@@ -445,13 +445,13 @@ pub mod number {
                 type Item = $t;
                 type Shrink = $t;
 
-                const CARDINALITY: Option<usize> = SpecialType::CARDINALITY;
+                const CARDINALITY: Option<u128> = SpecialType::CARDINALITY;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     SPECIAL.generate(state).into()
                 }
 
-                fn cardinality(&self) -> Option<usize> {
+                fn cardinality(&self) -> Option<u128> {
                     SPECIAL.cardinality()
                 }
             }
@@ -460,7 +460,7 @@ pub mod number {
                 type Item = $t;
                 type Shrink = Shrinker<$t>;
 
-                const CARDINALITY: Option<usize> = usize::checked_sub($t::MAX as _, $t::MIN as _);
+                const CARDINALITY: Option<u128> = u128::checked_sub($t::MAX as _, $t::MIN as _);
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     let value = state.with().size(1.0).u8(..);
@@ -505,13 +505,13 @@ pub mod number {
                 type Item = $t;
                 type Shrink = $t;
 
-                const CARDINALITY: Option<usize> = SpecialType::CARDINALITY;
+                const CARDINALITY: Option<u128> = SpecialType::CARDINALITY;
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     SPECIAL.generate(state).into()
                 }
 
-                fn cardinality(&self) -> Option<usize> {
+                fn cardinality(&self) -> Option<u128> {
                     SPECIAL.cardinality()
                 }
             }
@@ -520,7 +520,7 @@ pub mod number {
                 type Item = $t;
                 type Shrink = Shrinker<$t>;
 
-                const CARDINALITY: Option<usize> = Some(utility::$t::cardinality($t::MIN, $t::MAX) as _);
+                const CARDINALITY: Option<u128> = Some(utility::$t::cardinality($t::MIN, $t::MAX) as _);
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     let value = state.with().size(1.0).u8(..);

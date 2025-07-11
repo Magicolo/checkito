@@ -57,13 +57,13 @@ impl State {
         }
     }
 
-    pub(crate) fn exhaustive(index: usize) -> Self {
+    pub(crate) fn exhaustive(seed: u64) -> Self {
         Self {
-            mode: Mode::Exhaustive(index as _),
+            mode: Mode::Exhaustive(seed as _),
             sizes: Sizes::default(),
             limit: 0,
             depth: 0,
-            seed: 0,
+            seed,
         }
     }
 
@@ -294,12 +294,12 @@ macro_rules! integer {
             pub fn $integer<R: Into<Range<$integer>>>(&mut self, range: R) -> $integer {
                 #[inline]
                 const fn divide(left: $positive, right: $positive) -> $positive {
-                    let d = left / right;
-                    let r = left % right;
-                    if r > 0 {
-                        d + 1
+                    let value = left / right;
+                    let remain = left % right;
+                    if remain > 0 {
+                        value + 1
                     } else {
-                        d
+                        value
                     }
                 }
 
@@ -338,8 +338,11 @@ macro_rules! integer {
                                 debug_assert!(end > 0);
                                 // Centers the range around zero as much as possible.
                                 let center = (range / 2) as $integer;
-                                let shift = (start + center).max(0) + (end - center).min(0);
-                                value.wrapping_add(shift).wrapping_sub(center)
+                                let remain = (range % 2) as $integer;
+                                let shift = (start + center).max(0) + (end - center - remain).min(0);
+                                let a = value.wrapping_add(shift).wrapping_sub(center);
+                                debug_assert!(a >= start && a <= end);
+                                a
                             }
                         }
                         // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
@@ -594,6 +597,16 @@ impl<R: Into<Range<f64>>> From<R> for Sizes {
 mod tests {
     use super::*;
     use core::cmp::Ordering;
+
+    #[test]
+    fn is_within_bounds() {
+        const COUNT: usize = 100;
+        for i in 0..=100 {
+            let mut state = State::random(i, COUNT, (0.0..1.0).into(), 0);
+            let value = state.i8(-128..=1);
+            assert!(value >= -128 && value <= 1);
+        }
+    }
 
     #[test]
     fn random_is_exhaustive() {

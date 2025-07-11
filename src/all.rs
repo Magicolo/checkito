@@ -45,7 +45,7 @@ mod array {
         type Item = [G::Item; N];
         type Shrink = Shrinker<[G::Shrink; N]>;
 
-        const CARDINALITY: Option<usize> = Array::<G, N>::CARDINALITY;
+        const CARDINALITY: Option<u128> = Array::<G, N>::CARDINALITY;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker {
@@ -54,7 +54,7 @@ mod array {
             }
         }
 
-        fn cardinality(&self) -> Option<usize> {
+        fn cardinality(&self) -> Option<u128> {
             self.iter()
                 .map(G::cardinality)
                 .fold(Some(1), cardinality::all_product)
@@ -85,7 +85,7 @@ mod slice {
         type Item = Box<[G::Item]>;
         type Shrink = Shrinker<Box<[G::Shrink]>>;
 
-        const CARDINALITY: Option<usize> = None;
+        const CARDINALITY: Option<u128> = None;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker {
@@ -97,7 +97,7 @@ mod slice {
             }
         }
 
-        fn cardinality(&self) -> Option<usize> {
+        fn cardinality(&self) -> Option<u128> {
             self.iter()
                 .map(G::cardinality)
                 .fold(Some(1), cardinality::all_product)
@@ -128,7 +128,7 @@ mod vector {
         type Item = Vec<G::Item>;
         type Shrink = Shrinker<Vec<G::Shrink>>;
 
-        const CARDINALITY: Option<usize> = None;
+        const CARDINALITY: Option<u128> = None;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker {
@@ -140,7 +140,7 @@ mod vector {
             }
         }
 
-        fn cardinality(&self) -> Option<usize> {
+        fn cardinality(&self) -> Option<u128> {
             self.iter()
                 .map(G::cardinality)
                 .fold(Some(1), cardinality::all_product)
@@ -180,7 +180,7 @@ macro_rules! tuple {
             type Item = ($($t::Item,)*);
             type Shrink = Shrinker<($($t::Shrink,)*)>;
 
-            const CARDINALITY: Option<usize> = {
+            const CARDINALITY: Option<u128> = {
                 let cardinality = Some(1);
                 $(let cardinality = cardinality::all_product(cardinality, $t::CARDINALITY);)*
                 cardinality
@@ -193,7 +193,7 @@ macro_rules! tuple {
                 }
             }
 
-            fn cardinality(&self) -> Option<usize> {
+            fn cardinality(&self) -> Option<u128> {
                 let cardinality = Some(1);
                 $(let cardinality = cardinality::all_product(cardinality, $t::CARDINALITY);)*
                 cardinality

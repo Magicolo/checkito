@@ -21,7 +21,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     type Item = Option<G::Item>;
     type Shrink = Shrinker<G::Shrink, F>;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
@@ -40,7 +40,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
         }
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.generator.cardinality()
     }
 }

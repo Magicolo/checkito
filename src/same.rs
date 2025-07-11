@@ -7,7 +7,7 @@ impl<T: Clone> Generate for Same<T> {
     type Item = T;
     type Shrink = Self;
 
-    const CARDINALITY: Option<usize> = Some(1);
+    const CARDINALITY: Option<u128> = Some(1);
 
     fn generate(&self, _: &mut State) -> Self::Shrink {
         self.clone()

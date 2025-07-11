@@ -144,7 +144,7 @@ impl Generate for Regex {
     type Item = String;
     type Shrink = Shrinker;
 
-    const CARDINALITY: Option<usize> = None;
+    const CARDINALITY: Option<u128> = None;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         match self {
@@ -157,7 +157,7 @@ impl Generate for Regex {
         }
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         match self {
             Regex::Empty | Regex::Text(_) => Some(1),
             Regex::Range(range) => range.cardinality(),

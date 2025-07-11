@@ -14,7 +14,7 @@ impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
     type Item = I::Item;
     type Shrink = Shrinker<I::Shrink, O::Shrink>;
 
-    const CARDINALITY: Option<usize> = cardinality::all_product(O::CARDINALITY, I::CARDINALITY);
+    const CARDINALITY: Option<u128> = cardinality::all_product(O::CARDINALITY, I::CARDINALITY);
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let old = state.clone();
@@ -28,7 +28,7 @@ impl<I: Generate, O: Generate<Item = I> + ?Sized> Generate for Flatten<O> {
         }
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         cardinality::all_product(self.0.cardinality(), I::CARDINALITY)
     }
 }

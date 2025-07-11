@@ -24,13 +24,13 @@ impl<G: Generate + ?Sized> Generate for Shrinker<G> {
     type Item = G::Shrink;
     type Shrink = Shrinker<G::Shrink>;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Shrinker(self.0.generate(state))
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.0.cardinality()
     }
 }

@@ -42,7 +42,7 @@ pub trait Generate {
     /// [`Self`], how large is the set of all possible [`Self::Item`] that they
     /// could generate. If the cardinality of that set can not be determined
     /// or is too large to fit in a [`usize`], set it to [`None`].
-    const CARDINALITY: Option<usize>;
+    const CARDINALITY: Option<u128>;
 
     /// Primary method of this trait. It generates a [`Shrink`] instance that
     /// will be able to produce values of type [`Generate::Item`] and shrink
@@ -54,7 +54,7 @@ pub trait Generate {
     /// [`Self`], how large is the set of all possible [`Self::Item`] that it
     /// could generate. If the cardinality of that set can not be determined
     /// or is too large to fit in a [`usize`], set it to [`None`].
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         Self::CARDINALITY
     }
 
@@ -324,13 +324,13 @@ impl<G: Generate + ?Sized> Generate for &G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         G::cardinality(self)
     }
 }
@@ -339,13 +339,13 @@ impl<G: Generate + ?Sized> Generate for &mut G {
     type Item = G::Item;
     type Shrink = G::Shrink;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         G::generate(self, state)
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         G::cardinality(self)
     }
 }

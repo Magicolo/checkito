@@ -14,13 +14,13 @@ impl<G: Generate + ?Sized, I: From<G::Item>> Generate for Convert<G, I> {
     type Item = I;
     type Shrink = Convert<G::Shrink, I>;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Convert(PhantomData, self.1.generate(state))
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.1.cardinality()
     }
 }

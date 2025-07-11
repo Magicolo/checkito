@@ -7,13 +7,13 @@ impl<G: Generate + ?Sized> Generate for Keep<G> {
     type Item = G::Item;
     type Shrink = Keep<G::Shrink>;
 
-    const CARDINALITY: Option<usize> = G::CARDINALITY;
+    const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Keep(self.0.generate(state))
     }
 
-    fn cardinality(&self) -> Option<usize> {
+    fn cardinality(&self) -> Option<u128> {
         self.0.cardinality()
     }
 }

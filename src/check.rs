@@ -216,19 +216,20 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
-        let (count, exhaustive) = match self.generator.cardinality() {
-            Some(cardinality) => (
-                cardinality.min(self.generate.count),
-                cardinality <= self.generate.count,
-            ),
-            None => (self.generate.count, false),
-        };
+        // TODO:
+        // let (count, exhaustive) = match self.generator.cardinality() {
+        //     Some(cardinality) => (
+        //         cardinality.min(self.generate.count),
+        //         cardinality <= self.generate.count,
+        //     ),
+        //     None => (self.generate.count, false),
+        // };
         Checks {
             checker: self.clone(),
             machine: Machine::Generate {
                 index: 0,
-                count,
-                exhaustive,
+                count: self.generate.count,
+                exhaustive: false,
             },
             check,
         }
@@ -250,16 +251,23 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     exhaustive,
                     ..
                 } => {
-                    let mut state = if exhaustive {
-                        State::exhaustive(index)
-                    } else {
-                        State::random(
-                            index,
-                            count,
-                            self.checker.generate.size,
-                            self.checker.generate.seed,
-                        )
-                    };
+                    // TODO:
+                    // let mut state = if exhaustive {
+                    //     State::exhaustive(index)
+                    // } else {
+                    //     State::random(
+                    //         index,
+                    //         count,
+                    //         self.checker.generate.size,
+                    //         self.checker.generate.seed,
+                    //     )
+                    // };
+                    let mut state = State::random(
+                        index,
+                        count,
+                        self.checker.generate.size,
+                        self.checker.generate.seed,
+                    );
                     let shrinker = self.checker.generator.generate(&mut state);
                     match handle(shrinker.item(), &mut self.check) {
                         Ok(proof) => {

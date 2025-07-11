@@ -38,6 +38,14 @@ mod range {
                 }
 
                 #[test]
+                fn has_extremes() {
+                    let samples = $t::generator().samples(1000).collect::<Vec<_>>();
+                    assert!(samples.contains(&$t::MIN));
+                    assert!(samples.contains(&$t::MAX));
+                    assert!(samples.contains(&(0 as $t)));
+                }
+
+                #[test]
                 fn is_in_range() {
                     assert!((number::<$t>(), number::<$t>())
                         .map(|(low, high)| (low.min($t::MAX - $t::MAX / 100 as $t), high.min($t::MAX - $t::MAX / 100 as $t)))
@@ -73,14 +81,18 @@ mod range {
 
                 #[test]
                 fn is_in_range_to_inclusive() {
-                    assert!(number::<$t>().flat_map(|high| (..=high, high)).check(|(low, high)| low <= high)
-                    .is_none());
+                    assert!(number::<$t>()
+                        .flat_map(|high| (..=high, high))
+                        .check(|(low, high)| low <= high)
+                        .ok_or(true)
+                        .unwrap_err());
                 }
 
                 #[test]
                 fn is_positive() {
-                    assert!(positive::<$t>().check(|value| value >= 0 as $t)
-                    .is_none());
+                    assert!(positive::<$t>()
+                        .check(|value| value >= 0 as $t)
+                        .is_none());
                 }
 
                 #[test]
