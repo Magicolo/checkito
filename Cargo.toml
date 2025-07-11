@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
-rust-version = "1.65"
+rust-version = "1.70"
 
 [badges]
 github = { repository = "Magicolo/checkito", workflow = "test" }
@@ -21,10 +21,10 @@ check = ["checkito_macro/check"]
 regex = ["regex-syntax/unicode", "checkito_macro/regex"]
 
 [dependencies]
-orn = { version = "0.6.1" }
-fastrand = { version = "2.3.0" }
-ref-cast = { version = "1.0.23" }
-rustversion = { version = "1.0.19" }
+orn = "0.6.1"
+fastrand = "2.3.0"
+ref-cast = "1.0.24"
+rustversion = "1.0.21"
 checkito_macro = { version = "0.4.2", path = "checkito_macro", default-features = false, optional = true }
 regex-syntax = { version = "0.8.5", default-features = false, optional = true }
 
