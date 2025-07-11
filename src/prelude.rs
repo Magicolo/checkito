@@ -1,8 +1,8 @@
 use crate::{
     any::Any, array::Array, boxed::Boxed, collect::Collect, convert::Convert, dampen::Dampen,
     filter::Filter, filter_map::FilterMap, flatten::Flatten, generate::Generate, keep::Keep,
-    map::Map, primitive::number::Number, same::Same, shrink::Shrinker, size::Size, state::Sizes,
-    unify::Unify,
+    lazy::Lazy, map::Map, primitive::number::Number, same::Same, shrink::Shrinker, size::Size,
+    state::Sizes, unify::Unify,
 };
 use core::marker::PhantomData;
 
@@ -195,10 +195,6 @@ pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> impl Generate<Item =
 }
 
 #[inline]
-pub const fn lazy<G: Generate, F: Fn() -> G + Clone>(
-    generator: F,
-) -> impl Generate<Item = G::Item> {
-    let generator = flat_map((), move |_| generator());
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn lazy<G: Generate, F: Fn() -> G>(generator: F) -> Lazy<G, F> {
+    Lazy::new(generator)
 }

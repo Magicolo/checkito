@@ -13,6 +13,7 @@ pub mod filter_map;
 pub mod flatten;
 pub mod generate;
 pub mod keep;
+pub mod lazy;
 pub mod map;
 mod prelude;
 pub mod primitive;
