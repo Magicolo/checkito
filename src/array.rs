@@ -1,4 +1,4 @@
-use crate::{all, generate::Generate, state::State, utility::cardinality};
+use crate::{all, cardinality, generate::Generate, state::State};
 use core::array;
 
 #[derive(Clone, Debug)]

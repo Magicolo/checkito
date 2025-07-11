@@ -1,9 +1,4 @@
-use crate::{
-    generate::Generate,
-    shrink::Shrink,
-    state::State,
-    utility::{cardinality, tuples},
-};
+use crate::{cardinality, generate::Generate, shrink::Shrink, state::State, utility::tuples};
 use core::f64;
 use ref_cast::RefCast;
 use std::{rc::Rc, sync::Arc};

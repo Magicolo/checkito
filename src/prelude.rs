@@ -1,8 +1,8 @@
 use crate::{
-    any::Any, array::Array, boxed::Boxed, collect::Collect, convert::Convert, dampen::Dampen,
-    filter::Filter, filter_map::FilterMap, flatten::Flatten, generate::Generate, keep::Keep,
-    lazy::Lazy, map::Map, primitive::number::Number, same::Same, shrink::Shrinker, size::Size,
-    state::Sizes, unify::Unify,
+    any::Any, array::Array, boxed::Boxed, cardinality::Cardinality, collect::Collect,
+    convert::Convert, dampen::Dampen, filter::Filter, filter_map::FilterMap, flatten::Flatten,
+    generate::Generate, keep::Keep, lazy::Lazy, map::Map, primitive::number::Number, same::Same,
+    shrink::Shrinker, size::Size, state::Sizes, unify::Unify,
 };
 use core::marker::PhantomData;
 
@@ -197,4 +197,15 @@ pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> impl Generate<Item =
 #[inline]
 pub const fn lazy<G: Generate, F: Fn() -> G>(generator: F) -> Lazy<G, F> {
     Lazy::new(generator)
+}
+
+/// Overrides both the static and dynamic cardinalities to `C`. To use
+/// when the context allows to provide a more precise cardinality value than the
+/// default estimate.
+///
+/// Providing an incorrect cardinality can cause unexpected behavior when
+/// running [`Check::check`].
+#[inline]
+pub const fn cardinality<G: Generate, const C: u128>(generator: G) -> Cardinality<G, C> {
+    Cardinality(generator)
 }

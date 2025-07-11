@@ -1,9 +1,9 @@
 use crate::{
+    cardinality,
     convert::Convert,
     generate::{FullGenerate, Generate},
     shrink::Shrink,
     state::State,
-    utility::cardinality,
 };
 use core::{marker::PhantomData, mem::take};
 use std::{rc::Rc, sync::Arc};

@@ -1,4 +1,4 @@
-use crate::{generate::Generate, shrink::Shrink, state::State, utility::cardinality};
+use crate::{cardinality, generate::Generate, shrink::Shrink, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Flatten<G: ?Sized>(pub(crate) G);

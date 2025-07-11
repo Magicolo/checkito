@@ -4,6 +4,7 @@ pub mod all;
 pub mod any;
 pub mod array;
 pub mod boxed;
+pub mod cardinality;
 pub mod check;
 pub mod collect;
 pub mod convert;
@@ -43,3 +44,9 @@ const COLLECT: usize = 1024;
 const RETRIES: usize = 256;
 #[cfg(feature = "regex")]
 const REPEATS: u32 = 64;
+
+/*
+    TODO:
+    - Create a U8<const N: u8>; type for each primitive such that a range between those
+    constants can have a precise static cardinality.
+*/

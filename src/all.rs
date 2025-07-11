@@ -1,8 +1,9 @@
 use crate::{
+    cardinality,
     generate::{FullGenerate, Generate},
     shrink::Shrink,
     state::State,
-    utility::{cardinality, tuples},
+    utility::tuples,
 };
 
 #[derive(Clone, Debug)]
