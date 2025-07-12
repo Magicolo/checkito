@@ -57,13 +57,13 @@ impl State {
         }
     }
 
-    pub(crate) fn exhaustive(seed: u64) -> Self {
+    pub(crate) fn exhaustive(index: usize) -> Self {
         Self {
-            mode: Mode::Exhaustive(seed as _),
+            mode: Mode::Exhaustive(index as _),
             sizes: Sizes::default(),
             limit: 0,
             depth: 0,
-            seed,
+            seed: 0,
         }
     }
 

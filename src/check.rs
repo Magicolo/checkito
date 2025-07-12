@@ -251,23 +251,16 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     exhaustive,
                     ..
                 } => {
-                    // TODO:
-                    // let mut state = if exhaustive {
-                    //     State::exhaustive(index)
-                    // } else {
-                    //     State::random(
-                    //         index,
-                    //         count,
-                    //         self.checker.generate.size,
-                    //         self.checker.generate.seed,
-                    //     )
-                    // };
-                    let mut state = State::random(
-                        index,
-                        count,
-                        self.checker.generate.size,
-                        self.checker.generate.seed,
-                    );
+                    let mut state = if exhaustive {
+                        State::exhaustive(index)
+                    } else {
+                        State::random(
+                            index,
+                            count,
+                            self.checker.generate.size,
+                            self.checker.generate.seed,
+                        )
+                    };
                     let shrinker = self.checker.generator.generate(&mut state);
                     match handle(shrinker.item(), &mut self.check) {
                         Ok(proof) => {
