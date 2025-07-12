@@ -30,7 +30,7 @@ pub trait Sample: Generate {
         Sampler::new(self, state::seed())
     }
 
-    /// Generates `count` random values the are progressively larger in size.
+    /// Generates `count` random values that are progressively larger in size.
     /// For additional sampling settings, see [`Sample::sampler`].
     fn samples(&self, count: usize) -> Samples<Self> {
         let mut sampler = self.sampler();
