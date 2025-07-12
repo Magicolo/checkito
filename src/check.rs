@@ -216,20 +216,24 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
-        // TODO:
-        // let (count, exhaustive) = match self.generator.cardinality() {
-        //     Some(cardinality) => (
-        //         cardinality.min(self.generate.count),
-        //         cardinality <= self.generate.count,
-        //     ),
-        //     None => (self.generate.count, false),
-        // };
+        let (count, exhaustive) = match self
+            .generator
+            .cardinality()
+            .map(usize::try_from)
+            .and_then(result::Result::ok)
+        {
+            Some(cardinality) => (
+                cardinality.min(self.generate.count),
+                cardinality <= self.generate.count,
+            ),
+            None => (self.generate.count, false),
+        };
         Checks {
             checker: self.clone(),
             machine: Machine::Generate {
                 index: 0,
-                count: self.generate.count,
-                exhaustive: false,
+                count,
+                exhaustive,
             },
             check,
         }
