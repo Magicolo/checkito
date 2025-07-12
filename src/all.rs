@@ -59,6 +59,7 @@ mod array {
             self.iter()
                 .map(G::cardinality)
                 .fold(Some(1), cardinality::all_product)
+                .or(Self::CARDINALITY)
         }
     }
 
@@ -102,6 +103,7 @@ mod slice {
             self.iter()
                 .map(G::cardinality)
                 .fold(Some(1), cardinality::all_product)
+                .or(Self::CARDINALITY)
         }
     }
 
@@ -145,6 +147,7 @@ mod vector {
             self.iter()
                 .map(G::cardinality)
                 .fold(Some(1), cardinality::all_product)
+                .or(Self::CARDINALITY)
         }
     }
 

@@ -178,7 +178,6 @@ macro_rules! slice {
                     .iter()
                     .map(|generator| generator.cardinality())
                     .fold(Some(0), cardinality::any_sum)
-                    // TODO: Use a `min`?
                     .or(Self::CARDINALITY)
             }
         }
