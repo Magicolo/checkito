@@ -1,5 +1,10 @@
-use crate::{Generate, state::State};
+use crate::{
+    Generate,
+    collect::Count,
+    state::{Range, State},
+};
 
+#[derive(Debug, Clone)]
 pub struct Cardinality<G, const C: u128>(pub(crate) G);
 
 impl<G: Generate, const C: u128> Generate for Cardinality<G, C> {
@@ -10,6 +15,14 @@ impl<G: Generate, const C: u128> Generate for Cardinality<G, C> {
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         self.0.generate(state)
+    }
+}
+
+impl<G: Count, const C: u128> Count for Cardinality<G, C> {
+    const COUNT: Option<Range<usize>> = G::COUNT;
+
+    fn count(&self) -> Range<usize> {
+        self.0.count()
     }
 }
 
@@ -34,40 +47,58 @@ pub(crate) const fn all_product(left: Option<u128>, right: Option<u128>) -> Opti
 pub(crate) const fn all_repeat_static<const N: usize>(value: Option<u128>) -> Option<u128> {
     match (value, N) {
         (_, 0) => Some(1),
-        (Some(value @ 0..=1), _) => Some(value),
-        (Some(value), count) => {
+        (Some(0), _) => Some(0),
+        (Some(1), _) => Some(1),
+        (Some(value @ 2..), count @ 1..) => {
             if count <= u32::MAX as _ {
                 u128::checked_pow(value, count as _)
             } else {
                 None
             }
         }
-        (None, _) => None,
+        (None, 1..) => None,
     }
 }
 
-// pub(crate) const fn all_repeat_dynamic(mut value: Option<u128>, count:
-// usize) -> Option<u128> {     // FIXME: This considers only all values
-// of [T; count] but not [T; count     // - 1]     // (and so on).
-// Example: when T = true, count = 2, the possible     // values are [],
-// // [true], [true, true]. This is not represented here.     for i in
-// 0..=count {         let a = match (value, count) {
-//             (_, 0) => Some(1),
-//             (Some(0), _) => Some(0),
-//             (Some(1), count @ 1..) => u128::checked_add(count as _, 1),
-//             (Some(value @ 2..), count @ 1..) => {
-//                 if count <= u32::MAX as _ {
-//                     if let Some(result) = u128::checked_pow(value, count
-// as _) {                         u128::checked_mul(result, value /
-// (value - 1))                     } else {
-//                         None
-//                     }
-//                 } else {
-//                     None
-//                 }
-//             }
-//             (None, _) => None,
-//         };
-//     }
-//     value
-// }
+pub(crate) const fn all_repeat_dynamic(value: Option<u128>, count: usize) -> Option<u128> {
+    match (value, count) {
+        (Some(0), _) | (_, 0) => Some(1),
+        (Some(1), count @ 1..) => u128::checked_add(count as _, 1),
+        (Some(value @ 2..), count @ 1..) => {
+            if count < u32::MAX as _ {
+                match u128::checked_pow(value, count as u32 + 1) {
+                    Some(pow) => Some((pow - 1) / (value - 1)),
+                    None => None,
+                }
+            } else {
+                None
+            }
+        }
+        (None, 1..) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_repeat_dynamic_is_valid() {
+        assert_eq!(all_repeat_dynamic(None, 1), None);
+        assert_eq!(all_repeat_dynamic(None, 1000), None);
+        assert_eq!(all_repeat_dynamic(None, 0), Some(1));
+        assert_eq!(all_repeat_dynamic(Some(1), 0), Some(1));
+        assert_eq!(all_repeat_dynamic(Some(1), 10), Some(11));
+        assert_eq!(all_repeat_dynamic(Some(1), 1000), Some(1001));
+        assert_eq!(all_repeat_dynamic(Some(2), 0), Some(1));
+        assert_eq!(all_repeat_dynamic(Some(2), 1), Some(1 + 2));
+        assert_eq!(
+            all_repeat_dynamic(Some(2), 5),
+            Some(1 + 2 + 4 + 8 + 16 + 32)
+        );
+        assert_eq!(
+            all_repeat_dynamic(Some(3), 5),
+            Some(1 + 3 + 9 + 27 + 81 + 243)
+        );
+    }
+}
