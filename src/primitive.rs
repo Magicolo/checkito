@@ -1,5 +1,6 @@
 use crate::{
     any::Any,
+    collect::Count,
     generate::{FullGenerate, Generate},
     shrink::Shrink,
     state::{Range, State},
@@ -52,37 +53,51 @@ impl<T: ?Sized> Clone for Full<T> {
 
 impl<T: ?Sized> Copy for Full<T> {}
 
+impl Count for usize {
+    fn count(&self) -> Range<usize> {
+        Range::from(*self)
+    }
+}
+
+impl Count for Full<usize> {
+    const COUNT: Option<Range<usize>> = Some(Range(usize::MIN, usize::MAX));
+
+    fn count(&self) -> Range<usize> {
+        Range(usize::MIN, usize::MAX)
+    }
+}
+
 macro_rules! full {
-    ($t:ty) => {
-        impl FullGenerate for $t {
-            type Generator = Full<$t>;
-            type Item = $t;
+    ($type: ty) => {
+        impl FullGenerate for $type {
+            type Generator = Full<$type>;
+            type Item = $type;
 
             fn generator() -> Self::Generator {
-                Full::<$t>::NEW
+                Full::<$type>::NEW
             }
         }
     };
 }
 
 macro_rules! same {
-    ($t:ty) => {
-        impl Generate for $t {
+    ($type: ty) => {
+        impl Generate for $type {
             type Item = Self;
             type Shrink = Self;
 
             const CARDINALITY: Option<u128> = Some(1);
 
             fn generate(&self, _: &mut State) -> Self::Shrink {
-                <$t as Clone>::clone(self)
+                <$type as Clone>::clone(self)
             }
         }
 
-        impl Shrink for $t {
+        impl Shrink for $type {
             type Item = Self;
 
             fn item(&self) -> Self::Item {
-                <$t as Clone>::clone(self)
+                <$type as Clone>::clone(self)
             }
 
             fn shrink(&mut self) -> Option<Self> {
@@ -93,12 +108,12 @@ macro_rules! same {
 }
 
 macro_rules! range {
-    ($t:ident, $r:ty, $s:ty) => {
-        impl Generate for $r {
-            type Item = $t;
-            type Shrink = $s;
+    ($type: ident, $range: ty, $shrink: ty) => {
+        impl Generate for $range {
+            type Item = $type;
+            type Shrink = $shrink;
 
-            const CARDINALITY: Option<u128> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $type::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Range::from(self).generate(state)
@@ -112,27 +127,27 @@ macro_rules! range {
 }
 
 macro_rules! ranges {
-    (RANGES, $t: ident, $s: ty) => {
-        range!($t, ops::Range<$t>, $s);
-        range!($t, ops::RangeInclusive<$t>, $s);
-        range!($t, ops::RangeFrom<$t>, $s);
-        range!($t, ops::RangeTo<$t>, $s);
-        range!($t, ops::RangeToInclusive<$t>, $s);
+    (RANGES, $type: ident, $shrink: ty) => {
+        range!($type, ops::Range<$type>, $shrink);
+        range!($type, ops::RangeInclusive<$type>, $shrink);
+        range!($type, ops::RangeFrom<$type>, $shrink);
+        range!($type, ops::RangeTo<$type>, $shrink);
+        range!($type, ops::RangeToInclusive<$type>, $shrink);
     };
-    (INTEGER, $t:ident) => {
-        ranges!(RANGES, $t, Shrinker<$t>);
+    (INTEGER, $type:ident) => {
+        ranges!(RANGES, $type, Shrinker<$type>);
 
-        impl Generate for Range<$t> {
-            type Item = $t;
-            type Shrink = Shrinker<$t>;
+        impl Generate for Range<$type> {
+            type Item = $type;
+            type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $type::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker {
                     start: self.start(),
                     end: self.end(),
-                    item: state.$t(self),
+                    item: state.$type(self),
                     direction: Direction::None,
                 }
             }
@@ -142,44 +157,44 @@ macro_rules! ranges {
             }
         }
     };
-    (FLOATING, $t:ident) => {
-        ranges!(RANGES, $t, Shrinker<$t>);
+    (FLOATING, $type:ident) => {
+        ranges!(RANGES, $type, Shrinker<$type>);
 
-        impl Generate for Range<$t> {
-            type Item = $t;
-            type Shrink = Shrinker<$t>;
+        impl Generate for Range<$type> {
+            type Item = $type;
+            type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $type::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 debug_assert!(self.start().is_finite() && self.end().is_finite());
                 Shrinker {
                     start: self.start(),
                     end: self.end(),
-                    item: state.$t(self),
+                    item: state.$type(self),
                     direction: Direction::None,
                 }
             }
 
             fn cardinality(&self) -> Option<u128> {
-                Some(utility::$t::cardinality(self.start(), self.end()) as _)
+                Some(utility::$type::cardinality(self.start(), self.end()) as _)
             }
         }
     };
-    (CHARACTER, $t:ident) => {
-        ranges!(RANGES, $t, Shrinker);
+    (CHARACTER, $type:ident) => {
+        ranges!(RANGES, $type, Shrinker);
 
-        impl Generate for Range<$t> {
-            type Item = $t;
+        impl Generate for Range<$type> {
+            type Item = $type;
             type Shrink = Shrinker;
 
-            const CARDINALITY: Option<u128> = $t::CARDINALITY;
+            const CARDINALITY: Option<u128> = $type::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker(super::Shrinker {
                     start: self.start() as u32,
                     end: self.end() as u32,
-                    item: state.$t(self) as u32,
+                    item: state.$type(self) as u32,
                     direction: Direction::None,
                 })
             }
@@ -192,62 +207,63 @@ macro_rules! ranges {
 }
 
 macro_rules! shrink {
-    ($s:expr, $t:ident) => {{
-        // Never change `$s.item` to preserve coherence in calls to `shrinker.item()`.
-        match $s.direction {
-            Direction::None if $s.item >= 0 as $t => {
-                $s.start = $s.start.max(0 as $t);
-                if $s.start == $s.item {
+    ($shrink:expr, $type:ident) => {{
+        // Never change `$shrink.item` to preserve coherence in calls to
+        // `shrinker.item()`.
+        match $shrink.direction {
+            Direction::None if $shrink.item >= 0 as $type => {
+                $shrink.start = $shrink.start.max(0 as $type);
+                if $shrink.start == $shrink.item {
                     None
                 } else {
-                    $s.direction = Direction::High;
-                    $s.end = $s.item;
+                    $shrink.direction = Direction::High;
+                    $shrink.end = $shrink.item;
                     Some(Shrinker {
-                        direction: $s.direction,
-                        start: $s.start,
-                        end: $s.start,
-                        item: $s.start,
+                        direction: $shrink.direction,
+                        start: $shrink.start,
+                        end: $shrink.start,
+                        item: $shrink.start,
                     })
                 }
             }
             Direction::None => {
-                $s.end = $s.end.min(0 as $t);
-                if $s.end == $s.item {
+                $shrink.end = $shrink.end.min(0 as $type);
+                if $shrink.end == $shrink.item {
                     None
                 } else {
-                    $s.direction = Direction::Low;
-                    $s.start = $s.item;
+                    $shrink.direction = Direction::Low;
+                    $shrink.start = $shrink.item;
                     Some(Shrinker {
-                        direction: $s.direction,
-                        start: $s.end,
-                        end: $s.end,
-                        item: $s.end,
+                        direction: $shrink.direction,
+                        start: $shrink.end,
+                        end: $shrink.end,
+                        item: $shrink.end,
                     })
                 }
             }
             Direction::Low => {
-                let delta = $s.end / 2 as $t - $s.start / 2 as $t;
-                let middle = $s.start + delta;
-                if middle == $s.start || middle == $s.end {
+                let delta = $shrink.end / 2 as $type - $shrink.start / 2 as $type;
+                let middle = $shrink.start + delta;
+                if middle == $shrink.start || middle == $shrink.end {
                     None
                 } else {
-                    let mut shrinker = $s.clone();
+                    let mut shrinker = $shrink.clone();
                     shrinker.start = middle;
                     shrinker.item = middle;
-                    $s.end = middle;
+                    $shrink.end = middle;
                     Some(shrinker)
                 }
             }
             Direction::High => {
-                let delta = $s.end / 2 as $t - $s.start / 2 as $t;
-                let middle = $s.start + delta;
-                if middle == $s.start || middle == $s.end {
+                let delta = $shrink.end / 2 as $type - $shrink.start / 2 as $type;
+                let middle = $shrink.start + delta;
+                if middle == $shrink.start || middle == $shrink.end {
                     None
                 } else {
-                    let mut shrinker = $s.clone();
+                    let mut shrinker = $shrink.clone();
                     shrinker.end = middle;
                     shrinker.item = middle;
-                    $s.start = middle;
+                    $shrink.start = middle;
                     Some(shrinker)
                 }
             }
@@ -417,33 +433,39 @@ pub mod number {
     }
 
     macro_rules! number {
-        ($t: ident) => {
-            impl Number for $t {
+        ($type: ident) => {
+            impl Number for $type {
                 type Full = ops::RangeInclusive<Self>;
                 type Negative = ops::RangeInclusive<Self>;
                 type Positive = ops::RangeInclusive<Self>;
                 type Special = Special<Self>;
 
                 const FULL: Self::Full = Self::MIN..=Self::MAX;
-                const MAX: Self = $t::MAX;
-                const MIN: Self = $t::MIN;
+                const MAX: Self = $type::MAX;
+                const MIN: Self = $type::MIN;
                 const NEGATIVE: Self::Negative = Self::MIN..=Self::ZERO;
-                const ONE: Self = 1 as $t;
+                const ONE: Self = 1 as $type;
                 const POSITIVE: Self::Positive = Self::ZERO..=Self::MAX;
-                const SPECIAL: Self::Special = Special::<$t>::NEW;
-                const ZERO: Self = 0 as $t;
+                const SPECIAL: Self::Special = Special::<$type>::NEW;
+                const ZERO: Self = 0 as $type;
             }
         };
     }
 
     macro_rules! integer {
-        ($t:ident) => {
-            type SpecialType = Any<($t, $t, $t)>;
-            const SPECIAL: SpecialType = Any((0 as $t, $t::MIN, $t::MAX));
+        ($type: ident) => {
+            type SpecialType = Any<($type, $type, $type)>;
+            const SPECIAL: SpecialType = Any((0 as $type, $type::MIN, $type::MAX));
 
-            impl Generate for Special<$t> {
-                type Item = $t;
-                type Shrink = $t;
+            impl From<Full<$type>> for Range<$type> {
+                fn from(_: Full<$type>) -> Self {
+                    Range($type::MIN, $type::MAX)
+                }
+            }
+
+            impl Generate for Special<$type> {
+                type Item = $type;
+                type Shrink = $type;
 
                 const CARDINALITY: Option<u128> = SpecialType::CARDINALITY;
 
@@ -456,54 +478,54 @@ pub mod number {
                 }
             }
 
-            impl Generate for Full<$t> {
-                type Item = $t;
-                type Shrink = Shrinker<$t>;
+            impl Generate for Full<$type> {
+                type Item = $type;
+                type Shrink = Shrinker<$type>;
 
-                const CARDINALITY: Option<u128> = u128::checked_sub($t::MAX as _, $t::MIN as _);
+                const CARDINALITY: Option<u128> = u128::checked_sub($type::MAX as _, $type::MIN as _);
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     let value = state.with().size(1.0).u8(..);
                     match value {
-                        0..=249 => Range($t::MIN, $t::MAX).generate(state),
+                        0..=249 => Range($type::MIN, $type::MAX).generate(state),
                         250.. => Shrinker {
-                            start: $t::MIN,
-                            end: $t::MAX,
-                            item: Special::<$t>::NEW.generate(state),
+                            start: $type::MIN,
+                            end: $type::MAX,
+                            item: Special::<$type>::NEW.generate(state),
                             direction: Direction::None
                         },
                     }
                 }
             }
 
-            impl Shrink for Shrinker<$t> {
-                type Item = $t;
+            impl Shrink for Shrinker<$type> {
+                type Item = $type;
 
                 fn item(&self) -> Self::Item {
                     self.item
                 }
 
                 fn shrink(&mut self) -> Option<Self> {
-                    shrink!(self, $t)
+                    shrink!(self, $type)
                 }
             }
 
-            full!($t);
-            same!($t);
-            ranges!(INTEGER, $t);
-            number!($t);
+            full!($type);
+            same!($type);
+            ranges!(INTEGER, $type);
+            number!($type);
         };
-        ($($ts:ident),*) => { $(pub(crate) mod $ts { use super::*; integer!($ts); })* };
+        ($($types: ident),*) => { $(pub(crate) mod $types { use super::*; integer!($types); })* };
     }
 
     macro_rules! floating {
-        ($t:ident) => {
-            type SpecialType = Any<($t, $t, $t, $t, $t, $t, $t, $t)>;
-            const SPECIAL: SpecialType = Any((0 as $t, $t::MIN, $t::MAX, $t::EPSILON, $t::INFINITY, $t::NEG_INFINITY, $t::MIN_POSITIVE, $t::NAN));
+        ($type: ident) => {
+            type SpecialType = Any<($type, $type, $type, $type, $type, $type, $type, $type)>;
+            const SPECIAL: SpecialType = Any((0 as $type, $type::MIN, $type::MAX, $type::EPSILON, $type::INFINITY, $type::NEG_INFINITY, $type::MIN_POSITIVE, $type::NAN));
 
-            impl Generate for Special<$t> {
-                type Item = $t;
-                type Shrink = $t;
+            impl Generate for Special<$type> {
+                type Item = $type;
+                type Shrink = $type;
 
                 const CARDINALITY: Option<u128> = SpecialType::CARDINALITY;
 
@@ -516,31 +538,31 @@ pub mod number {
                 }
             }
 
-            impl Generate for Full<$t> {
-                type Item = $t;
-                type Shrink = Shrinker<$t>;
+            impl Generate for Full<$type> {
+                type Item = $type;
+                type Shrink = Shrinker<$type>;
 
-                const CARDINALITY: Option<u128> = Some(utility::$t::cardinality($t::MIN, $t::MAX) as _);
+                const CARDINALITY: Option<u128> = Some(utility::$type::cardinality($type::MIN, $type::MAX) as _);
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     let value = state.with().size(1.0).u8(..);
                     match value {
-                        0..=89 => ($t::MIN..=$t::MAX).generate(state),
-                        90..=179 => (-$t::EPSILON.recip()..=$t::EPSILON.recip()).generate(state),
-                        180..=214 => ($t::MIN.recip()..=$t::MAX.recip()).generate(state),
-                        215..=249 => (-$t::EPSILON..=$t::EPSILON).generate(state),
+                        0..=89 => ($type::MIN..=$type::MAX).generate(state),
+                        90..=179 => (-$type::EPSILON.recip()..=$type::EPSILON.recip()).generate(state),
+                        180..=214 => ($type::MIN.recip()..=$type::MAX.recip()).generate(state),
+                        215..=249 => (-$type::EPSILON..=$type::EPSILON).generate(state),
                         250.. => Shrinker {
-                            start: $t::MIN,
-                            end: $t::MAX,
-                            item: Special::<$t>::NEW.generate(state),
+                            start: $type::MIN,
+                            end: $type::MAX,
+                            item: Special::<$type>::NEW.generate(state),
                             direction: Direction::None
                         },
                     }
                 }
             }
 
-            impl Shrink for Shrinker<$t> {
-                type Item = $t;
+            impl Shrink for Shrinker<$type> {
+                type Item = $type;
 
                 fn item(&self) -> Self::Item {
                     self.item
@@ -548,19 +570,19 @@ pub mod number {
 
                 fn shrink(&mut self) -> Option<Self> {
                     if self.item.is_finite() {
-                        shrink!(self, $t)
+                        shrink!(self, $type)
                     } else {
                         None
                     }
                 }
             }
 
-            full!($t);
-            same!($t);
-            ranges!(FLOATING, $t);
-            number!($t);
+            full!($type);
+            same!($type);
+            ranges!(FLOATING, $type);
+            number!($type);
         };
-        ($($ts:ident),*) => { $(pub mod $ts { use super::*; floating!($ts); })* };
+        ($($types: ident),*) => { $(pub mod $types { use super::*; floating!($types); })* };
     }
 
     integer!(

@@ -1,9 +1,10 @@
 use crate::{
     cardinality,
+    collect::Count,
     convert::Convert,
     generate::{FullGenerate, Generate},
     shrink::Shrink,
-    state::State,
+    state::{Range, State},
 };
 use core::{marker::PhantomData, mem::take};
 use std::{rc::Rc, sync::Arc};
@@ -183,6 +184,14 @@ macro_rules! pointer {
 
                 fn cardinality(&self) -> Option<u128> {
                     G::cardinality(self)
+                }
+            }
+
+            impl<C: Count> Count for $t<C> {
+                const COUNT: Option<Range<usize>> = C::COUNT;
+
+                fn count(&self) -> Range<usize> {
+                    C::count(self)
                 }
             }
         }

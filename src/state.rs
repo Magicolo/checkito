@@ -1,4 +1,4 @@
-use crate::utility;
+use crate::{collect::Count, utility};
 use core::{iter::FusedIterator, ops};
 use fastrand::Rng;
 use std::{
@@ -532,6 +532,42 @@ impl DoubleEndedIterator for States {
 }
 
 impl FusedIterator for States {}
+
+impl Count for Range<usize> {
+    fn count(&self) -> Range<usize> {
+        *self
+    }
+}
+
+impl Count for ops::RangeFrom<usize> {
+    fn count(&self) -> Range<usize> {
+        self.clone().into()
+    }
+}
+
+impl Count for ops::Range<usize> {
+    fn count(&self) -> Range<usize> {
+        self.clone().into()
+    }
+}
+
+impl Count for ops::RangeInclusive<usize> {
+    fn count(&self) -> Range<usize> {
+        self.clone().into()
+    }
+}
+
+impl Count for ops::RangeTo<usize> {
+    fn count(&self) -> Range<usize> {
+        Range::from(*self)
+    }
+}
+
+impl Count for ops::RangeToInclusive<usize> {
+    fn count(&self) -> Range<usize> {
+        Range::from(*self)
+    }
+}
 
 impl Sizes {
     const SCALE: f64 = 6.0;

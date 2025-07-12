@@ -7,6 +7,7 @@ pub mod boxed;
 pub mod cardinality;
 pub mod check;
 pub mod collect;
+pub mod constant;
 pub mod convert;
 pub mod dampen;
 pub mod filter;
@@ -49,4 +50,6 @@ const REPEATS: u32 = 64;
     TODO:
     - Create a U8<const N: u8>; type for each primitive such that a range between those
     constants can have a precise static cardinality.
+    - Create a folder/module for 'generate' and put all relevant files in it. The 'Generate' trait should be in the 'mod.rs'.
+    - Find a way to allow composed generators in 'Generate::collect_with' such that dampened ranges can be used.
 */

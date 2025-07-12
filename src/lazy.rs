@@ -1,6 +1,11 @@
-use crate::{Generate, state::State};
+use crate::{
+    Generate,
+    collect::Count,
+    state::{Range, State},
+};
 use std::sync::OnceLock;
 
+#[derive(Debug, Clone)]
 pub struct Lazy<T, F>(OnceLock<T>, F);
 
 impl<G: Generate, F: Fn() -> G> Lazy<G, F> {
@@ -24,6 +29,14 @@ impl<G: Generate, F: Fn() -> G> Generate for Lazy<G, F> {
     }
 }
 
+impl<G: Count, F: Fn() -> G> Count for Lazy<G, F> {
+    const COUNT: Option<Range<usize>> = G::COUNT;
+
+    fn count(&self) -> Range<usize> {
+        self.0.get_or_init(|| self.1()).count()
+    }
+}
+
 #[rustversion::since(1.80)]
 #[allow(clippy::incompatible_msrv)]
 impl<G: Generate, F: FnOnce() -> G> Generate for core::cell::LazyCell<G, F> {
@@ -32,12 +45,22 @@ impl<G: Generate, F: FnOnce() -> G> Generate for core::cell::LazyCell<G, F> {
 
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
-    fn generate(&self, state: &mut crate::state::State) -> Self::Shrink {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         Self::force(self).generate(state)
     }
 
     fn cardinality(&self) -> Option<u128> {
         Self::force(self).cardinality()
+    }
+}
+
+#[rustversion::since(1.80)]
+#[allow(clippy::incompatible_msrv)]
+impl<G: Count, F: FnOnce() -> G> Count for core::cell::LazyCell<G, F> {
+    const COUNT: Option<Range<usize>> = G::COUNT;
+
+    fn count(&self) -> Range<usize> {
+        Self::force(self).count()
     }
 }
 
@@ -49,11 +72,21 @@ impl<G: Generate, F: FnOnce() -> G> Generate for std::sync::LazyLock<G, F> {
 
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
-    fn generate(&self, state: &mut crate::state::State) -> Self::Shrink {
+    fn generate(&self, state: &mut State) -> Self::Shrink {
         Self::force(self).generate(state)
     }
 
     fn cardinality(&self) -> Option<u128> {
         Self::force(self).cardinality()
+    }
+}
+
+#[rustversion::since(1.80)]
+#[allow(clippy::incompatible_msrv)]
+impl<G: Count, F: FnOnce() -> G> Count for std::sync::LazyLock<G, F> {
+    const COUNT: Option<Range<usize>> = G::COUNT;
+
+    fn count(&self) -> Range<usize> {
+        Self::force(self).count()
     }
 }

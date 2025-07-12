@@ -8,7 +8,7 @@ use crate::{
     prelude::collect,
     primitive::char,
     shrink::Shrink,
-    state::State,
+    state::{Range, State},
 };
 use core::{fmt, ops::RangeInclusive};
 use regex_syntax::{
@@ -21,7 +21,7 @@ pub enum Regex {
     Empty,
     Text(String),
     Range(RangeInclusive<char>),
-    Collect(collect::Collect<Box<Regex>, RangeInclusive<usize>, String>),
+    Collect(collect::Collect<Box<Regex>, Range<usize>, String>),
     Any(any::Any<Box<[Regex]>>),
     All(Box<[Regex]>),
 }
@@ -114,8 +114,7 @@ impl Regex {
                 }
                 Self::Collect(collect(
                     Box::new(tree),
-                    low as usize..=high as usize,
-                    Some(low as _),
+                    (low as usize..=high as usize).into(),
                 ))
             }
             HirKind::Class(Class::Unicode(class)) => {

@@ -1,10 +1,11 @@
 use crate::{
+    collect::Count,
     generate::Generate,
-    state::{Sizes, State},
+    state::{Range, Sizes, State},
 };
 
 #[derive(Debug, Clone)]
-pub struct Size<G, F>(pub(crate) G, pub(crate) F);
+pub struct Size<G, F: ?Sized>(pub(crate) G, pub(crate) F);
 
 impl<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S> Generate for Size<G, F> {
     type Item = G::Item;
@@ -19,5 +20,13 @@ impl<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S> Generate for Size<G, F> {
 
     fn cardinality(&self) -> Option<u128> {
         self.0.cardinality()
+    }
+}
+
+impl<C: Count, S: Into<Sizes>, F: Fn(Sizes) -> S> Count for Size<C, F> {
+    const COUNT: Option<Range<usize>> = C::COUNT;
+
+    fn count(&self) -> Range<usize> {
+        self.0.count()
     }
 }

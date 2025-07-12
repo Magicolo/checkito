@@ -1,9 +1,9 @@
 use crate::{
-    COLLECT, RETRIES,
+    RETRIES,
     any::Any,
     array::Array,
     boxed::Boxed,
-    collect::Collect,
+    collect::{self, Collect, Count},
     convert::Convert,
     dampen::Dampen,
     filter::Filter,
@@ -12,13 +12,12 @@ use crate::{
     keep::Keep,
     map::Map,
     prelude,
-    sample::Sample,
     shrink::Shrink,
     size::Size,
     state::{Sizes, State},
     unify::Unify,
 };
-use core::{iter::FromIterator, ops::RangeInclusive};
+use core::iter::FromIterator;
 
 /// When implemented for a type `T`, this allows to retrieve a generator for `T`
 /// that does not require any parameter. It should be implemented for any type
@@ -217,27 +216,24 @@ pub trait Generate {
     }
 
     /// Same as [`Generate::collect_with`] but with a predefined `count`.
-    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, RangeInclusive<usize>, F>
+    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, collect::Default, F>
     where
         Self: Sized,
     {
-        prelude::collect(self, 0..=COLLECT, Some(0))
+        prelude::collect(self, collect::Default::new())
     }
 
     /// Generates a variable number of items based on the provided `count`
     /// [`Generate`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
-    fn collect_with<C: Generate<Item = usize>, F: FromIterator<Self::Item>>(
+    fn collect_with<C: Generate<Item = usize> + Count, F: FromIterator<Self::Item>>(
         self,
         count: C,
     ) -> Collect<Self, C, F>
     where
         Self: Sized,
     {
-        // TODO: Find a more reliable way to determine the minimum (and perhaps the
-        // maximum); use a `Bound` trait?
-        let minimum = count.sample(0.0);
-        prelude::collect(self, count, Some(minimum))
+        prelude::collect(self, count)
     }
 
     /// Maps the current `size` of the generation process to a different one.

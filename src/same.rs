@@ -1,4 +1,9 @@
-use crate::{generate::Generate, shrink::Shrink, state::State};
+use crate::{
+    collect::Count,
+    generate::Generate,
+    shrink::Shrink,
+    state::{Range, State},
+};
 
 #[derive(Clone, Debug)]
 pub struct Same<T: ?Sized>(pub(crate) T);
@@ -23,5 +28,11 @@ impl<T: Clone> Shrink for Same<T> {
 
     fn shrink(&mut self) -> Option<Self> {
         None
+    }
+}
+
+impl Count for Same<usize> {
+    fn count(&self) -> Range<usize> {
+        Range::from(self.0)
     }
 }

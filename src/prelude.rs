@@ -1,8 +1,24 @@
 use crate::{
-    any::Any, array::Array, boxed::Boxed, cardinality::Cardinality, collect::Collect,
-    convert::Convert, dampen::Dampen, filter::Filter, filter_map::FilterMap, flatten::Flatten,
-    generate::Generate, keep::Keep, lazy::Lazy, map::Map, primitive::number::Number, same::Same,
-    shrink::Shrinker, size::Size, state::Sizes, unify::Unify,
+    any::Any,
+    array::Array,
+    boxed::Boxed,
+    cardinality::Cardinality,
+    collect::{Collect, Count},
+    convert::Convert,
+    dampen::Dampen,
+    filter::Filter,
+    filter_map::FilterMap,
+    flatten::Flatten,
+    generate::Generate,
+    keep::Keep,
+    lazy::Lazy,
+    map::Map,
+    primitive::number::Number,
+    same::Same,
+    shrink::Shrinker,
+    size::Size,
+    state::Sizes,
+    unify::Unify,
 };
 use core::marker::PhantomData;
 
@@ -91,15 +107,13 @@ pub const fn array<G: Generate, const N: usize>(generator: G) -> Array<G, N> {
 }
 
 #[inline]
-pub const fn collect<G: Generate, C: Generate<Item = usize>, F: FromIterator<G::Item>>(
+pub const fn collect<G: Generate, C: Generate<Item = usize> + Count, F: FromIterator<G::Item>>(
     generator: G,
     count: C,
-    minimum: Option<usize>,
 ) -> Collect<G, C, F> {
     Collect {
         _marker: PhantomData,
         count,
-        minimum,
         generator,
     }
 }

@@ -1,4 +1,8 @@
-use crate::{generate::Generate, state::State};
+use crate::{
+    collect::Count,
+    generate::Generate,
+    state::{Range, State},
+};
 
 #[derive(Clone, Debug)]
 pub struct Dampen<G: ?Sized> {
@@ -24,5 +28,13 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
 
     fn cardinality(&self) -> Option<u128> {
         self.generator.cardinality()
+    }
+}
+
+impl<C: Count + ?Sized> Count for Dampen<C> {
+    const COUNT: Option<Range<usize>> = C::COUNT;
+
+    fn count(&self) -> Range<usize> {
+        self.generator.count()
     }
 }

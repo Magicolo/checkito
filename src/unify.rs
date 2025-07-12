@@ -1,4 +1,10 @@
-use crate::{generate::Generate, shrink::Shrink, state::State, utility::tuples};
+use crate::{
+    collect::Count,
+    generate::Generate,
+    shrink::Shrink,
+    state::{Range, State},
+    utility::tuples,
+};
 use core::marker::PhantomData;
 
 #[derive(Debug)]
@@ -7,6 +13,17 @@ pub struct Unify<T: ?Sized, I: ?Sized>(pub(crate) PhantomData<I>, pub(crate) T);
 impl<T: Clone, I: ?Sized> Clone for Unify<T, I> {
     fn clone(&self) -> Self {
         Self(PhantomData, self.1.clone())
+    }
+}
+
+impl<G: Generate<Item = usize> + Count> Count for Unify<G, usize>
+where
+    Unify<G::Shrink, usize>: Shrink<Item = usize>,
+{
+    const COUNT: Option<Range<usize>> = G::COUNT;
+
+    fn count(&self) -> crate::state::Range<usize> {
+        self.1.count()
     }
 }
 
