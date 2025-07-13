@@ -1,6 +1,6 @@
 [package]
 name = "checkito_macro"
-version = "0.4.2"
+version = "0.5.0"
 authors = ["Magicolo <magicololand@gmail.com>"]
 edition = "2021"
 documentation = "https://docs.rs/checkito_macro/latest/checkito_macro/"
@@ -15,9 +15,10 @@ rust-version = "1.65.0"
 proc-macro = true
 
 [features]
-default = ["regex", "check"]
+default = ["regex", "check", "constant"]
 regex = ["regex-syntax/unicode"]
 check = []
+constant = []
 
 [dependencies]
 syn = { version = "2.0.96", features = [

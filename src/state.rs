@@ -1,6 +1,6 @@
 use crate::{
     collect::Count,
-    primitive::number::{u8::U8, usize::Usize},
+    primitive::{u8::U8, usize::Usize},
     utility,
 };
 use core::{iter::FusedIterator, ops, ops::Bound};

@@ -1,22 +1,28 @@
 #![forbid(unsafe_code)]
 
+use quote::ToTokens;
+
 #[cfg(feature = "check")]
 mod check;
+#[cfg(feature = "constant")]
+mod constant;
 #[cfg(feature = "regex")]
 mod regex;
 
 #[cfg(feature = "regex")]
 #[proc_macro]
 pub fn regex(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use quote::quote;
-    use syn::parse_macro_input;
-    let regex::Regex(pattern, repeats) = parse_macro_input!(input);
-    let pattern = pattern.token();
-    let repeats = match repeats {
-        Some(repeats) => quote!({ #repeats }.into()),
-        None => quote!(None),
-    };
-    quote!(::checkito::regex(#pattern, #repeats).unwrap()).into()
+    syn::parse_macro_input!(input as regex::Regex).into()
+}
+
+#[cfg(feature = "constant")]
+#[proc_macro]
+pub fn constant(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let expression = syn::parse_macro_input!(input);
+    match constant::convert(&expression) {
+        Some(tokens) => tokens.into(),
+        None => expression.into_token_stream().into(),
+    }
 }
 
 #[cfg(feature = "check")]

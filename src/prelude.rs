@@ -13,7 +13,7 @@ use crate::{
     keep::Keep,
     lazy::Lazy,
     map::Map,
-    primitive::number::Number,
+    primitive::Number,
     same::Same,
     shrink::Shrinker,
     size::Size,

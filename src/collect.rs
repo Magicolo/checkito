@@ -1,7 +1,7 @@
 use crate::{
     COLLECT, all, cardinality,
     generate::{FullGenerate, Generate},
-    primitive::{self, Constant, Direction, Full, number::usize::Usize},
+    primitive::{self, Constant, Direction, Full, usize::Usize},
     shrink::Shrink,
     state::{Range, State},
 };

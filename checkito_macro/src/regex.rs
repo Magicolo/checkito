@@ -1,3 +1,5 @@
+use proc_macro::TokenStream;
+use quote::quote;
 use regex_syntax::Parser;
 use syn::{
     Error, Expr, ExprLit, Lit, LitStr,
@@ -32,5 +34,16 @@ impl Parse for Regex {
             Ok(_) => Ok(Regex(pattern, repeats)),
             Err(error) => Err(Error::new(pattern.span(), format!("{error}"))),
         }
+    }
+}
+
+impl From<Regex> for TokenStream {
+    fn from(Regex(pattern, repeats): Regex) -> Self {
+        let pattern = pattern.token();
+        let repeats = match repeats {
+            Some(repeats) => quote!({ #repeats }.into()),
+            None => quote!(None),
+        };
+        quote!(::checkito::regex(#pattern, #repeats).unwrap()).into()
     }
 }

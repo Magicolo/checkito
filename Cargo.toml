@@ -16,16 +16,17 @@ rust-version = "1.70"
 github = { repository = "Magicolo/checkito", workflow = "test" }
 
 [features]
-default = ["check", "regex"]
+default = ["check", "regex", "constant"]
 check = ["checkito_macro/check"]
 regex = ["regex-syntax/unicode", "checkito_macro/regex"]
+constant = ["checkito_macro/constant"]
 
 [dependencies]
 orn = "0.6.1"
 fastrand = "2.3.0"
 ref-cast = "1.0.24"
 rustversion = "1.0.21"
-checkito_macro = { version = "0.4.2", path = "checkito_macro", default-features = false, optional = true }
+checkito_macro = { version = "0.5.0", path = "checkito_macro", default-features = false, optional = true }
 regex-syntax = { version = "0.8.5", default-features = false, optional = true }
 
 [dev-dependencies]

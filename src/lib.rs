@@ -32,6 +32,8 @@ mod utility;
 pub use check::Check;
 #[cfg(feature = "check")]
 pub use checkito_macro::check;
+#[cfg(feature = "constant")]
+pub use checkito_macro::constant;
 #[cfg(feature = "regex")]
 pub use checkito_macro::regex;
 pub use generate::{FullGenerate, Generate};
