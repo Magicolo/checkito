@@ -1,10 +1,11 @@
-use crate::{collect::Count, utility};
-use core::{iter::FusedIterator, ops};
-use fastrand::Rng;
-use std::{
-    mem::replace,
-    ops::{Bound, RangeBounds},
+use crate::{
+    collect::Count,
+    primitive::number::{u8::U8, usize::Usize},
+    utility,
 };
+use core::{iter::FusedIterator, ops, ops::Bound};
+use fastrand::Rng;
+use std::{mem::replace, ops::RangeBounds};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sizes {
@@ -29,8 +30,8 @@ pub(crate) struct States {
     seed: u64,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Range<T>(pub(crate) T, pub(crate) T);
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Range<S, E = S>(pub(crate) S, pub(crate) E);
 
 pub struct With<'a> {
     state: &'a mut State,
@@ -125,13 +126,13 @@ impl State {
 
     #[inline]
     pub fn bool(&mut self) -> bool {
-        self.u8(Range(0, 1)) == 1
+        self.u8(Range(U8::ZERO, U8::ONE)) == 1
     }
 
     #[inline]
     pub fn char<R: Into<Range<char>>>(&mut self, range: R) -> char {
         let Range(start, end) = range.into();
-        let value = self.u32(Range(start as _, end as _));
+        let value = self.u32(Range(start as u32, end as u32));
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 }
@@ -286,7 +287,7 @@ macro_rules! ranges {
 }
 
 macro_rules! integer {
-    ($integer: ident, $positive: ident) => {
+    ($integer: ident, $positive: ident, $constant: ident) => {
         ranges!($integer, |value| $integer::saturating_add(value, 1), |value| $integer::saturating_sub(value, 1));
 
         impl State {
@@ -359,8 +360,8 @@ macro_rules! integer {
             }
         }
     };
-    ($([$integer: ident, $positive: ident]),*) => {
-        $(integer!($integer, $positive);)*
+    ($([$integer: ident, $positive: ident, $constant: ident]),*) => {
+        $(integer!($integer, $positive, $constant);)*
     }
 }
 
@@ -439,18 +440,18 @@ ranges!(
         .unwrap_or(char::REPLACEMENT_CHARACTER)
 );
 integer!(
-    [u8, u8],
-    [u16, u16],
-    [u32, u32],
-    [u64, u64],
-    [u128, u128],
-    [usize, usize],
-    [i8, u8],
-    [i16, u16],
-    [i32, u32],
-    [i64, u64],
-    [i128, u128],
-    [isize, usize]
+    [u8, u8, U8],
+    [u16, u16, U16],
+    [u32, u32, U32],
+    [u64, u64, U64],
+    [u128, u128, U128],
+    [usize, usize, Usize],
+    [i8, u8, I8],
+    [i16, u16, I16],
+    [i32, u32, I32],
+    [i64, u64, I64],
+    [i128, u128, I128],
+    [isize, usize, Isize]
 );
 
 floating!([f32, i32], [f64, i64]);
@@ -566,6 +567,22 @@ impl Count for ops::RangeTo<usize> {
 impl Count for ops::RangeToInclusive<usize> {
     fn count(&self) -> Range<usize> {
         Range::from(*self)
+    }
+}
+
+impl<const N: usize> Count for Usize<N> {
+    const COUNT: Option<Range<usize>> = Some(Range(N, N));
+
+    fn count(&self) -> Range<usize> {
+        Range(N, N)
+    }
+}
+
+impl<const N: usize, const M: usize> Count for Range<Usize<N>, Usize<M>> {
+    const COUNT: Option<Range<usize>> = Some(Range(N, M));
+
+    fn count(&self) -> Range<usize> {
+        Range(N, M)
     }
 }
 

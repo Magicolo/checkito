@@ -12,6 +12,7 @@ use crate::{
     keep::Keep,
     map::Map,
     prelude,
+    primitive::Constant,
     shrink::Shrink,
     size::Size,
     state::{Sizes, State},
@@ -220,7 +221,7 @@ pub trait Generate {
     where
         Self: Sized,
     {
-        prelude::collect(self, collect::Default::new())
+        prelude::collect(self, Constant::VALUE)
     }
 
     /// Generates a variable number of items based on the provided `count`

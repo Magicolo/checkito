@@ -1,8 +1,7 @@
 use crate::{
     COLLECT, all, cardinality,
-    constant::{self, Usize},
     generate::{FullGenerate, Generate},
-    primitive::{self, Direction, Full},
+    primitive::{self, Constant, Direction, Full, number::usize::Usize},
     shrink::Shrink,
     state::{Range, State},
 };
@@ -36,13 +35,13 @@ pub(crate) enum Machine {
     Done,
 }
 
-pub type Default = constant::Range<Usize<0>, Usize<COLLECT>>;
+pub type Default = Range<Usize<0>, Usize<COLLECT>>;
 
 impl<G: Generate, F: FromIterator<G::Item>> Collect<G, Default, F> {
     pub(crate) const fn new(generator: G) -> Self {
         Self {
             generator,
-            count: constant::Range::new(),
+            count: Constant::VALUE,
             _marker: PhantomData,
         }
     }

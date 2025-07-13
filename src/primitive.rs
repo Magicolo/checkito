@@ -29,8 +29,20 @@ pub struct Shrinker<T> {
     pub(crate) direction: Direction,
 }
 
-impl<T: ?Sized> Special<T> {
-    pub(crate) const NEW: Self = Self(PhantomData);
+pub trait Constant {
+    const VALUE: Self;
+}
+
+impl<T> Constant for Full<T> {
+    const VALUE: Self = Self(PhantomData);
+}
+
+impl<T> Constant for Special<T> {
+    const VALUE: Self = Self(PhantomData);
+}
+
+impl<S: Constant, E: Constant> Constant for Range<S, E> {
+    const VALUE: Self = Self(S::VALUE, E::VALUE);
 }
 
 impl<T: ?Sized> Clone for Special<T> {
@@ -40,10 +52,6 @@ impl<T: ?Sized> Clone for Special<T> {
 }
 
 impl<T: ?Sized> Copy for Special<T> {}
-
-impl<T: ?Sized> Full<T> {
-    pub(crate) const NEW: Self = Self(PhantomData);
-}
 
 impl<T: ?Sized> Clone for Full<T> {
     fn clone(&self) -> Self {
@@ -74,7 +82,7 @@ macro_rules! full {
             type Item = $type;
 
             fn generator() -> Self::Generator {
-                Full::<$type>::NEW
+                Constant::VALUE
             }
         }
     };
@@ -102,6 +110,73 @@ macro_rules! same {
 
             fn shrink(&mut self) -> Option<Self> {
                 None
+            }
+        }
+    };
+}
+
+macro_rules! constant {
+    ($type: ident, $name: ident, $shrink: ty) => {
+        #[derive(Debug, Copy, Clone, Default)]
+        pub struct $name<const N: $type>;
+
+        impl $name<{ $type::MIN }> {
+            pub const MIN: Self = Self;
+        }
+
+        impl $name<{ $type::MAX }> {
+            pub const MAX: Self = Self;
+        }
+
+        impl $name<{ 0 as $type }> {
+            pub const ZERO: Self = Self;
+        }
+
+        impl $name<{ 1 as $type }> {
+            pub const ONE: Self = Self;
+        }
+
+        impl<const N: $type> From<$name<N>> for $type {
+            fn from(_: $name<N>) -> Self {
+                N
+            }
+        }
+
+        impl<const N: $type> Constant for $name<N> {
+            const VALUE: Self = Self;
+        }
+
+        impl<const N: $type> Generate for $name<N> {
+            type Item = $type;
+            type Shrink = $type;
+
+            const CARDINALITY: Option<u128> = Some(1);
+
+            fn generate(&self, _: &mut State) -> Self::Shrink {
+                N
+            }
+        }
+
+        impl<const N: $type> From<$name<N>> for Range<$name<N>, $name<N>> {
+            fn from(value: $name<N>) -> Self {
+                Range(value, value)
+            }
+        }
+
+        impl<const N: $type, const M: $type> From<Range<$name<N>, $name<M>>> for Range<$type> {
+            fn from(_: Range<$name<N>, $name<M>>) -> Self {
+                Range(N, M)
+            }
+        }
+
+        impl<const N: $type, const M: $type> Generate for Range<$name<N>, $name<M>> {
+            type Item = $type;
+            type Shrink = $shrink;
+
+            const CARDINALITY: Option<u128> = u128::checked_sub(M as _, N as _);
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                Range(N, M).generate(state)
             }
         }
     };
@@ -275,8 +350,39 @@ pub mod bool {
     use super::*;
     use core::mem::take;
 
+    #[derive(Debug, Copy, Clone, Default)]
+    pub struct Bool<const N: bool>;
     #[derive(Copy, Clone, Debug)]
     pub struct Shrinker(bool, bool);
+
+    impl<const N: bool> From<Bool<N>> for bool {
+        fn from(_: Bool<N>) -> Self {
+            N
+        }
+    }
+
+    impl Bool<true> {
+        pub const TRUE: Self = Self;
+    }
+
+    impl Bool<false> {
+        pub const FALSE: Self = Self;
+    }
+
+    impl<const N: bool> Constant for Bool<N> {
+        const VALUE: Self = Self;
+    }
+
+    impl<const N: bool> Generate for Bool<N> {
+        type Item = bool;
+        type Shrink = bool;
+
+        const CARDINALITY: Option<u128> = Some(1);
+
+        fn generate(&self, _: &mut State) -> Self::Shrink {
+            N
+        }
+    }
 
     impl Generate for Full<bool> {
         type Item = bool;
@@ -377,11 +483,11 @@ pub mod char {
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
             match value {
-                0..=249 => Range(0 as char, char::MAX).generate(state),
+                0..=249 => Range(Char::MIN, Char::MAX).generate(state),
                 250.. => Shrinker(super::Shrinker {
                     start: 0,
                     end: char::MAX as _,
-                    item: Special::<char>::NEW.generate(state) as _,
+                    item: Special::<char>::VALUE.generate(state) as _,
                     direction: Direction::None,
                 }),
             }
@@ -403,6 +509,7 @@ pub mod char {
     full!(char);
     same!(char);
     ranges!(CHARACTER, char);
+    constant!(char, Char, Shrinker);
 }
 
 pub mod string {
@@ -446,14 +553,14 @@ pub mod number {
                 const NEGATIVE: Self::Negative = Self::MIN..=Self::ZERO;
                 const ONE: Self = 1 as $type;
                 const POSITIVE: Self::Positive = Self::ZERO..=Self::MAX;
-                const SPECIAL: Self::Special = Special::<$type>::NEW;
+                const SPECIAL: Self::Special = Constant::VALUE;
                 const ZERO: Self = 0 as $type;
             }
         };
     }
 
     macro_rules! integer {
-        ($type: ident) => {
+        ($type: ident, $constant: ident) => {
             type SpecialType = Any<($type, $type, $type)>;
             const SPECIAL: SpecialType = Any((0 as $type, $type::MIN, $type::MAX));
 
@@ -491,7 +598,7 @@ pub mod number {
                         250.. => Shrinker {
                             start: $type::MIN,
                             end: $type::MAX,
-                            item: Special::<$type>::NEW.generate(state),
+                            item: Special::<$type>::VALUE.generate(state),
                             direction: Direction::None
                         },
                     }
@@ -513,9 +620,10 @@ pub mod number {
             full!($type);
             same!($type);
             ranges!(INTEGER, $type);
+            constant!($type, $constant, Shrinker::<$type>);
             number!($type);
         };
-        ($($types: ident),*) => { $(pub(crate) mod $types { use super::*; integer!($types); })* };
+        ($([$type: ident, $constant: ident]),*$(,)?) => { $(pub(crate) mod $type { use super::*; integer!($type, $constant); })* };
     }
 
     macro_rules! floating {
@@ -554,7 +662,7 @@ pub mod number {
                         250.. => Shrinker {
                             start: $type::MIN,
                             end: $type::MAX,
-                            item: Special::<$type>::NEW.generate(state),
+                            item: Special::<$type>::VALUE.generate(state),
                             direction: Direction::None
                         },
                     }
@@ -586,7 +694,18 @@ pub mod number {
     }
 
     integer!(
-        u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize
+        [u8, U8],
+        [u16, U16],
+        [u32, U32],
+        [u64, U64],
+        [u128, U128],
+        [usize, Usize],
+        [i8, I8],
+        [i16, I16],
+        [i32, I32],
+        [i64, I64],
+        [i128, I128],
+        [isize, Isize],
     );
     floating!(f32, f64);
 }
