@@ -215,7 +215,7 @@ macro_rules! ranges {
         range!($type, ops::RangeTo<$type>, $shrink);
         range!($type, ops::RangeToInclusive<$type>, $shrink);
     };
-    (INTEGER, $type:ident) => {
+    (INTEGER, $type: ident) => {
         ranges!(RANGES, $type, Shrinker<$type>);
 
         impl Generate for Range<$type> {
