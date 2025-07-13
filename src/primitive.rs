@@ -165,7 +165,10 @@ macro_rules! constant {
 
         impl<const N: $type, const M: $type> From<Range<$name<N>, $name<M>>> for Range<$type> {
             fn from(_: Range<$name<N>, $name<M>>) -> Self {
-                Range(N, M)
+                Range(
+                    if N < M { N } else { M } as _,
+                    if N < M { M } else { N } as _,
+                )
             }
         }
 
@@ -173,10 +176,13 @@ macro_rules! constant {
             type Item = $type;
             type Shrink = $shrink;
 
-            const CARDINALITY: Option<u128> = u128::checked_sub(M as _, N as _);
+            const CARDINALITY: Option<u128> = Some(u128::wrapping_sub(
+                if N < M { M } else { N } as _,
+                if N < M { N } else { M } as _,
+            ));
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                Range(N, M).generate(state)
+                Range::<$type>::from(*self).generate(state)
             }
         }
     };
@@ -228,7 +234,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                u128::checked_sub(self.end() as _, self.start() as _)
+                Some(u128::wrapping_sub(self.end() as _, self.start() as _))
             }
         }
     };
@@ -275,7 +281,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                u128::checked_sub(self.end() as _, self.start() as _)
+                Some(u128::wrapping_sub(self.end() as _, self.start() as _))
             }
         }
     };
@@ -478,7 +484,7 @@ pub mod char {
         type Item = char;
         type Shrink = Shrinker;
 
-        const CARDINALITY: Option<u128> = u128::checked_sub(char::MAX as _, 0 as char as _);
+        const CARDINALITY: Option<u128> = Some(u128::wrapping_sub(char::MAX as _, 0 as char as _));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
@@ -589,7 +595,7 @@ pub mod number {
                 type Item = $type;
                 type Shrink = Shrinker<$type>;
 
-                const CARDINALITY: Option<u128> = u128::checked_sub($type::MAX as _, $type::MIN as _);
+                const CARDINALITY: Option<u128> = Some(u128::wrapping_sub($type::MAX as _, $type::MIN as _));
 
                 fn generate(&self, state: &mut State) -> Self::Shrink {
                     let value = state.with().size(1.0).u8(..);
