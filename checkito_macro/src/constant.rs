@@ -1,16 +1,18 @@
 use quote::quote_spanned;
 use syn::{
     __private::{Span, TokenStream2},
-    Expr, ExprBinary, ExprCast, ExprGroup, ExprLit, ExprRange, ExprUnary, Ident, Lit, RangeLimits,
-    Type, TypeGroup, TypeParen, TypePath,
+    Block, Expr, ExprBinary, ExprBlock, ExprCast, ExprConst, ExprGroup, ExprLit, ExprRange,
+    ExprUnary, Ident, Lit, RangeLimits, Stmt, Type, TypeGroup, TypeParen, TypePath,
     spanned::Spanned,
 };
 
 pub fn convert(expression: &Expr) -> Option<TokenStream2> {
     if let Some((module, constant)) = unpack_expression(expression) {
-        return Some(
-            quote_spanned!(expression.span() => ::checkito::primitive::#module::#constant::<{ #expression }>),
-        );
+        return Some(quote_spanned!(expression.span() => {
+            #[allow(unused_braces)]
+            #[allow(clippy::unnecessary_cast)]
+            <::checkito::primitive::#module::#constant::<{ #expression }> as ::checkito::primitive::Constant>::VALUE
+        }));
     }
 
     match expression {
@@ -24,7 +26,10 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
                     let (module, constant) = unpack_expression(end)?;
                     (
                         quote_spanned!(expression.span() => #module::MIN),
-                        quote_spanned!(end.span() => #end),
+                        match limits {
+                            RangeLimits::HalfOpen(_) => quote_spanned!(end.span() => #end - 1),
+                            RangeLimits::Closed(_) => quote_spanned!(end.span() => #end),
+                        },
                         module,
                         constant,
                     )
@@ -49,21 +54,20 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
                         };
                     (
                         quote_spanned!(start.span() => #start),
-                        quote_spanned!(end.span() => #end),
+                        match limits {
+                            RangeLimits::HalfOpen(_) => quote_spanned!(end.span() => #end - 1),
+                            RangeLimits::Closed(_) => quote_spanned!(end.span() => #end),
+                        },
                         module,
                         constant,
                     )
                 }
             };
-            let right = match limits {
-                RangeLimits::HalfOpen(_) => {
-                    quote_spanned!(right.span() => #right - 1 as #module)
-                }
-                RangeLimits::Closed(_) => quote_spanned!(right.span() => #right),
-            };
-            Some(
-                quote_spanned!(expression.span() => <::checkito::state::Range::<::checkito::primitive::#module::#constant::<{ #left }>, ::checkito::primitive::#module::#constant::<{ #right }>> as ::checkito::primitive::Constant>::Value),
-            )
+            Some(quote_spanned!(expression.span() => {
+                #[allow(unused_braces)]
+                #[allow(clippy::unnecessary_cast)]
+                <::checkito::state::Range::<::checkito::primitive::#module::#constant::<{ #left }>, ::checkito::primitive::#module::#constant::<{ #right }>> as ::checkito::primitive::Constant>::VALUE
+            }))
         }
         _ => None,
     }
@@ -72,7 +76,9 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
 fn unpack_expression(expression: &Expr) -> Option<(Ident, Ident)> {
     match expression {
         Expr::Group(ExprGroup { expr, .. }) => unpack_expression(expr),
-        Expr::Cast(ExprCast { expr, ty, .. }) if matches!(expr.as_ref(), Expr::Lit(..)) => {
+        Expr::Const(ExprConst { block, .. }) => unpack_block(block),
+        Expr::Block(ExprBlock { block, .. }) => unpack_block(block),
+        Expr::Cast(ExprCast { expr, ty, .. }) if unpack_expression(expr).is_some() => {
             unpack_type(ty)
         }
         Expr::Lit(ExprLit { lit, .. }) => unpack_literal(lit),
@@ -86,6 +92,13 @@ fn unpack_expression(expression: &Expr) -> Option<(Ident, Ident)> {
                 (Some(_), Some(_)) => None,
             }
         }
+        _ => None,
+    }
+}
+
+fn unpack_block(block: &Block) -> Option<(Ident, Ident)> {
+    match block.stmts.last()? {
+        Stmt::Expr(expr, None) => unpack_expression(expr),
         _ => None,
     }
 }

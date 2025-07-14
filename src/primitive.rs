@@ -133,7 +133,7 @@ macro_rules! same {
 
 macro_rules! constant {
     ($type: ident, $name: ident, $shrink: ty) => {
-        #[derive(Debug, Copy, Clone, Default)]
+        #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name<const N: $type>;
 
         impl $name<{ $type::MIN }> {

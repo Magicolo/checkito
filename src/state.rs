@@ -30,7 +30,7 @@ pub(crate) struct States {
     seed: u64,
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Range<S, E = S>(pub(crate) S, pub(crate) E);
 
 pub struct With<'a> {
