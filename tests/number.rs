@@ -46,6 +46,14 @@ mod range {
                 }
 
                 #[test]
+                fn is_same_range() {
+                    assert!(number::<$t>()
+                        .flat_map(|value| (value, value..=value))
+                        .check(|(left, right)| assert_eq!(left, right))
+                        .is_none());
+                }
+
+                #[test]
                 fn is_in_range() {
                     assert!((number::<$t>(), number::<$t>())
                         .map(|(low, high)| (low.min($t::MAX - $t::MAX / 100 as $t), high.min($t::MAX - $t::MAX / 100 as $t)))
@@ -121,7 +129,7 @@ mod range {
                                 (0 as $t..=value, value..=value)
                             }
                         })
-                        .flat_map(|(low, high)| (low, high, shrinker((low..=high))))
+                        .flat_map(|(low, high)| (low, high, shrinker(low..=high)))
                         .check(|(low, high, mut outer)| {
                             while let Some(inner) = outer.shrink() {
                                 outer = inner;
@@ -182,6 +190,32 @@ mod range {
 
     tests!(
         i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64
+    );
+}
+
+#[test]
+fn shrinks_to_low_or_high() {
+    assert!(
+        number::<f32>()
+            .flat_map(|value| {
+                if value < 0 as f32 {
+                    (value..=value, value..=0 as f32)
+                } else {
+                    (0 as f32..=value, value..=value)
+                }
+            })
+            .flat_map(|(low, high)| (low, high, shrinker(low..=high)))
+            .check(|(low, high, mut outer)| {
+                while let Some(inner) = outer.shrink() {
+                    outer = inner;
+                }
+                if low >= 0 as f32 {
+                    assert_eq!(low, outer.item())
+                } else {
+                    assert_eq!(high, outer.item())
+                }
+            })
+            .is_none()
     );
 }
 

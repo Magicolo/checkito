@@ -2,7 +2,7 @@ use quote::quote_spanned;
 use syn::{
     __private::{Span, TokenStream2},
     Block, Expr, ExprBinary, ExprBlock, ExprCast, ExprConst, ExprGroup, ExprLit, ExprRange,
-    ExprUnary, Ident, Lit, RangeLimits, Stmt, Type, TypeGroup, TypeParen, TypePath,
+    ExprTuple, ExprUnary, Ident, Lit, RangeLimits, Stmt, Type, TypeGroup, TypeParen, TypePath,
     spanned::Spanned,
 };
 
@@ -124,6 +124,13 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
 
     match expression {
         Expr::Group(ExprGroup { expr, .. }) => convert(expr),
+        Expr::Tuple(ExprTuple { elems, .. }) => {
+            let mut items = Vec::new();
+            for elem in elems {
+                items.push(convert(elem)?);
+            }
+            Some(quote_spanned!(expression.span() => #(#items,)*))
+        }
         Expr::Range(ExprRange {
             start, limits, end, ..
         }) => {
