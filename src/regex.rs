@@ -6,9 +6,9 @@ use crate::{
     collect::{self},
     generate::Generate,
     prelude::collect,
-    primitive::char,
+    primitive::{Range, char},
     shrink::Shrink,
-    state::{Range, State},
+    state::State,
 };
 use core::fmt;
 use regex_syntax::{

@@ -1,7 +1,8 @@
 use crate::{
     collect::Count,
     generate::Generate,
-    state::{Range, Sizes, State},
+    primitive::Range,
+    state::{Sizes, State},
 };
 
 #[derive(Debug, Clone)]

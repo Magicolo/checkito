@@ -1,12 +1,9 @@
 #![cfg(feature = "constant")]
 
 pub mod common;
-use ::checkito::{
-    primitive::{Constant, i32::I32},
-    state::Range,
-};
 use checkito::primitive::{
-    char::Char, i64::I64, i128::I128, isize::Isize, u128::U128, usize::Usize,
+    Constant, Range, char::Char, i32::I32, i64::I64, i128::I128, isize::Isize, u128::U128,
+    usize::Usize,
 };
 use common::*;
 

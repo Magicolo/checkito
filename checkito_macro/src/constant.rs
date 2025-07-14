@@ -180,7 +180,7 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
             Some(quote_spanned!(expression.span() => {
                 #[allow(unused_braces)]
                 #[allow(clippy::unnecessary_cast)]
-                <::checkito::state::Range::<::checkito::primitive::#module::#constant::<{ #start }>, ::checkito::primitive::#module::#constant::<{ #end }>> as ::checkito::primitive::Constant>::VALUE
+                <::checkito::primitive::Range::<::checkito::primitive::#module::#constant::<{ #start }>, ::checkito::primitive::#module::#constant::<{ #end }>> as ::checkito::primitive::Constant>::VALUE
             }))
         }
         _ => None,

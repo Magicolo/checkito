@@ -1,9 +1,4 @@
-use crate::{
-    collect::Count,
-    generate::Generate,
-    shrink::Shrink,
-    state::{Range, State},
-};
+use crate::{collect::Count, generate::Generate, primitive::Range, shrink::Shrink, state::State};
 use core::marker::PhantomData;
 
 #[derive(Debug)]

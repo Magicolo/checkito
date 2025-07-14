@@ -1,9 +1,10 @@
+use self::usize::Usize;
 use crate::{
     any::Any,
     collect::Count,
     generate::{FullGenerate, Generate},
     shrink::Shrink,
-    state::{Range, State},
+    state::State,
     utility,
 };
 use core::{marker::PhantomData, ops};
@@ -14,6 +15,9 @@ pub(crate) enum Direction {
     Low,
     High,
 }
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Range<S, E = S>(pub(crate) S, pub(crate) E);
 
 #[derive(Debug)]
 pub struct Full<T: ?Sized>(PhantomData<T>);
@@ -76,6 +80,82 @@ impl<T: ?Sized> Clone for Full<T> {
 }
 
 impl<T: ?Sized> Copy for Full<T> {}
+
+impl<T: Copy> Range<T> {
+    #[inline]
+    pub const fn start(&self) -> T {
+        self.0
+    }
+
+    #[inline]
+    pub const fn end(&self) -> T {
+        self.1
+    }
+}
+
+impl<T, R: Into<Range<T>> + Clone> From<&R> for Range<T> {
+    fn from(value: &R) -> Self {
+        value.clone().into()
+    }
+}
+
+impl<T, R: Into<Range<T>> + Clone> From<&mut R> for Range<T> {
+    fn from(value: &mut R) -> Self {
+        value.clone().into()
+    }
+}
+
+impl Count for Range<usize> {
+    fn count(&self) -> Range<usize> {
+        *self
+    }
+}
+
+impl Count for ops::RangeFrom<usize> {
+    fn count(&self) -> Range<usize> {
+        self.clone().into()
+    }
+}
+
+impl Count for ops::Range<usize> {
+    fn count(&self) -> Range<usize> {
+        self.clone().into()
+    }
+}
+
+impl Count for ops::RangeInclusive<usize> {
+    fn count(&self) -> Range<usize> {
+        self.clone().into()
+    }
+}
+
+impl Count for ops::RangeTo<usize> {
+    fn count(&self) -> Range<usize> {
+        Range::from(*self)
+    }
+}
+
+impl Count for ops::RangeToInclusive<usize> {
+    fn count(&self) -> Range<usize> {
+        Range::from(*self)
+    }
+}
+
+impl<const N: usize> Count for Usize<N> {
+    const COUNT: Option<Range<usize>> = Some(Range(N, N));
+
+    fn count(&self) -> Range<usize> {
+        Range(N, N)
+    }
+}
+
+impl<const N: usize, const M: usize> Count for Range<Usize<N>, Usize<M>> {
+    const COUNT: Option<Range<usize>> = Some(Range(N, M));
+
+    fn count(&self) -> Range<usize> {
+        Range(N, M)
+    }
+}
 
 impl Count for usize {
     fn count(&self) -> Range<usize> {

@@ -1,8 +1,5 @@
 use crate::{
-    collect::Count,
-    generate::Generate,
-    shrink::Shrink,
-    state::{Range, State},
+    collect::Count, generate::Generate, primitive::Range, shrink::Shrink, state::State,
     utility::tuples,
 };
 use core::marker::PhantomData;
@@ -22,7 +19,7 @@ where
 {
     const COUNT: Option<Range<usize>> = G::COUNT;
 
-    fn count(&self) -> crate::state::Range<usize> {
+    fn count(&self) -> Range<usize> {
         self.1.count()
     }
 }

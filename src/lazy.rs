@@ -1,8 +1,4 @@
-use crate::{
-    Generate,
-    collect::Count,
-    state::{Range, State},
-};
+use crate::{Generate, collect::Count, primitive::Range, state::State};
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,5 @@
 use crate::{
-    collect::Count,
-    primitive::{u8::U8, usize::Usize},
+    primitive::{Range, u8::U8},
     utility,
 };
 use core::{iter::FusedIterator, ops, ops::Bound};
@@ -29,9 +28,6 @@ pub(crate) struct States {
     sizes: Sizes,
     seed: u64,
 }
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Range<S, E = S>(pub(crate) S, pub(crate) E);
 
 pub struct With<'a> {
     state: &'a mut State,
@@ -206,30 +202,6 @@ impl Drop for With<'_> {
     fn drop(&mut self) {
         self.state.depth = self.depth;
         self.state.sizes = self.sizes;
-    }
-}
-
-impl<T: Copy> Range<T> {
-    #[inline]
-    pub const fn start(&self) -> T {
-        self.0
-    }
-
-    #[inline]
-    pub const fn end(&self) -> T {
-        self.1
-    }
-}
-
-impl<T, R: Into<Range<T>> + Clone> From<&R> for Range<T> {
-    fn from(value: &R) -> Self {
-        value.clone().into()
-    }
-}
-
-impl<T, R: Into<Range<T>> + Clone> From<&mut R> for Range<T> {
-    fn from(value: &mut R) -> Self {
-        value.clone().into()
     }
 }
 
@@ -533,58 +505,6 @@ impl DoubleEndedIterator for States {
 }
 
 impl FusedIterator for States {}
-
-impl Count for Range<usize> {
-    fn count(&self) -> Range<usize> {
-        *self
-    }
-}
-
-impl Count for ops::RangeFrom<usize> {
-    fn count(&self) -> Range<usize> {
-        self.clone().into()
-    }
-}
-
-impl Count for ops::Range<usize> {
-    fn count(&self) -> Range<usize> {
-        self.clone().into()
-    }
-}
-
-impl Count for ops::RangeInclusive<usize> {
-    fn count(&self) -> Range<usize> {
-        self.clone().into()
-    }
-}
-
-impl Count for ops::RangeTo<usize> {
-    fn count(&self) -> Range<usize> {
-        Range::from(*self)
-    }
-}
-
-impl Count for ops::RangeToInclusive<usize> {
-    fn count(&self) -> Range<usize> {
-        Range::from(*self)
-    }
-}
-
-impl<const N: usize> Count for Usize<N> {
-    const COUNT: Option<Range<usize>> = Some(Range(N, N));
-
-    fn count(&self) -> Range<usize> {
-        Range(N, N)
-    }
-}
-
-impl<const N: usize, const M: usize> Count for Range<Usize<N>, Usize<M>> {
-    const COUNT: Option<Range<usize>> = Some(Range(N, M));
-
-    fn count(&self) -> Range<usize> {
-        Range(N, M)
-    }
-}
 
 impl Sizes {
     const SCALE: f64 = 6.0;

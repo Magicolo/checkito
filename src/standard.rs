@@ -3,8 +3,9 @@ use crate::{
     collect::Count,
     convert::Convert,
     generate::{FullGenerate, Generate},
+    primitive::Range,
     shrink::Shrink,
-    state::{Range, State},
+    state::State,
 };
 use core::{marker::PhantomData, mem::take};
 use std::{rc::Rc, sync::Arc};
