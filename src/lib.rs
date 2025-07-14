@@ -1,5 +1,5 @@
-#![forbid(unsafe_code)]
 #![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
 
 pub mod all;
 pub mod any;
