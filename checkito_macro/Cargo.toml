@@ -15,10 +15,11 @@ rust-version = "1.65.0"
 proc-macro = true
 
 [features]
-default = ["regex", "check", "constant"]
+default = ["regex", "check", "constant", "parallel"]
 regex = ["regex-syntax/unicode"]
 check = []
 constant = []
+parallel = []
 
 [dependencies]
 syn = { version = "2.0.96", features = [

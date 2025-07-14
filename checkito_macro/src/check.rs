@@ -1,6 +1,6 @@
-use core::{fmt, mem::replace, ops::Deref};
+use core::{fmt, mem::replace, ops::Deref, str::FromStr};
 use quote::{ToTokens, format_ident, quote_spanned};
-use std::collections::HashSet;
+use std::{collections::HashSet, env};
 use syn::{
     __private::{Span, TokenStream2},
     Error, Expr, ExprAssign, ExprField, ExprLit, ExprPath, ExprRange, FnArg, Ident, Lit, LitBool,
@@ -20,6 +20,8 @@ pub struct Check {
     pub color: Option<bool>,
     #[cfg(feature = "constant")]
     pub constant: Option<bool>,
+    #[cfg(feature = "parallel")]
+    pub parallel: Option<bool>,
     pub verbose: Option<bool>,
 }
 
@@ -30,6 +32,8 @@ pub enum Key {
     Verbose,
     #[cfg(feature = "constant")]
     Constant,
+    #[cfg(feature = "parallel")]
+    Parallel,
     GenerateCount,
     GenerateSeed,
     GenerateSize,
@@ -46,6 +50,8 @@ static KEYS: &[Key] = &[
     Key::Verbose,
     #[cfg(feature = "constant")]
     Key::Constant,
+    #[cfg(feature = "parallel")]
+    Key::Parallel,
     Key::GenerateCount,
     Key::GenerateSeed,
     Key::GenerateSize,
@@ -78,6 +84,8 @@ impl From<Key> for &'static str {
             Key::Verbose => "verbose",
             #[cfg(feature = "constant")]
             Key::Constant => "constant",
+            #[cfg(feature = "parallel")]
+            Key::Parallel => "parallel",
             Key::GenerateCount => "generate.count",
             Key::GenerateSeed => "generate.seed",
             Key::GenerateSize => "generate.size",
@@ -162,17 +170,19 @@ impl fmt::Display for Key {
 }
 
 impl Check {
-    pub const fn new(span: Span) -> Self {
+    pub fn new(span: Span) -> Self {
         Self {
             span,
             settings: Vec::new(),
             generators: Vec::new(),
             rest: None,
-            debug: None,
+            debug: parse("CHECKITO_DEBUG"),
+            color: parse("CHECKITO_COLOR"),
+            verbose: parse("CHECKITO_VERBOSE"),
             #[cfg(feature = "constant")]
-            constant: None,
-            color: None,
-            verbose: None,
+            constant: parse("CHECKITO_CONSTANT"),
+            #[cfg(feature = "parallel")]
+            parallel: parse("CHECKITO_PARALLEL"),
         }
     }
 
@@ -266,6 +276,8 @@ impl Check {
                 Key::Debug | Key::Color | Key::Verbose => continue,
                 #[cfg(feature = "constant")]
                 Key::Constant => continue,
+                #[cfg(feature = "parallel")]
+                Key::Parallel => continue,
             });
         }
 
@@ -323,6 +335,11 @@ impl Parse for Check {
                             #[cfg(feature = "constant")]
                             Key::Constant => {
                                 check.constant = Some(as_bool(&right)?);
+                                continue;
+                            }
+                            #[cfg(feature = "parallel")]
+                            Key::Parallel => {
+                                check.parallel = Some(as_bool(&right)?);
                                 continue;
                             }
                             Key::GenerateSize => {
@@ -414,5 +431,12 @@ fn as_bool(expression: &Expr) -> Result<bool, Error> {
         expression => Err(error(expression, |expression| {
             format!("expression '{expression}' must be a boolean literal",)
         })),
+    }
+}
+
+fn parse<T: FromStr>(key: &str) -> Option<T> {
+    match env::var(key) {
+        Ok(value) => value.parse().ok(),
+        Err(_) => None,
     }
 }
