@@ -35,7 +35,6 @@ pub struct Shrinker<T> {
 
 pub trait Number: Sized {
     type Full: Generate<Item = Self>;
-    type Special: Generate<Item = Self>;
     type Positive: Generate<Item = Self>;
     type Negative: Generate<Item = Self>;
 
@@ -44,7 +43,6 @@ pub trait Number: Sized {
     const MIN: Self;
     const MAX: Self;
     const FULL: Self::Full;
-    const SPECIAL: Self::Special;
     const POSITIVE: Self::Positive;
     const NEGATIVE: Self::Negative;
 }
@@ -680,12 +678,10 @@ macro_rules! integer {
             type Full = Range<$constant::<{ Self::MIN }>, $constant::<{ Self::MAX }>>;
             type Negative = Range<$constant::<{ Self::MIN }>, $constant::<{ Self::ZERO }>>;
             type Positive = Range<$constant::<{ Self::ZERO }>, $constant::<{ Self::MAX }>>;
-            type Special = Special<Self>;
 
             const FULL: Self::Full = Self::Full::VALUE;
             const NEGATIVE: Self::Negative = Self::Negative::VALUE;
             const POSITIVE: Self::Positive = Self::Positive::VALUE;
-            const SPECIAL: Self::Special = Self::Special::VALUE;
             const MAX: Self = $type::MAX;
             const MIN: Self = $type::MIN;
             const ONE: Self = 1 as $type;
@@ -759,17 +755,14 @@ macro_rules! floating {
             }
         }
 
-
         impl Number for $type {
             type Full = Range<$type>;
             type Negative = Range<$type>;
             type Positive = Range<$type>;
-            type Special = Special<Self>;
 
             const FULL: Self::Full = Range(Self::MIN, Self::MAX);
             const NEGATIVE: Self::Negative = Range(Self::MIN, Self::ZERO);
             const POSITIVE: Self::Positive = Range(Self::ZERO, Self::MAX);
-            const SPECIAL: Self::Special = Self::Special::VALUE;
             const MAX: Self = $type::MAX;
             const MIN: Self = $type::MIN;
             const ONE: Self = 1 as $type;
