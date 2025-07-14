@@ -6,42 +6,66 @@ use syn::{
     spanned::Spanned,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     None,
     Default,
     Character(char),
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 struct Pack {
-    module: Ident,
-    constant: Ident,
+    module: &'static str,
+    constant: &'static str,
     kind: Kind,
+    span: Span,
+}
+
+impl Kind {
+    pub fn merge(left: Self, right: Self) -> Self {
+        match (left, right) {
+            (Kind::None, Kind::None) => Kind::None,
+            (Kind::Default, right) => right,
+            (left, Kind::Default) => left,
+            (_, right @ Kind::Character(_)) => right,
+            (Kind::Character(value), Kind::None) => Kind::Character(value),
+        }
+    }
 }
 
 impl Pack {
-    pub fn new(module: &str, constant: &str, span: Span) -> Self {
+    pub fn new(module: &'static str, constant: &'static str, span: Span) -> Self {
         Self {
-            module: Ident::new(module, span),
-            constant: Ident::new(constant, span),
+            module,
+            constant,
             kind: Kind::None,
+            span,
         }
+    }
+
+    pub fn module(&self) -> Ident {
+        Ident::new(self.module, self.span)
+    }
+
+    pub fn constant(&self) -> Ident {
+        Ident::new(self.constant, self.span)
     }
 
     pub fn default(span: Span) -> Self {
         Self {
-            module: Ident::new("i32", span),
-            constant: Ident::new("I32", span),
+            module: "i32",
+            constant: "I32",
             kind: Kind::Default,
+            span,
         }
     }
 
     pub fn character(value: char, span: Span) -> Self {
         Self {
-            module: Ident::new("char", span),
-            constant: Ident::new("Char", span),
+            module: "char",
+            constant: "Char",
             kind: Kind::Character(value),
+            span,
         }
     }
 
@@ -68,10 +92,17 @@ impl Pack {
             (Some(left), None) => Some(left),
             (None, Some(right)) => Some(right),
             (Some(left), Some(right)) => {
-                if right.is_default() || left == right {
-                    Some(left)
-                } else if left.is_default() {
+                if left.is_default() {
                     Some(right)
+                } else if right.is_default() {
+                    Some(left)
+                } else if left.module == right.module && left.constant == right.constant {
+                    Some(Pack {
+                        module: left.module,
+                        constant: left.constant,
+                        kind: Kind::merge(left.kind, right.kind),
+                        span: left.span.join(right.span).unwrap_or(left.span),
+                    })
                 } else {
                     None
                 }
@@ -81,10 +112,9 @@ impl Pack {
 }
 
 pub fn convert(expression: &Expr) -> Option<TokenStream2> {
-    if let Some(Pack {
-        module, constant, ..
-    }) = unpack_expression(expression)
-    {
+    if let Some(pack) = unpack_expression(expression) {
+        let module = pack.module();
+        let constant = pack.constant();
         return Some(quote_spanned!(expression.span() => {
             #[allow(unused_braces)]
             #[allow(clippy::unnecessary_cast)]
@@ -97,11 +127,11 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
         Expr::Range(ExprRange {
             start, limits, end, ..
         }) => {
-            let (left, right, pack) = match (start, end) {
+            let (start, end, pack) = match (start, end) {
                 (None, None) => return None,
                 (None, Some(end)) => {
                     let pack = unpack_expression(end)?;
-                    let module = &pack.module;
+                    let module = pack.module();
                     (
                         quote_spanned!(expression.span() => #module::MIN),
                         pack.limit(end, limits)?,
@@ -110,7 +140,7 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
                 }
                 (Some(start), None) => {
                     let pack = unpack_expression(start)?;
-                    let module = &pack.module;
+                    let module = pack.module();
                     (
                         quote_spanned!(start.span() => #start),
                         quote_spanned!(expression.span() => #module::MAX),
@@ -126,12 +156,12 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
                     )
                 }
             };
-            let module = &pack.module;
-            let constant = &pack.constant;
+            let module = pack.module();
+            let constant = pack.constant();
             Some(quote_spanned!(expression.span() => {
                 #[allow(unused_braces)]
                 #[allow(clippy::unnecessary_cast)]
-                <::checkito::state::Range::<::checkito::primitive::#module::#constant::<{ #left }>, ::checkito::primitive::#module::#constant::<{ #right }>> as ::checkito::primitive::Constant>::VALUE
+                <::checkito::state::Range::<::checkito::primitive::#module::#constant::<{ #start }>, ::checkito::primitive::#module::#constant::<{ #end }>> as ::checkito::primitive::Constant>::VALUE
             }))
         }
         _ => None,
