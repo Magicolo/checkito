@@ -20,8 +20,8 @@ pub struct Check {
     pub color: Option<bool>,
     #[cfg(feature = "constant")]
     pub constant: Option<bool>,
-    #[cfg(feature = "parallel")]
-    pub parallel: Option<bool>,
+    // #[cfg(feature = "parallel")]
+    // pub parallel: Option<bool>,
     pub verbose: Option<bool>,
 }
 
@@ -32,8 +32,8 @@ pub enum Key {
     Verbose,
     #[cfg(feature = "constant")]
     Constant,
-    #[cfg(feature = "parallel")]
-    Parallel,
+    // #[cfg(feature = "parallel")]
+    // Parallel,
     GenerateCount,
     GenerateSeed,
     GenerateSize,
@@ -50,8 +50,8 @@ static KEYS: &[Key] = &[
     Key::Verbose,
     #[cfg(feature = "constant")]
     Key::Constant,
-    #[cfg(feature = "parallel")]
-    Key::Parallel,
+    // #[cfg(feature = "parallel")]
+    // Key::Parallel,
     Key::GenerateCount,
     Key::GenerateSeed,
     Key::GenerateSize,
@@ -84,8 +84,8 @@ impl From<Key> for &'static str {
             Key::Verbose => "verbose",
             #[cfg(feature = "constant")]
             Key::Constant => "constant",
-            #[cfg(feature = "parallel")]
-            Key::Parallel => "parallel",
+            // #[cfg(feature = "parallel")]
+            // Key::Parallel => "parallel",
             Key::GenerateCount => "generate.count",
             Key::GenerateSeed => "generate.seed",
             Key::GenerateSize => "generate.size",
@@ -181,8 +181,8 @@ impl Check {
             verbose: parse("CHECKITO_VERBOSE"),
             #[cfg(feature = "constant")]
             constant: parse("CHECKITO_CONSTANT"),
-            #[cfg(feature = "parallel")]
-            parallel: parse("CHECKITO_PARALLEL"),
+            // #[cfg(feature = "parallel")]
+            // parallel: parse("CHECKITO_PARALLEL"),
         }
     }
 
@@ -276,8 +276,8 @@ impl Check {
                 Key::Debug | Key::Color | Key::Verbose => continue,
                 #[cfg(feature = "constant")]
                 Key::Constant => continue,
-                #[cfg(feature = "parallel")]
-                Key::Parallel => continue,
+                // #[cfg(feature = "parallel")]
+                // Key::Parallel => continue,
             });
         }
 
@@ -337,11 +337,11 @@ impl Parse for Check {
                                 check.constant = Some(as_bool(&right)?);
                                 continue;
                             }
-                            #[cfg(feature = "parallel")]
-                            Key::Parallel => {
-                                check.parallel = Some(as_bool(&right)?);
-                                continue;
-                            }
+                            // #[cfg(feature = "parallel")]
+                            // Key::Parallel => {
+                            //     check.parallel = Some(as_bool(&right)?);
+                            //     continue;
+                            // }
                             Key::GenerateSize => {
                                 quote_spanned!(right.span() => ::checkito::state::Sizes::from(#right))
                             }
