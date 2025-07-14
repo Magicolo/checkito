@@ -2,7 +2,7 @@
 
 use crate::{
     REPEATS, all,
-    any::{self, Any},
+    any::Any,
     collect::{self},
     generate::Generate,
     prelude::collect,
@@ -10,7 +10,7 @@ use crate::{
     shrink::Shrink,
     state::{Range, State},
 };
-use core::{fmt, ops::RangeInclusive};
+use core::fmt;
 use regex_syntax::{
     Parser,
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
@@ -20,9 +20,9 @@ use regex_syntax::{
 pub enum Regex {
     Empty,
     Text(String),
-    Range(RangeInclusive<char>),
+    Range(Range<char>),
     Collect(collect::Collect<Box<Regex>, Range<usize>, String>),
-    Any(any::Any<Box<[Regex]>>),
+    Any(Any<Box<[Regex]>>),
     All(Box<[Regex]>),
 }
 
@@ -59,13 +59,13 @@ impl From<regex_syntax::Error> for Error {
 
 impl From<&ClassUnicodeRange> for Regex {
     fn from(value: &ClassUnicodeRange) -> Self {
-        Regex::Range(value.start()..=value.end())
+        Regex::Range(Range(value.start(), value.end()))
     }
 }
 
 impl From<&ClassBytesRange> for Regex {
     fn from(value: &ClassBytesRange) -> Self {
-        Regex::Range(value.start() as char..=value.end() as char)
+        Regex::Range(Range(value.start() as char, value.end() as char))
     }
 }
 
