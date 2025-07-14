@@ -538,26 +538,6 @@ pub mod char {
     constant!(char, Char, Shrinker);
 }
 
-macro_rules! number {
-    ($type: ident) => {
-        impl Number for $type {
-            type Full = ops::RangeInclusive<Self>;
-            type Negative = ops::RangeInclusive<Self>;
-            type Positive = ops::RangeInclusive<Self>;
-            type Special = Special<Self>;
-
-            const FULL: Self::Full = Self::MIN..=Self::MAX;
-            const MAX: Self = $type::MAX;
-            const MIN: Self = $type::MIN;
-            const NEGATIVE: Self::Negative = Self::MIN..=Self::ZERO;
-            const ONE: Self = 1 as $type;
-            const POSITIVE: Self::Positive = Self::ZERO..=Self::MAX;
-            const SPECIAL: Self::Special = Constant::VALUE;
-            const ZERO: Self = 0 as $type;
-        }
-    };
-}
-
 macro_rules! integer {
     ($type: ident, $constant: ident) => {
         type SpecialType = Any<($type, $type, $type)>;
@@ -616,11 +596,26 @@ macro_rules! integer {
             }
         }
 
+        impl Number for $type {
+            type Full = Range<$constant::<{ Self::MIN }>, $constant::<{ Self::MAX }>>;
+            type Negative = Range<$constant::<{ Self::MIN }>, $constant::<{ Self::ZERO }>>;
+            type Positive = Range<$constant::<{ Self::ZERO }>, $constant::<{ Self::MAX }>>;
+            type Special = Special<Self>;
+
+            const FULL: Self::Full = Self::Full::VALUE;
+            const NEGATIVE: Self::Negative = Self::Negative::VALUE;
+            const POSITIVE: Self::Positive = Self::Positive::VALUE;
+            const SPECIAL: Self::Special = Self::Special::VALUE;
+            const MAX: Self = $type::MAX;
+            const MIN: Self = $type::MIN;
+            const ONE: Self = 1 as $type;
+            const ZERO: Self = 0 as $type;
+        }
+
         full!($type);
         same!($type);
         ranges!(INTEGER, $type);
         constant!($type, $constant, Shrinker::<$type>);
-        number!($type);
     };
     ($([$type: ident, $constant: ident]),*$(,)?) => { $(pub mod $type { use super::*; integer!($type, $constant); })* };
 }
@@ -684,10 +679,26 @@ macro_rules! floating {
             }
         }
 
+
+        impl Number for $type {
+            type Full = Range<$type>;
+            type Negative = Range<$type>;
+            type Positive = Range<$type>;
+            type Special = Special<Self>;
+
+            const FULL: Self::Full = Range(Self::MIN, Self::MAX);
+            const NEGATIVE: Self::Negative = Range(Self::MIN, Self::ZERO);
+            const POSITIVE: Self::Positive = Range(Self::ZERO, Self::MAX);
+            const SPECIAL: Self::Special = Self::Special::VALUE;
+            const MAX: Self = $type::MAX;
+            const MIN: Self = $type::MIN;
+            const ONE: Self = 1 as $type;
+            const ZERO: Self = 0 as $type;
+        }
+
         full!($type);
         same!($type);
         ranges!(FLOATING, $type);
-        number!($type);
     };
     ($($types: ident),*) => { $(pub mod $types { use super::*; floating!($types); })* };
 }
