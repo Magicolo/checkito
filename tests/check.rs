@@ -106,6 +106,12 @@ fn compiles_with_verbose_true() {}
 #[check(verbose = false)]
 fn compiles_with_verbose_false() {}
 
+#[check(constant = true)]
+fn compiles_with_constant_true() {}
+
+#[check(constant = false)]
+fn compiles_with_constant_false() {}
+
 #[check(generate.seed = 1234567890 / 100)]
 fn compiles_with_generate_seed() {}
 

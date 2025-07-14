@@ -18,6 +18,8 @@ pub struct Check {
     pub rest: Option<(usize, Span)>,
     pub debug: Option<bool>,
     pub color: Option<bool>,
+    #[cfg(feature = "constant")]
+    pub constant: Option<bool>,
     pub verbose: Option<bool>,
 }
 
@@ -26,6 +28,8 @@ pub enum Key {
     Color,
     Debug,
     Verbose,
+    #[cfg(feature = "constant")]
+    Constant,
     GenerateCount,
     GenerateSeed,
     GenerateSize,
@@ -36,21 +40,21 @@ pub enum Key {
     ShrinkErrors,
 }
 
-impl Key {
-    const KEYS: [Key; 11] = [
-        Key::Color,
-        Key::Debug,
-        Key::Verbose,
-        Key::GenerateCount,
-        Key::GenerateSeed,
-        Key::GenerateSize,
-        Key::GenerateItems,
-        Key::GenerateError,
-        Key::ShrinkCount,
-        Key::ShrinkItems,
-        Key::ShrinkErrors,
-    ];
-}
+static KEYS: &[Key] = &[
+    Key::Color,
+    Key::Debug,
+    Key::Verbose,
+    #[cfg(feature = "constant")]
+    Key::Constant,
+    Key::GenerateCount,
+    Key::GenerateSeed,
+    Key::GenerateSize,
+    Key::GenerateItems,
+    Key::GenerateError,
+    Key::ShrinkCount,
+    Key::ShrinkItems,
+    Key::ShrinkErrors,
+];
 
 impl AsRef<str> for Key {
     fn as_ref(&self) -> &str {
@@ -72,6 +76,8 @@ impl From<Key> for &'static str {
             Key::Color => "color",
             Key::Debug => "debug",
             Key::Verbose => "verbose",
+            #[cfg(feature = "constant")]
+            Key::Constant => "constant",
             Key::GenerateCount => "generate.count",
             Key::GenerateSeed => "generate.seed",
             Key::GenerateSize => "generate.size",
@@ -88,7 +94,7 @@ impl TryFrom<&Ident> for Key {
     type Error = Error;
 
     fn try_from(value: &Ident) -> Result<Self, Self::Error> {
-        for key in Self::KEYS {
+        for key in KEYS.iter().copied() {
             if value == &key {
                 return Ok(key);
             }
@@ -96,7 +102,7 @@ impl TryFrom<&Ident> for Key {
         Err(error(value, |key| {
             format!(
                 "unrecognized key '{key}'\nmust be one of [{}]",
-                join(", ", Self::KEYS)
+                join(", ", KEYS)
             )
         }))
     }
@@ -110,7 +116,7 @@ impl TryFrom<&Expr> for Key {
             error(value, |key| {
                 format!(
                     "unrecognized key '{key}'\nmust be one of [{}]",
-                    join(", ", Self::KEYS)
+                    join(", ", KEYS)
                 )
             })
         };
@@ -118,14 +124,14 @@ impl TryFrom<&Expr> for Key {
             error(value, |key| {
                 format!(
                     "invalid expression '{key}'\nmust be a key in [{}].",
-                    join(", ", Self::KEYS)
+                    join(", ", KEYS)
                 )
             })
         };
         match value {
             Expr::Path(ExprPath { path, .. }) => {
                 let ident = path.require_ident()?;
-                for key in Self::KEYS {
+                for key in KEYS.iter().copied() {
                     if ident == &key {
                         return Ok(key);
                     }
@@ -135,7 +141,7 @@ impl TryFrom<&Expr> for Key {
             Expr::Field(ExprField { base, member, .. }) => {
                 if let Member::Named(name) = member {
                     if let Expr::Path(ExprPath { path, .. }) = base.as_ref() {
-                        for key in Self::KEYS {
+                        for key in KEYS.iter().copied() {
                             if [path.require_ident()?, name].into_iter().eq(key.split('.')) {
                                 return Ok(key);
                             }
@@ -163,6 +169,8 @@ impl Check {
             generators: Vec::new(),
             rest: None,
             debug: None,
+            #[cfg(feature = "constant")]
+            constant: None,
             color: None,
             verbose: None,
         }
@@ -193,6 +201,14 @@ impl Check {
                 match expressions.next() {
                     Some(Expr::Infer(infer)) => {
                         quote_spanned!(infer.span() => <#ty as ::checkito::generate::FullGenerate>::generator())
+                    }
+                    #[cfg(feature = "constant")]
+                    Some(expression) if self.constant.is_none() || self.constant == Some(true) => {
+                        use crate::constant;
+                        match constant::convert(expression) {
+                            Some(tokens) => tokens,
+                            None => quote_spanned!(expression.span() => #expression),
+                        }
                     }
                     Some(expression) => quote_spanned!(expression.span() => #expression),
                     None => {
@@ -248,6 +264,8 @@ impl Check {
                     quote_spanned!(left.span() => _checker.shrink.errors = #right;)
                 }
                 Key::Debug | Key::Color | Key::Verbose => continue,
+                #[cfg(feature = "constant")]
+                Key::Constant => continue,
             });
         }
 
@@ -283,7 +301,7 @@ impl Check {
 impl Parse for Check {
     fn parse(input: ParseStream) -> Result<Self, Error> {
         let mut check = Check::new(input.span());
-        let mut keys = Key::KEYS.into_iter().collect::<HashSet<_>>();
+        let mut keys = KEYS.into_iter().collect::<HashSet<_>>();
         for expression in Punctuated::<Expr, Comma>::parse_terminated(input)? {
             match expression {
                 Expr::Assign(ExprAssign { left, right, .. }) => {
@@ -300,6 +318,11 @@ impl Parse for Check {
                             }
                             Key::Verbose => {
                                 check.verbose = Some(as_bool(&right)?);
+                                continue;
+                            }
+                            #[cfg(feature = "constant")]
+                            Key::Constant => {
+                                check.constant = Some(as_bool(&right)?);
                                 continue;
                             }
                             Key::GenerateSize => {
