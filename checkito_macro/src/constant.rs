@@ -124,12 +124,24 @@ pub fn convert(expression: &Expr) -> Option<TokenStream2> {
 
     match expression {
         Expr::Group(ExprGroup { expr, .. }) => convert(expr),
+        Expr::Const(ExprConst { block, .. }) if block.stmts.len() == 1 => {
+            match block.stmts.last()? {
+                Stmt::Expr(expr, None) => convert(expr),
+                _ => None,
+            }
+        }
+        Expr::Block(ExprBlock { block, .. }) if block.stmts.len() == 1 => {
+            match block.stmts.last()? {
+                Stmt::Expr(expr, None) => convert(expr),
+                _ => None,
+            }
+        }
         Expr::Tuple(ExprTuple { elems, .. }) => {
             let mut items = Vec::new();
             for elem in elems {
                 items.push(convert(elem)?);
             }
-            Some(quote_spanned!(expression.span() => #(#items,)*))
+            Some(quote_spanned!(expression.span() => (#(#items,)*)))
         }
         Expr::Range(ExprRange {
             start, limits, end, ..

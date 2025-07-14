@@ -5,13 +5,17 @@ use ::checkito::{
     primitive::{Constant, i32::I32},
     state::Range,
 };
-use checkito::primitive::{char::Char, isize::Isize, usize::Usize};
+use checkito::primitive::{
+    char::Char, i64::I64, i128::I128, isize::Isize, u128::U128, usize::Usize,
+};
 use common::*;
 
 #[test]
+#[allow(clippy::unit_cmp)]
 fn non_constant_remain_as_is() {
     assert_eq!(constant!("a"), "a");
     assert_eq!(constant!(..), ..);
+    assert_eq!(constant!(()), ());
 }
 
 #[test]
@@ -28,6 +32,11 @@ fn constant_expression_is_converted() {
     assert_eq!(constant!(1usize + 2), Usize::<3>);
     assert_eq!(constant!(1usize + 2usize), Usize::<3>);
     assert_eq!(constant!(1 + 2usize), Usize::<3>);
+    assert_eq!(constant!((1i32,)), (I32::<1>,));
+    assert_eq!(constant!({ (1,) }), (I32::<1>,));
+    assert_eq!(constant!({ { 1 as u128 } }), U128::<1>);
+    assert_eq!(constant!({ { { 1i128 } } }), I128::<1>);
+    assert_eq!(constant!({ { { { 1i64 + 2 } } } }), I64::<3>);
 }
 
 #[test]
