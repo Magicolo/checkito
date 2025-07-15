@@ -23,11 +23,12 @@ pub(crate) mod f32 {
         f32::from_bits(bits)
     }
 
-    pub const fn cardinality(start: f32, end: f32) -> u128 {
+    #[inline]
+    pub const fn cardinality(start: f32, end: f32) -> Option<u128> {
         if start.is_nan() || end.is_nan() {
-            1
+            Some(1)
         } else {
-            u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).saturating_add(1)
+            u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).checked_add(1)
         }
     }
 
@@ -114,11 +115,11 @@ pub(crate) mod f64 {
     }
 
     #[inline]
-    pub const fn cardinality(start: f64, end: f64) -> u128 {
+    pub const fn cardinality(start: f64, end: f64) -> Option<u128> {
         if start.is_nan() || end.is_nan() {
-            1
+            Some(1)
         } else {
-            u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).saturating_add(1)
+            u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).checked_add(1)
         }
     }
 

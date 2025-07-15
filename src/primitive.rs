@@ -7,7 +7,11 @@ use crate::{
     state::State,
     utility,
 };
-use core::{marker::PhantomData, ops};
+use core::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    ops::{self, Add, Div, Mul, Sub},
+};
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Direction {
@@ -33,7 +37,9 @@ pub struct Shrinker<T> {
     pub(crate) direction: Direction,
 }
 
-pub trait Number: Sized {
+pub trait Number:
+    Sized + Copy + Clone + Debug + Display + PartialEq + PartialOrd + Default + Add + Sub + Mul + Div
+{
     type Full: Generate<Item = Self>;
     type Positive: Generate<Item = Self>;
     type Negative: Generate<Item = Self>;
@@ -270,10 +276,11 @@ macro_rules! constant {
             type Item = $type;
             type Shrink = $shrink;
 
-            const CARDINALITY: Option<u128> = Some(u128::wrapping_sub(
+            const CARDINALITY: Option<u128> = u128::wrapping_sub(
                 if N < M { M } else { N } as _,
                 if N < M { N } else { M } as _,
-            ));
+            )
+            .checked_add(1);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Range::<$type>::from(*self).generate(state)
@@ -328,7 +335,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                Some(u128::wrapping_sub(self.end() as _, self.start() as _))
+                u128::wrapping_sub(self.end() as _, self.start() as _).checked_add(1)
             }
         }
     };
@@ -352,7 +359,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                Some(utility::$type::cardinality(self.start(), self.end()) as _)
+                utility::$type::cardinality(self.start(), self.end())
             }
         }
     };
@@ -375,7 +382,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                Some(u128::wrapping_sub(self.end() as _, self.start() as _))
+                u128::wrapping_sub(self.end() as _, self.start() as _).checked_add(1)
             }
         }
     };
@@ -720,7 +727,7 @@ macro_rules! floating {
             type Item = $type;
             type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = Some(utility::$type::cardinality($type::MIN, $type::MAX) as _);
+            const CARDINALITY: Option<u128> = utility::$type::cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let value = state.with().size(1.0).u8(..);

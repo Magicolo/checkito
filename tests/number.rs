@@ -190,7 +190,7 @@ mod range {
         ($($type:ident),+) => { $(tests!($type []);)* };
     }
 
-    macro_rules! floating {
+    macro_rules! rational {
         ($type: ident) => {
             #[test]
             fn has_special() {
@@ -216,13 +216,23 @@ mod range {
     tests!(
         i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
     );
-    tests!(f32[floating]);
-    tests!(f64[floating]);
+    tests!(f32[rational]);
+    tests!(f64[rational]);
+}
+
+#[test]
+fn check_finds_maximum() {
+    let fail = (negative::<usize>(), negative::<usize>().keep())
+        .check(|(left, right)| dbg!(left > right))
+        .unwrap();
+    assert_eq!(fail.item.0, fail.item.1);
 }
 
 #[cfg(feature = "check")]
 mod check {
     use super::*;
+    use checkito::primitive::Number;
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
     #[check(positive::<u8>(), 0u8)]
     #[check(positive::<u16>(), 0u16)]
@@ -258,5 +268,17 @@ mod check {
     #[check(negative::<f64>(), 0f64)]
     fn is_negative<T: PartialOrd>(value: T, zero: T) {
         assert!(value <= zero);
+    }
+
+    #[check(negative::<u8>())]
+    #[check(negative::<u16>())]
+    #[check(negative::<u32>())]
+    #[check(negative::<u64>())]
+    #[check(negative::<u128>())]
+    #[check(negative::<usize>())]
+    fn positive_negative_runs_once_per_type<T: Number>(value: T) {
+        static RUNS: AtomicUsize = AtomicUsize::new(0);
+        assert_eq!(value, T::ZERO);
+        assert!(RUNS.fetch_add(1, Ordering::Relaxed) <= 6);
     }
 }

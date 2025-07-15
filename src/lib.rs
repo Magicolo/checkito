@@ -47,3 +47,11 @@ const COLLECT: usize = 1024;
 const RETRIES: usize = 256;
 #[cfg(feature = "regex")]
 const REPEATS: u32 = 64;
+
+/*
+    TODO:
+    - Instead of running a fixed number of checks, determine the number of checks based on the runtime of the generation and check.
+    - Support for 'async' checks.
+        - The check attribute can automatically detect this based on the 'async' keyword of the function.
+    - Support for 'parallel' checks.
+*/
