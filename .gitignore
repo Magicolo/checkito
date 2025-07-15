@@ -1,4 +1,5 @@
-**/target
-**/coverage
-**/Cargo.lock
-/.vscode
+target
+coverage
+Cargo.lock
+.vscode
+.local
