@@ -245,13 +245,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                         Ok(proof) => {
                             self.machine = Machine::Generate(shrinkers);
                             if self.checker.generate.items {
-                                break Some(Result::Pass(Pass {
-                                    item: shrinker.item(),
-                                    generates: state.index(),
-                                    shrinks: 0,
-                                    proof,
-                                    state,
-                                }));
+                                break Some(pass(shrinker.item(), state, proof));
                             }
                         }
                         Err(cause) => {
@@ -272,26 +266,14 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                 } => {
                     if indices.1 >= self.checker.shrink.count {
                         self.machine = Machine::Done;
-                        break Some(Result::Fail(Fail {
-                            item: shrinker.item(),
-                            generates: indices.0,
-                            shrinks: indices.1,
-                            state,
-                            cause,
-                        }));
+                        break Some(fail(shrinker.item(), indices, state, cause));
                     }
 
                     let new = match shrinker.shrink() {
                         Some(shrinker) => shrinker,
                         None => {
                             self.machine = Machine::Done;
-                            break Some(Result::Fail(Fail {
-                                item: shrinker.item(),
-                                generates: indices.0,
-                                shrinks: indices.1,
-                                state,
-                                cause,
-                            }));
+                            break Some(fail(shrinker.item(), indices, state, cause));
                         }
                     };
                     let result = handle(new.item(), &mut self.check);
@@ -304,13 +286,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                                 cause,
                             };
                             if self.checker.shrink.items {
-                                break Some(Result::Shrink(Pass {
-                                    item: new.item(),
-                                    generates: indices.0,
-                                    shrinks: indices.1,
-                                    proof,
-                                    state,
-                                }));
+                                break Some(shrink(new.item(), indices, state, proof));
                             }
                         }
                         Err(new_cause) => {
@@ -321,13 +297,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                                 cause: new_cause,
                             };
                             if self.checker.shrink.errors {
-                                break Some(Result::Shrunk(Fail {
-                                    item: shrinker.item(),
-                                    generates: indices.0,
-                                    shrinks: indices.1,
-                                    cause,
-                                    state,
-                                }));
+                                break Some(shrunk(shrinker.item(), indices, state, cause));
                             }
                         }
                     }
@@ -427,6 +397,61 @@ impl<T, P> Fail<T, P> {
             Cause::Disprove(proof) => format!("{proof:?}").into(),
         }
     }
+}
+
+const fn pass<T, P: Prove>(item: T, state: State, proof: P::Proof) -> Result<T, P> {
+    Result::Pass(Pass {
+        item,
+        generates: state.index(),
+        shrinks: 0,
+        proof,
+        state,
+    })
+}
+
+const fn fail<T, P: Prove>(
+    item: T,
+    (generates, shrinks): (usize, usize),
+    state: State,
+    cause: Cause<P::Error>,
+) -> Result<T, P> {
+    Result::Fail(Fail {
+        item,
+        generates,
+        shrinks,
+        state,
+        cause,
+    })
+}
+
+const fn shrink<T, P: Prove>(
+    item: T,
+    (generates, shrinks): (usize, usize),
+    state: State,
+    proof: P::Proof,
+) -> Result<T, P> {
+    Result::Shrink(Pass {
+        item,
+        generates,
+        shrinks,
+        proof,
+        state,
+    })
+}
+
+const fn shrunk<T, P: Prove>(
+    item: T,
+    (generates, shrinks): (usize, usize),
+    state: State,
+    cause: Cause<P::Error>,
+) -> Result<T, P> {
+    Result::Shrunk(Fail {
+        item,
+        generates,
+        shrinks,
+        state,
+        cause,
+    })
 }
 
 fn cast(error: Box<dyn Any + Send>) -> Option<Cow<'static, str>> {
