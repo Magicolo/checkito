@@ -125,13 +125,7 @@ pub trait Check: Generate {
         checker.generate.items = false;
         checker.shrink.items = false;
         checker.shrink.errors = false;
-        match checker.checks(check).last()? {
-            Result::Pass(_) => None,
-            Result::Fail(fail) => Some(fail),
-            Result::Shrink(_) | Result::Shrunk(_) => {
-                unreachable!("it is invalid for the `Checks` iterator to end on a shrinking result")
-            }
-        }
+        checker.checks(check).last()?.fail(false)
     }
 }
 
@@ -216,17 +210,12 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
-        let (count, exhaustive) = match self
-            .generator
-            .cardinality()
-            .map(usize::try_from)
-            .and_then(result::Result::ok)
-        {
-            Some(cardinality) => (
+        let (count, exhaustive) = match self.generator.cardinality().map(usize::try_from) {
+            Some(Ok(cardinality)) => (
                 cardinality.min(self.generate.count),
                 cardinality <= self.generate.count,
             ),
-            None => (self.generate.count, false),
+            _ => (self.generate.count, false),
         };
         Checks {
             checker: self.clone(),

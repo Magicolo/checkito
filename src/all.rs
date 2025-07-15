@@ -199,7 +199,7 @@ macro_rules! tuple {
 
             fn cardinality(&self) -> Option<u128> {
                 let cardinality = Some(1);
-                $(let cardinality = cardinality::all_product(cardinality, $t::CARDINALITY);)*
+                $(let cardinality = cardinality::all_product(cardinality, self.$i.cardinality());)*
                 cardinality
             }
         }
