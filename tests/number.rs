@@ -1,5 +1,4 @@
 pub mod common;
-use checkito::shrink::Shrinkers;
 use common::*;
 
 mod range {
@@ -113,7 +112,7 @@ mod range {
 
                 #[test]
                 fn shrinks_to_zero() {
-                    for mut outer in Shrinkers::from(&number::<$type>()) {
+                    for mut outer in shrinker(number::<$type>()).samples(1000) {
                         while let Some(inner) = outer.shrink() {
                             outer = inner;
                         }

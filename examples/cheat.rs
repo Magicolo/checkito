@@ -130,7 +130,7 @@ fn has_even_hundred() {
 fn main() {
     // `checkito` comes with a bunch of builtin generators such as this generic
     // number generator. An array of generators will produce an array of values.
-    let generator = [(); 10].map(|_| number::<f64>());
+    let generator = &[(); 10].map(|_| number::<f64>());
 
     // For more configuration and control over the generation and shrinking
     // processes, retrieve a [`check::Checker`] from any generator.

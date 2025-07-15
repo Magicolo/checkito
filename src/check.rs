@@ -2,10 +2,10 @@ use crate::{
     CHECKS,
     generate::Generate,
     prove::Prove,
-    shrink::{Shrink, Shrinkers},
-    state::{self, Modes, Sizes, State},
+    shrink::Shrink,
+    state::{self, Modes, Sizes, State, States},
 };
-use core::{fmt, mem::replace, panic::AssertUnwindSafe};
+use core::{fmt, mem::replace, ops, panic::AssertUnwindSafe};
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
 
 /// Bounds the generation process.
@@ -59,15 +59,15 @@ pub struct Shrinks {
 
 /// The [`Checker`] structure holds a reference to a [`Generate`] instance and
 /// some configuration options for the checking and shrinking processes.
-#[derive(Debug)]
-pub struct Checker<'a, G: ?Sized> {
-    /// A generator that will generate items and their shrinkers for checking a
-    /// property.
-    generator: &'a G,
+#[derive(Debug, Clone)]
+pub struct Checker<G: ?Sized> {
     /// Bounds the generation process.
     pub generate: Generates,
     /// Bounds the shrinking process.
     pub shrink: Shrinks,
+    /// A generator that will generate items and their shrinkers for checking a
+    /// property.
+    pub generator: G,
 }
 
 /// This structure is used to iterate over a sequence of check results.
@@ -96,16 +96,17 @@ pub struct Checker<'a, G: ?Sized> {
 ///   failed.
 /// - Yield at most the smallest number between [`Generate::cardinality`] and
 ///   [`Generates::count`] [`Result::Pass`] results.
-pub struct Checks<'a, G: Generate + ?Sized, E, F> {
-    checker: Checker<'a, G>,
-    machine: Machine<'a, G, E>,
+pub struct Checks<G: Generate, E, F> {
+    yields: (bool, bool, bool),
+    shrinks: ops::Range<usize>,
+    machine: Machine<G, E>,
     check: F,
 }
 
-enum Machine<'a, G: Generate + ?Sized, E> {
-    Generate(Shrinkers<'a, G>),
+enum Machine<G: Generate, E> {
+    Generate(G, States),
     Shrink {
-        indices: (usize, usize),
+        index: usize,
         state: State,
         shrinker: G::Shrink,
         cause: Cause<E>,
@@ -114,11 +115,17 @@ enum Machine<'a, G: Generate + ?Sized, E> {
 }
 
 pub trait Check: Generate {
-    fn checker(&self) -> Checker<Self> {
+    fn checker(self) -> Checker<Self>
+    where
+        Self: Sized,
+    {
         Checker::new(self, state::seed())
     }
 
-    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(&self, check: F) -> Checks<Self, P::Error, F> {
+    fn checks<P: Prove, F: FnMut(Self::Item) -> P>(self, check: F) -> Checks<Self, P::Error, F>
+    where
+        Self: Sized,
+    {
         self.checker().checks(check)
     }
 
@@ -182,8 +189,8 @@ pub enum Cause<E> {
 
 impl<G: Generate + ?Sized> Check for G {}
 
-impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub(crate) fn new(generator: &'a G, seed: u64) -> Self {
+impl<G: Generate> Checker<G> {
+    pub(crate) fn new(generator: G, seed: u64) -> Self {
         Self {
             generator,
             generate: Generates {
@@ -202,55 +209,43 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     }
 }
 
-impl<G: ?Sized> Clone for Checker<'_, G> {
-    fn clone(&self) -> Self {
-        Self {
-            generator: self.generator,
-            generate: self.generate.clone(),
-            shrink: self.shrink.clone(),
-        }
-    }
-}
-
-impl<'a, G: Generate + ?Sized> Checker<'a, G> {
-    pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
+impl<G: Generate> Checker<G> {
+    pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(self, check: F) -> Checks<G, P::Error, F> {
+        let modes = Modes::with(
+            self.generate.count,
+            self.generate.sizes,
+            self.generate.seed,
+            self.generator.cardinality(),
+            self.generate.exhaustive,
+        );
         Checks {
-            checker: self.clone(),
-            machine: Machine::Generate(Shrinkers::new(
-                self.generator,
-                Modes::with(
-                    self.generate.count,
-                    self.generate.sizes,
-                    self.generate.seed,
-                    self.generator.cardinality(),
-                    self.generate.exhaustive,
-                ),
-            )),
+            yields: (self.generate.items, self.shrink.items, self.shrink.errors),
+            shrinks: 0..self.shrink.count,
+            machine: Machine::Generate(self.generator, modes.into()),
             check,
         }
     }
 }
 
-impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
-    for Checks<'_, G, P::Error, F>
-{
+impl<G: Generate, P: Prove, F: FnMut(G::Item) -> P> Iterator for Checks<G, P::Error, F> {
     type Item = Result<G::Item, P>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match replace(&mut self.machine, Machine::Done) {
-                Machine::Generate(mut shrinkers) => {
-                    let (shrinker, state) = shrinkers.next_pair()?;
+                Machine::Generate(generator, mut states) => {
+                    let mut state = states.next()?;
+                    let shrinker = generator.generate(&mut state);
                     match handle(shrinker.item(), &mut self.check) {
                         Ok(proof) => {
-                            self.machine = Machine::Generate(shrinkers);
-                            if self.checker.generate.items {
+                            self.machine = Machine::Generate(generator, states);
+                            if self.yields.0 {
                                 break Some(pass(shrinker.item(), state, proof));
                             }
                         }
                         Err(cause) => {
                             self.machine = Machine::Shrink {
-                                indices: (state.index(), 0),
+                                index: 0,
                                 state,
                                 shrinker,
                                 cause,
@@ -259,45 +254,46 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                     }
                 }
                 Machine::Shrink {
-                    indices,
+                    index,
                     state,
                     mut shrinker,
                     cause,
                 } => {
-                    if indices.1 >= self.checker.shrink.count {
-                        self.machine = Machine::Done;
-                        break Some(fail(shrinker.item(), indices, state, cause));
-                    }
-
+                    let next = match self.shrinks.next() {
+                        Some(index) => index,
+                        None => {
+                            self.machine = Machine::Done;
+                            break Some(fail(shrinker.item(), index, state, cause));
+                        }
+                    };
                     let new = match shrinker.shrink() {
                         Some(shrinker) => shrinker,
                         None => {
                             self.machine = Machine::Done;
-                            break Some(fail(shrinker.item(), indices, state, cause));
+                            break Some(fail(shrinker.item(), index, state, cause));
                         }
                     };
-                    let result = handle(new.item(), &mut self.check);
-                    match result {
+                    match handle(new.item(), &mut self.check) {
                         Ok(proof) => {
                             self.machine = Machine::Shrink {
-                                indices: (indices.0, indices.1 + 1),
+                                index: next,
                                 state: state.clone(),
                                 shrinker,
                                 cause,
                             };
-                            if self.checker.shrink.items {
-                                break Some(shrink(new.item(), indices, state, proof));
+                            if self.yields.1 {
+                                break Some(shrink(new.item(), next, state, proof));
                             }
                         }
                         Err(new_cause) => {
                             self.machine = Machine::Shrink {
-                                indices: (indices.0, indices.1 + 1),
+                                index: next,
                                 state: state.clone(),
                                 shrinker: new,
                                 cause: new_cause,
                             };
-                            if self.checker.shrink.errors {
-                                break Some(shrunk(shrinker.item(), indices, state, cause));
+                            if self.yields.2 {
+                                break Some(shrunk(shrinker.item(), next, state, cause));
                             }
                         }
                     }
@@ -402,7 +398,7 @@ impl<T, P> Fail<T, P> {
 const fn pass<T, P: Prove>(item: T, state: State, proof: P::Proof) -> Result<T, P> {
     Result::Pass(Pass {
         item,
-        generates: state.index(),
+        generates: state.index() + 1,
         shrinks: 0,
         proof,
         state,
@@ -411,29 +407,24 @@ const fn pass<T, P: Prove>(item: T, state: State, proof: P::Proof) -> Result<T, 
 
 const fn fail<T, P: Prove>(
     item: T,
-    (generates, shrinks): (usize, usize),
+    index: usize,
     state: State,
     cause: Cause<P::Error>,
 ) -> Result<T, P> {
     Result::Fail(Fail {
         item,
-        generates,
-        shrinks,
+        generates: state.index() + 1,
+        shrinks: index,
         state,
         cause,
     })
 }
 
-const fn shrink<T, P: Prove>(
-    item: T,
-    (generates, shrinks): (usize, usize),
-    state: State,
-    proof: P::Proof,
-) -> Result<T, P> {
+const fn shrink<T, P: Prove>(item: T, index: usize, state: State, proof: P::Proof) -> Result<T, P> {
     Result::Shrink(Pass {
         item,
-        generates,
-        shrinks,
+        generates: state.index() + 1,
+        shrinks: index,
         proof,
         state,
     })
@@ -441,14 +432,14 @@ const fn shrink<T, P: Prove>(
 
 const fn shrunk<T, P: Prove>(
     item: T,
-    (generates, shrinks): (usize, usize),
+    index: usize,
     state: State,
     cause: Cause<P::Error>,
 ) -> Result<T, P> {
     Result::Shrunk(Fail {
         item,
-        generates,
-        shrinks,
+        generates: state.index() + 1,
+        shrinks: index,
         state,
         cause,
     })
@@ -764,7 +755,7 @@ mod environment {
             parse("CHECKITO_GENERATE_ITEMS")
         }
 
-        pub fn update<G>(checker: &mut Checker<'_, G>) {
+        pub fn update<G>(checker: &mut Checker<G>) {
             if let Some(value) = size() {
                 checker.generate.sizes = (value..=value).into();
             }
@@ -795,7 +786,7 @@ mod environment {
             parse("CHECKITO_SHRINK_ERRORS")
         }
 
-        pub fn update<G>(checker: &mut Checker<'_, G>) {
+        pub fn update<G>(checker: &mut Checker<G>) {
             if let Some(value) = count() {
                 checker.shrink.count = value;
             }
@@ -808,7 +799,7 @@ mod environment {
         }
     }
 
-    pub fn update<G>(checker: &mut Checker<'_, G>) {
+    pub fn update<G>(checker: &mut Checker<G>) {
         generate::update(checker);
         shrink::update(checker);
     }
