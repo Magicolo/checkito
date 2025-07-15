@@ -68,11 +68,11 @@ pub struct Checker<'a, G: ?Sized> {
 /// - If a check passes, a [`Result::Pass`] is produced.
 /// - If a check fails, the iterator enters the shrinking phase.
 /// - When shrinking, the iterator tries to repeatedly shrink the previous item
-///   and runs the check against it.
+///   and run checks against the shrunk items.
 /// - It the check passes, a [`Result::Shrink`] is produced and it means that
-///   the shrunk item has failed to reproduce the failing check.
+///   the shrunk item has failed to reproduce a failing check.
 /// - If the check fails, a [`Result::Shrunk`] is produced and it means that the
-///   shrunk item has successfully reproduced the failing check and is now
+///   shrunk item has successfully reproduced a failing check and it becomes
 ///   current item.
 /// - When the item is fully shrunk, the iterator produces a [`Result::Fail`]
 ///   with the final shrunk item in it.
@@ -84,9 +84,10 @@ pub struct Checker<'a, G: ?Sized> {
 /// - Yield only [`Result::Pass`] results if [`Generates::items`] is set to
 ///   `true` and all checks passed.
 /// - Never yield a [`Result::Pass`] after a check has failed.
-/// - Always yield a single final result of [`Result::Fail`] if a check failed.
-/// - Yield at most a single [`Result::Pass`] result if [`Generate::constant`]
-///   returns `true`.
+/// - Always yield a single final result of [`Result::Fail`] if at least a check
+///   failed.
+/// - Yield at most the smallest number between [`Generate::cardinality`] and
+///   [`Generates::count`] [`Result::Pass`] results.
 pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     checker: Checker<'a, G>,
     machine: Machine<G::Shrink, E>,
