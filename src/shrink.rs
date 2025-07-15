@@ -1,7 +1,6 @@
 use crate::{
-    check::{self},
     generate::Generate,
-    state::{self, Sizes, State, States},
+    state::{self, Modes, State, States},
 };
 use core::iter;
 
@@ -47,6 +46,14 @@ impl<S: Shrink> Shrink for Shrinker<S> {
     }
 }
 
+impl<G: Generate + ?Sized> Shrinkers<'_, G> {
+    pub(crate) fn next_pair(&mut self) -> Option<(G::Shrink, State)> {
+        let mut state = self.states.next()?;
+        let shrinker = self.generator.generate(&mut state);
+        Some((shrinker, state))
+    }
+}
+
 impl<G: Generate + ?Sized> Clone for Shrinkers<'_, G> {
     fn clone(&self) -> Self {
         Self {
@@ -58,15 +65,15 @@ impl<G: Generate + ?Sized> Clone for Shrinkers<'_, G> {
 
 impl<'a, G: Generate + ?Sized> From<&'a G> for Shrinkers<'a, G> {
     fn from(value: &'a G) -> Self {
-        Shrinkers::new(value, check::COUNT, .., None)
+        Shrinkers::new(value, Modes::default())
     }
 }
 
 impl<'a, G: Generate + ?Sized> Shrinkers<'a, G> {
-    pub fn new<S: Into<Sizes>>(generator: &'a G, count: usize, size: S, seed: Option<u64>) -> Self {
+    pub(crate) fn new(generator: &'a G, modes: Modes) -> Self {
         Shrinkers {
             generator,
-            states: States::new(count, size, seed),
+            states: modes.into(),
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::{
+    CHECKS,
     primitive::{Range, u8::U8},
     utility,
 };
@@ -19,6 +20,8 @@ pub struct Sizes {
 pub struct State {
     mode: Mode,
     sizes: Sizes,
+    index: usize,
+    count: usize,
     limit: usize,
     depth: usize,
     seed: u64,
@@ -27,9 +30,17 @@ pub struct State {
 #[derive(Clone, Debug)]
 pub(crate) struct States {
     indices: ops::Range<usize>,
-    count: usize,
-    sizes: Sizes,
-    seed: u64,
+    modes: Modes,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum Modes {
+    Random {
+        count: usize,
+        sizes: Sizes,
+        seed: u64,
+    },
+    Exhaustive(usize),
 }
 
 pub struct With<'a> {
@@ -51,16 +62,20 @@ impl State {
         Self {
             mode: Mode::Random(Rng::with_seed(seed.wrapping_add(index as _))),
             sizes: Sizes::from_ratio(index, count, size),
+            index,
+            count,
             limit: 0,
             depth: 0,
             seed,
         }
     }
 
-    pub(crate) fn exhaustive(index: usize) -> Self {
+    pub(crate) fn exhaustive(index: usize, count: usize) -> Self {
         Self {
             mode: Mode::Exhaustive(index as _),
             sizes: Sizes::default(),
+            index,
+            count,
             limit: 0,
             depth: 0,
             seed: 0,
@@ -95,6 +110,16 @@ impl State {
     #[inline]
     pub const fn seed(&self) -> u64 {
         self.seed
+    }
+
+    #[inline]
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+
+    #[inline]
+    pub const fn count(&self) -> usize {
+        self.count
     }
 
     #[inline]
@@ -432,14 +457,58 @@ integer!(
 
 floating!([f32, i32], [f64, i64]);
 
-impl States {
-    pub fn new<S: Into<Sizes>>(count: usize, size: S, seed: Option<u64>) -> Self {
-        Self {
-            indices: 0..count,
-            count,
-            sizes: size.into(),
-            seed: seed.unwrap_or_else(self::seed),
+impl Modes {
+    pub(crate) fn with(
+        count: usize,
+        sizes: Sizes,
+        seed: u64,
+        cardinality: Option<u128>,
+        exhaustive: Option<bool>,
+    ) -> Self {
+        match exhaustive {
+            Some(true) => Modes::Exhaustive(count),
+            Some(false) => Modes::Random { count, sizes, seed },
+            None => match cardinality.map(usize::try_from) {
+                Some(Ok(cardinality)) if cardinality <= count => Modes::Exhaustive(cardinality),
+                _ => Modes::Random { count, sizes, seed },
+            },
         }
+    }
+
+    pub(crate) fn state(self, index: usize) -> State {
+        match self {
+            Modes::Random { count, sizes, seed } => State::random(index, count, sizes, seed),
+            Modes::Exhaustive(count) => State::exhaustive(index, count),
+        }
+    }
+}
+
+impl Default for Modes {
+    fn default() -> Self {
+        Modes::Random {
+            count: CHECKS,
+            sizes: Sizes::default(),
+            seed: seed(),
+        }
+    }
+}
+
+impl From<Modes> for States {
+    fn from(modes: Modes) -> Self {
+        let count = match modes {
+            Modes::Random { count, .. } => count,
+            Modes::Exhaustive(count) => count,
+        };
+        States {
+            indices: 0..count,
+            modes,
+        }
+    }
+}
+
+impl Default for States {
+    fn default() -> Self {
+        Modes::default().into()
     }
 }
 
@@ -447,12 +516,7 @@ impl Iterator for States {
     type Item = State;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(State::random(
-            self.indices.next()?,
-            self.count,
-            self.sizes,
-            self.seed,
-        ))
+        Some(self.modes.state(self.indices.next()?))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -464,21 +528,11 @@ impl Iterator for States {
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        Some(State::random(
-            self.indices.nth(n)?,
-            self.count,
-            self.sizes,
-            self.seed,
-        ))
+        Some(self.modes.state(self.indices.nth(n)?))
     }
 
-    fn last(mut self) -> Option<Self::Item> {
-        Some(State::random(
-            self.indices.next()?,
-            self.count,
-            self.sizes,
-            self.seed,
-        ))
+    fn last(self) -> Option<Self::Item> {
+        Some(self.modes.state(self.indices.last()?))
     }
 }
 
@@ -490,28 +544,19 @@ impl ExactSizeIterator for States {
 
 impl DoubleEndedIterator for States {
     fn next_back(&mut self) -> Option<Self::Item> {
-        Some(State::random(
-            self.indices.next_back()?,
-            self.count,
-            self.sizes,
-            self.seed,
-        ))
+        Some(self.modes.state(self.indices.next_back()?))
     }
 
     fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
-        Some(State::random(
-            self.indices.nth_back(n)?,
-            self.count,
-            self.sizes,
-            self.seed,
-        ))
+        Some(self.modes.state(self.indices.nth_back(n)?))
     }
 }
 
 impl FusedIterator for States {}
 
 impl Sizes {
-    const SCALE: f64 = 6.0;
+    pub(crate) const DEFAULT: Self = Self::new(0.0, 1.0, Self::SCALE);
+    pub(crate) const SCALE: f64 = 6.0;
 
     #[inline]
     pub(crate) const fn new(start: f64, end: f64, scale: f64) -> Self {
@@ -630,7 +675,7 @@ mod tests {
             compare: impl Fn(&T, &T) -> Ordering,
         ) {
             let mut values = (0..count)
-                .map(|i| generate(&mut State::exhaustive(i as _)))
+                .map(|i| generate(&mut State::exhaustive(i as _, count)))
                 .collect::<Vec<_>>();
             values.sort_by(&compare);
             values.dedup_by(|left, right| compare(left, right) == Ordering::Equal);

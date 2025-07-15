@@ -43,6 +43,7 @@ pub use prove::Prove;
 pub use sample::Sample;
 pub use shrink::Shrink;
 
+const CHECKS: usize = 1000;
 const COLLECT: usize = 1024;
 const RETRIES: usize = 256;
 #[cfg(feature = "regex")]

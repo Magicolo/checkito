@@ -1,8 +1,9 @@
 use crate::{
+    CHECKS,
     generate::Generate,
     prove::Prove,
-    shrink::Shrink,
-    state::{self, Sizes, State},
+    shrink::{Shrink, Shrinkers},
+    state::{self, Modes, Sizes, State},
 };
 use core::{fmt, mem::replace, panic::AssertUnwindSafe};
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
@@ -17,7 +18,7 @@ pub struct Generates {
     /// Range of sizes that will be gradually traversed while generating values.
     ///
     /// Defaults to `0.0..1.0`.
-    pub size: Sizes,
+    pub sizes: Sizes,
     /// Maximum number of items that will be generated.
     ///
     /// Setting this to `0` will cause the [`Checks`] to do nothing.
@@ -28,6 +29,13 @@ pub struct Generates {
     ///
     /// Defaults to `true`.
     pub items: bool,
+    /// - `Some(true)` => Will generate all possible samples ignoring
+    ///   [`Generates::seed`] and [`Generates::sizes`].
+    /// - `Some(false)` => Will generate [`Generates::count`] random samples
+    ///   using [`Generates::seed`] and [`Generates::sizes`].
+    /// - `None` => Will determine exhaustiveness based on whether
+    ///   [`Generate::cardinality`] is `<=` than [`Generates::count`].
+    pub exhaustive: Option<bool>,
 }
 
 /// Bounds the shrinking process.
@@ -90,20 +98,16 @@ pub struct Checker<'a, G: ?Sized> {
 ///   [`Generates::count`] [`Result::Pass`] results.
 pub struct Checks<'a, G: Generate + ?Sized, E, F> {
     checker: Checker<'a, G>,
-    machine: Machine<G::Shrink, E>,
+    machine: Machine<'a, G, E>,
     check: F,
 }
 
-enum Machine<S, E> {
-    Generate {
-        index: usize,
-        count: usize,
-        exhaustive: bool,
-    },
+enum Machine<'a, G: Generate + ?Sized, E> {
+    Generate(Shrinkers<'a, G>),
     Shrink {
         indices: (usize, usize),
         state: State,
-        shrinker: S,
+        shrinker: G::Shrink,
         cause: Cause<E>,
     },
     Done,
@@ -176,8 +180,6 @@ pub enum Cause<E> {
     Panic(Option<Cow<'static, str>>),
 }
 
-pub const COUNT: usize = 1000;
-
 impl<G: Generate + ?Sized> Check for G {}
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
@@ -186,9 +188,10 @@ impl<'a, G: Generate + ?Sized> Checker<'a, G> {
             generator,
             generate: Generates {
                 items: true,
-                count: COUNT,
+                count: CHECKS,
                 seed,
-                size: (0.0..=1.0).into(),
+                sizes: (0.0..=1.0).into(),
+                exhaustive: None,
             },
             shrink: Shrinks {
                 count: usize::MAX,
@@ -211,20 +214,18 @@ impl<G: ?Sized> Clone for Checker<'_, G> {
 
 impl<'a, G: Generate + ?Sized> Checker<'a, G> {
     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(&self, check: F) -> Checks<'a, G, P::Error, F> {
-        let (count, exhaustive) = match self.generator.cardinality().map(usize::try_from) {
-            Some(Ok(cardinality)) => (
-                cardinality.min(self.generate.count),
-                cardinality <= self.generate.count,
-            ),
-            _ => (self.generate.count, false),
-        };
         Checks {
             checker: self.clone(),
-            machine: Machine::Generate {
-                index: 0,
-                count,
-                exhaustive,
-            },
+            machine: Machine::Generate(Shrinkers::new(
+                self.generator,
+                Modes::with(
+                    self.generate.count,
+                    self.generate.sizes,
+                    self.generate.seed,
+                    self.generator.cardinality(),
+                    self.generate.exhaustive,
+                ),
+            )),
             check,
         }
     }
@@ -238,35 +239,15 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match replace(&mut self.machine, Machine::Done) {
-                Machine::Generate { index, count, .. } if index >= count => break None,
-                Machine::Generate {
-                    index,
-                    count,
-                    exhaustive,
-                    ..
-                } => {
-                    let mut state = if exhaustive {
-                        State::exhaustive(index)
-                    } else {
-                        State::random(
-                            index,
-                            count,
-                            self.checker.generate.size,
-                            self.checker.generate.seed,
-                        )
-                    };
-                    let shrinker = self.checker.generator.generate(&mut state);
+                Machine::Generate(mut shrinkers) => {
+                    let (shrinker, state) = shrinkers.next_pair()?;
                     match handle(shrinker.item(), &mut self.check) {
                         Ok(proof) => {
-                            self.machine = Machine::Generate {
-                                index: index + 1,
-                                count,
-                                exhaustive,
-                            };
+                            self.machine = Machine::Generate(shrinkers);
                             if self.checker.generate.items {
                                 break Some(Result::Pass(Pass {
                                     item: shrinker.item(),
-                                    generates: index,
+                                    generates: state.index(),
                                     shrinks: 0,
                                     proof,
                                     state,
@@ -275,7 +256,7 @@ impl<G: Generate + ?Sized, P: Prove, F: FnMut(G::Item) -> P> Iterator
                         }
                         Err(cause) => {
                             self.machine = Machine::Shrink {
-                                indices: (index, 0),
+                                indices: (state.index(), 0),
                                 state,
                                 shrinker,
                                 cause,
@@ -760,7 +741,7 @@ mod environment {
 
         pub fn update<G>(checker: &mut Checker<'_, G>) {
             if let Some(value) = size() {
-                checker.generate.size = (value..=value).into();
+                checker.generate.sizes = (value..=value).into();
             }
             if let Some(value) = count() {
                 checker.generate.count = value;

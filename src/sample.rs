@@ -1,9 +1,9 @@
 use crate::{
     generate::Generate,
     shrink::{Shrink, Shrinkers, shrinker},
-    state,
+    state::{self, Modes, Sizes},
 };
-use core::{iter, ops::Range};
+use core::iter;
 
 #[derive(Debug)]
 pub struct Sampler<'a, G: ?Sized> {
@@ -14,7 +14,7 @@ pub struct Sampler<'a, G: ?Sized> {
     pub seed: u64,
     /// Range of sizes that will be gradually traversed while generating values.
     /// Defaults to `0.0..1.0`.
-    pub size: Range<f64>,
+    pub sizes: Sizes,
     /// Number of samples that will be generated.
     /// Defaults to `100`.
     pub count: usize,
@@ -54,7 +54,7 @@ impl<'a, G: ?Sized> Sampler<'a, G> {
         Self {
             generator,
             seed,
-            size: 0.0..1.0,
+            sizes: Sizes::DEFAULT,
             count: COUNT,
         }
     }
@@ -65,7 +65,7 @@ impl<G: ?Sized> Clone for Sampler<'_, G> {
         Self {
             generator: self.generator,
             seed: self.seed,
-            size: self.size.clone(),
+            sizes: self.sizes,
             count: self.count,
         }
     }
@@ -77,12 +77,22 @@ impl<'a, G: Generate + ?Sized> Sampler<'a, G> {
     }
 
     pub fn samples(&self) -> Samples<'a, G> {
-        Samples(Shrinkers::new(
+        Samples::new(
             self.generator,
-            self.count,
-            self.size.clone(),
-            Some(self.seed),
-        ))
+            Modes::with(
+                self.count,
+                self.sizes,
+                self.seed,
+                self.generator.cardinality(),
+                Some(false),
+            ),
+        )
+    }
+}
+
+impl<'a, G: Generate + ?Sized> Samples<'a, G> {
+    pub(crate) fn new(generator: &'a G, modes: Modes) -> Self {
+        Self(Shrinkers::new(generator, modes))
     }
 }
 
