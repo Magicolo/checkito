@@ -1,4 +1,5 @@
 use crate::{
+    SAMPLES,
     generate::Generate,
     shrink::{Shrink, Shrinkers, shrinker},
     state::{self, Modes, Sizes},
@@ -45,8 +46,6 @@ pub trait Sample: Generate {
     }
 }
 
-const COUNT: usize = 100;
-
 impl<G: Generate + ?Sized> Sample for G {}
 
 impl<'a, G: ?Sized> Sampler<'a, G> {
@@ -55,7 +54,7 @@ impl<'a, G: ?Sized> Sampler<'a, G> {
             generator,
             seed,
             sizes: Sizes::DEFAULT,
-            count: COUNT,
+            count: SAMPLES,
         }
     }
 }

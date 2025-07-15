@@ -622,9 +622,8 @@ mod tests {
 
     #[test]
     fn is_within_bounds() {
-        const COUNT: usize = 100;
         for i in 0..=100 {
-            let mut state = State::random(i, COUNT, (0.0..1.0).into(), 0);
+            let mut state = State::random(i, 100, (0.0..1.0).into(), 0);
             let value = state.i8(-128..=1);
             assert!(value >= -128 && value <= 1);
         }
