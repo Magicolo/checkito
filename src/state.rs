@@ -2,7 +2,10 @@ use crate::{
     primitive::{Range, u8::U8},
     utility,
 };
-use core::{iter::FusedIterator, ops, ops::Bound};
+use core::{
+    iter::FusedIterator,
+    ops::{self, Bound},
+};
 use fastrand::Rng;
 use std::{mem::replace, ops::RangeBounds};
 
@@ -352,8 +355,9 @@ macro_rules! floating {
                         range
                     } else {
                         let log = range.abs().log2();
-                        let power = size.powf(log as f64 / scale);
-                        range * power as $number
+                        let power = (log as f64 / scale).max(1.0);
+                        let pow = size.powf(power);
+                        range * pow as $number
                     }
                 }
 

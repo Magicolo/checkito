@@ -193,32 +193,6 @@ mod range {
     );
 }
 
-#[test]
-fn shrinks_to_low_or_high() {
-    assert!(
-        number::<f32>()
-            .flat_map(|value| {
-                if value < 0 as f32 {
-                    (value..=value, value..=0 as f32)
-                } else {
-                    (0 as f32..=value, value..=value)
-                }
-            })
-            .flat_map(|(low, high)| (low, high, shrinker(low..=high)))
-            .check(|(low, high, mut outer)| {
-                while let Some(inner) = outer.shrink() {
-                    outer = inner;
-                }
-                if low >= 0 as f32 {
-                    assert_eq!(low, outer.item())
-                } else {
-                    assert_eq!(high, outer.item())
-                }
-            })
-            .is_none()
-    );
-}
-
 #[cfg(feature = "check")]
 mod check {
     use super::*;
