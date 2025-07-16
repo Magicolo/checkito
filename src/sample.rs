@@ -15,7 +15,7 @@ pub struct Sampler<G: ?Sized> {
     /// Defaults to `0.0..1.0`.
     pub sizes: Sizes,
     /// Number of samples that will be generated.
-    /// Defaults to `100`.
+    /// Defaults to [`SAMPLES`].
     pub count: usize,
     /// A generator that will provide the samples.
     pub generator: G,

@@ -1,5 +1,5 @@
 use crate::{
-    CHECKS,
+    GENERATES,
     primitive::{Range, u8::U8},
     utility,
 };
@@ -486,7 +486,7 @@ impl Modes {
 impl Default for Modes {
     fn default() -> Self {
         Modes::Random {
-            count: CHECKS,
+            count: GENERATES,
             sizes: Sizes::default(),
             seed: seed(),
         }

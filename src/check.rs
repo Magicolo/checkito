@@ -1,5 +1,5 @@
 use crate::{
-    CHECKS, SHRINKS,
+    GENERATES, SHRINKS,
     generate::Generate,
     prove::Prove,
     shrink::Shrink,
@@ -29,7 +29,7 @@ pub struct Generates {
     ///
     /// Setting this to `0` will cause the [`Checks`] to do nothing.
     ///
-    /// Defaults to `1_000`.
+    /// Defaults to [`GENERATES`].
     pub count: usize,
     /// Whether or not the [`Checks`] iterator will yield generation items.
     ///
@@ -51,7 +51,7 @@ pub struct Shrinks {
     ///
     /// Setting this to `0` will disable shrinking.
     ///
-    /// Defaults to `1_000_000`.
+    /// Defaults to [`SHRINKS`].
     pub count: usize,
     /// Whether or not the [`Checks`] iterator will yield shrinking items.
     ///
@@ -194,7 +194,7 @@ impl<G: Generate, R: ?Sized> Checker<G, R> {
             generator,
             generate: Generates {
                 items: true,
-                count: CHECKS,
+                count: GENERATES,
                 seed,
                 sizes: Sizes::DEFAULT,
                 exhaustive: None,

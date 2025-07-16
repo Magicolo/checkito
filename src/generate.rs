@@ -1,9 +1,9 @@
 use crate::{
-    RETRIES,
+    COLLECTS, RETRIES,
     any::Any,
     array::Array,
     boxed::Boxed,
-    collect::{self, Collect, Count},
+    collect::{Collect, Count},
     convert::Convert,
     dampen::Dampen,
     filter::Filter,
@@ -12,7 +12,7 @@ use crate::{
     keep::Keep,
     map::Map,
     prelude,
-    primitive::Constant,
+    primitive::{Constant, Range, usize::Usize},
     shrink::Shrink,
     size::Size,
     state::{Sizes, State},
@@ -108,8 +108,8 @@ pub trait Generate {
         prelude::map(self, map)
     }
 
-    /// Same as [`Generate::filter_with`] but with a predefined number of
-    /// `retries`.
+    /// Same as [`Generate::filter_with`] but with a default `retries` of
+    /// [`RETRIES`].
     fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
@@ -216,8 +216,11 @@ pub trait Generate {
         prelude::array(self)
     }
 
-    /// Same as [`Generate::collect_with`] but with a predefined `count`.
-    fn collect<F: FromIterator<Self::Item>>(self) -> Collect<Self, collect::Default, F>
+    /// Same as [`Generate::collect_with`] but with a default `count` of
+    /// [`COLLECTS`].
+    fn collect<F: FromIterator<Self::Item>>(
+        self,
+    ) -> Collect<Self, Range<Usize<0>, Usize<COLLECTS>>, F>
     where
         Self: Sized,
     {

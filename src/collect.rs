@@ -1,5 +1,5 @@
 use crate::{
-    COLLECT, all, cardinality,
+    COLLECTS, all, cardinality,
     generate::{FullGenerate, Generate},
     primitive::{self, Constant, Direction, Full, Range, usize::Usize},
     shrink::Shrink,
@@ -35,7 +35,7 @@ pub(crate) enum Machine {
     Done,
 }
 
-pub type Default = Range<Usize<0>, Usize<COLLECT>>;
+type Default = Range<Usize<0>, Usize<COLLECTS>>;
 
 impl<G: Generate, F: FromIterator<G::Item>> Collect<G, Default, F> {
     pub(crate) const fn new(generator: G) -> Self {

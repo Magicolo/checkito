@@ -43,10 +43,10 @@ pub use prove::Prove;
 pub use sample::Sample;
 pub use shrink::Shrink;
 
-const CHECKS: usize = 1000;
-const SHRINKS: usize = 1_000_000;
-const SAMPLES: usize = 100;
-const COLLECT: usize = 1024;
+const GENERATES: usize = 1_024;
+const SHRINKS: usize = 1_048_576;
+const SAMPLES: usize = 128;
+const COLLECTS: usize = 1_024;
 const RETRIES: usize = 256;
 #[cfg(feature = "regex")]
 const REPEATS: u32 = 64;
