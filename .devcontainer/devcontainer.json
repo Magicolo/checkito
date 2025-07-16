@@ -7,16 +7,16 @@
         "COMPOSE_BAKE": "1",
         "DOCKER_BUILDKIT": "1",
         // Rust
-        "CARGO_TARGET_DIR": "/workspaces/rust/target",
-        "RUST_TEST_NOCAPTURE": "1"
+        "RUST_TEST_NOCAPTURE": "1",
+        "CARGO_TARGET_DIR": "/home/ubuntu/.rust/target"
     },
     "containerEnv": {
         // General
         "COMPOSE_BAKE": "1",
         "DOCKER_BUILDKIT": "1",
         // Rust
-        "CARGO_TARGET_DIR": "/workspaces/rust/target",
-        "RUST_TEST_NOCAPTURE": "1"
+        "RUST_TEST_NOCAPTURE": "1",
+        "CARGO_TARGET_DIR": "/home/ubuntu/.rust/target"
     },
     "mounts": [
         {
@@ -32,6 +32,11 @@
         {
             "source": "${localEnv:HOME}/.docker",
             "target": "/home/ubuntu/.docker",
+            "type": "bind"
+        },
+        {
+            "source": "${localEnv:HOME}/.rust",
+            "target": "/home/ubuntu/.rust",
             "type": "bind"
         }
     ],
@@ -91,5 +96,6 @@
                 "rust-analyzer.rustfmt.rangeFormatting.enable": true
             }
         }
-    }
+    },
+    "initializeCommand": "mkdir --parents ${localEnv:HOME}/.ssh ${localEnv:HOME}/.docker ${localEnv:HOME}/.rust && touch ${localEnv:HOME}/.gitconfig"
 }
