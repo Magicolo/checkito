@@ -30,6 +30,9 @@ macro_rules! generators {
                 is_generator::<same::Same<$type>>(shrinker(same($value)));
                 is_generator::<keep::Keep<$type>>(shrinker(keep($value)));
                 is_generator::<convert::Convert<$type, $type>>(shrinker(convert($value)));
+                is_generator::<$type>(with(|| $value));
+                is_generator::<$type>(lazy(|| $value));
+                is_generator::<$type>(cardinality::<_, 1>($value));
             }
         }
     };

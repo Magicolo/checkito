@@ -56,21 +56,34 @@ pub(crate) const fn all_repeat_static<const N: usize>(value: Option<u128>) -> Op
     }
 }
 
-pub(crate) const fn all_repeat_dynamic(value: Option<u128>, count: usize) -> Option<u128> {
-    match (value, count) {
-        (Some(0), _) | (_, 0) => Some(1),
-        (Some(1), count @ 1..) => u128::checked_add(count as _, 1),
-        (Some(value @ 2..), count @ 1..) => {
-            if count < u32::MAX as _ {
-                match u128::checked_pow(value, count as u32 + 1) {
-                    Some(pow) => Some((pow - 1) / (value - 1)),
-                    None => None,
+pub(crate) const fn all_repeat_dynamic(value: Option<u128>, count: Range<usize>) -> Option<u128> {
+    const fn next(value: Option<u128>, count: usize) -> Option<u128> {
+        match (value, count) {
+            (Some(0), _) | (_, 0) => Some(1),
+            (Some(1), count @ 1..) => u128::checked_add(count as _, 1),
+            (Some(value @ 2..), count @ 1..) => {
+                if count < u32::MAX as _ {
+                    match u128::checked_pow(value, count as u32 + 1) {
+                        Some(pow) => Some((pow - 1) / (value - 1)),
+                        None => None,
+                    }
+                } else {
+                    None
                 }
-            } else {
-                None
             }
+            (None, 1..) => None,
         }
-        (None, 1..) => None,
+    }
+
+    match next(value, count.end()) {
+        Some(end) => match count.start().checked_sub(1) {
+            Some(count) => match next(value, count) {
+                Some(start) => end.checked_sub(start),
+                None => None,
+            },
+            None => Some(end),
+        },
+        None => None,
     }
 }
 
@@ -80,20 +93,23 @@ mod tests {
 
     #[test]
     fn all_repeat_dynamic_is_valid() {
-        assert_eq!(all_repeat_dynamic(None, 1), None);
-        assert_eq!(all_repeat_dynamic(None, 1000), None);
-        assert_eq!(all_repeat_dynamic(None, 0), Some(1));
-        assert_eq!(all_repeat_dynamic(Some(1), 0), Some(1));
-        assert_eq!(all_repeat_dynamic(Some(1), 10), Some(11));
-        assert_eq!(all_repeat_dynamic(Some(1), 1000), Some(1001));
-        assert_eq!(all_repeat_dynamic(Some(2), 0), Some(1));
-        assert_eq!(all_repeat_dynamic(Some(2), 1), Some(1 + 2));
+        assert_eq!(all_repeat_dynamic(None, Range::from(0..=1)), None);
+        assert_eq!(all_repeat_dynamic(None, Range::from(0..=1000)), None);
+        assert_eq!(all_repeat_dynamic(None, Range::from(0..=0)), Some(1));
+        assert_eq!(all_repeat_dynamic(Some(1), Range::from(0..=0)), Some(1));
+        assert_eq!(all_repeat_dynamic(Some(1), Range::from(0..=10)), Some(11));
         assert_eq!(
-            all_repeat_dynamic(Some(2), 5),
+            all_repeat_dynamic(Some(1), Range::from(0..=1000)),
+            Some(1001)
+        );
+        assert_eq!(all_repeat_dynamic(Some(2), Range::from(0..=0)), Some(1));
+        assert_eq!(all_repeat_dynamic(Some(2), Range::from(0..=1)), Some(1 + 2));
+        assert_eq!(
+            all_repeat_dynamic(Some(2), Range::from(0..=5)),
             Some(1 + 2 + 4 + 8 + 16 + 32)
         );
         assert_eq!(
-            all_repeat_dynamic(Some(3), 5),
+            all_repeat_dynamic(Some(3), Range::from(0..=5)),
             Some(1 + 3 + 9 + 27 + 81 + 243)
         );
     }

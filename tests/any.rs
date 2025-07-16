@@ -1,6 +1,7 @@
 pub mod common;
 use checkito::any::Weight;
 use common::*;
+use std::collections::HashSet;
 
 #[test]
 fn weighted_any() {
@@ -17,4 +18,22 @@ fn weighted_any() {
     let hundred = samples.iter().filter(|&&value| value == 100).count();
     assert!(one < ten);
     assert!(ten < hundred);
+}
+
+#[test]
+fn generates_exhaustively() {
+    let set = any([1u16..=5, 10u16..=50, 100u16..=500])
+        .checks(|_| true)
+        .flat_map(|result| result.item())
+        .collect::<HashSet<_>>();
+
+    for i in 0u16..=5 {
+        assert!(set.contains(&i));
+    }
+    for i in 10u16..=50 {
+        assert!(set.contains(&i));
+    }
+    for i in 100u16..=500 {
+        assert!(set.contains(&i));
+    }
 }

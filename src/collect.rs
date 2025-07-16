@@ -93,7 +93,7 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize> + Count, F: FromIterator<G:
     type Shrink = Shrinker<G::Shrink, F>;
 
     const CARDINALITY: Option<u128> = match C::COUNT {
-        Some(count) => cardinality::all_repeat_dynamic(G::CARDINALITY, count.end()),
+        Some(count) => cardinality::all_repeat_dynamic(G::CARDINALITY, count),
         None => None,
     };
 
@@ -105,7 +105,7 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize> + Count, F: FromIterator<G:
     }
 
     fn cardinality(&self) -> Option<u128> {
-        cardinality::all_repeat_dynamic(self.generator.cardinality(), self.count.count().end())
+        cardinality::all_repeat_dynamic(self.generator.cardinality(), self.count.count())
     }
 }
 

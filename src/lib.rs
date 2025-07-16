@@ -44,6 +44,7 @@ pub use sample::Sample;
 pub use shrink::Shrink;
 
 const CHECKS: usize = 1000;
+const SHRINKS: usize = 1_000_000;
 const SAMPLES: usize = 100;
 const COLLECT: usize = 1024;
 const RETRIES: usize = 256;
@@ -56,4 +57,5 @@ const REPEATS: u32 = 64;
     - Support for 'async' checks.
         - The check attribute can automatically detect this based on the 'async' keyword of the function.
     - Support for 'parallel' checks.
+    - Review public api and make things more private to prevent breaking changes; especially modules.
 */

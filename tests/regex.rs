@@ -2,6 +2,7 @@
 
 pub mod common;
 use common::*;
+use std::collections::HashSet;
 
 #[test]
 fn generate_matches_regex() {
@@ -32,4 +33,16 @@ fn range_shrinks() {
         .unwrap();
     assert!(fail.item.chars().all(|symbol| symbol.is_ascii_lowercase()));
     assert!(fail.item == "wy" || fail.item == "yw");
+}
+
+#[test]
+fn generates_exhaustively() {
+    let set = dbg!(regex!("[a-z]{0,1}"))
+        .checks(Ok::<_, ()>)
+        .map(|result| result.item())
+        .collect::<HashSet<_>>();
+    set.contains("");
+    for letter in 'a'..='z' {
+        assert!(set.contains(letter.to_string().as_str()));
+    }
 }

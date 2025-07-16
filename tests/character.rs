@@ -1,7 +1,7 @@
 pub mod common;
 use common::*;
 use std::{
-    collections::{LinkedList, VecDeque},
+    collections::{HashSet, LinkedList, VecDeque},
     rc::Rc,
     sync::Arc,
 };
@@ -48,6 +48,19 @@ fn is_alphabetic() {
 #[test]
 fn full_does_not_panic() {
     assert!(char::generator().check(|_| true).is_none());
+}
+
+#[test]
+fn collects_exhaustively() {
+    let range = 'a'..='Z';
+    let set = range
+        .clone()
+        .checks(Ok::<_, ()>)
+        .map(|result| result.item())
+        .collect::<HashSet<_>>();
+    for letter in range {
+        assert!(set.contains(&letter));
+    }
 }
 
 macro_rules! collection {

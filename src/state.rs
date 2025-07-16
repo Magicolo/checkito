@@ -28,7 +28,7 @@ pub struct State {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct States {
+pub struct States {
     indices: ops::Range<usize>,
     modes: Modes,
 }
@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn is_within_bounds() {
         for i in 0..=100 {
-            let mut state = State::random(i, 100, (0.0..1.0).into(), 0);
+            let mut state = State::random(i, 100, Sizes::DEFAULT, 0);
             let value = state.i8(-128..=1);
             assert!(value >= -128 && value <= 1);
         }

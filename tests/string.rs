@@ -1,9 +1,21 @@
 pub mod common;
 use common::*;
+use std::collections::HashSet;
 
 #[test]
 fn checks_a_single_item() {
     assert_eq!("a constant".checks(|_| true).count(), 1);
+}
+
+#[test]
+fn collects_exhaustively() {
+    let set = Generate::collect::<String>('a'..='Z')
+        .checks(Ok::<_, ()>)
+        .map(|result| result.item())
+        .collect::<HashSet<_>>();
+    for letter in 'a'..='Z' {
+        assert!(set.contains(letter.to_string().as_str()));
+    }
 }
 
 #[cfg(feature = "check")]

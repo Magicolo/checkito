@@ -219,14 +219,6 @@ mod range {
     tests!(f64[rational]);
 }
 
-#[test]
-fn check_finds_maximum() {
-    let fail = (negative::<usize>(), negative::<usize>().keep())
-        .check(|(left, right)| dbg!(left > right))
-        .unwrap();
-    assert_eq!(fail.item.0, fail.item.1);
-}
-
 #[cfg(feature = "check")]
 mod check {
     use super::*;

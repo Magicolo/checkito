@@ -183,9 +183,13 @@ macro_rules! slice {
         }
     };
     (STATIC, $g: ident) => {
+        // TODO: This doesn't seem right?
         const CARDINALITY: Option<u128> = $g::CARDINALITY;
     };
     (STATIC, $g: ident, $n: ident) => {
+        // TODO: This doesn't seem right? Probably requires a `cardinality::any_repeat_static`?
+        // - Since the generating `Generate` is always a `G`, maybe it is alright to consider `G::CARDINALITY`?
+        // - Although `G::cardinality` uses the sum; they must be coherent...
         const CARDINALITY: Option<u128> = if $n == 0 { Some(0) } else { $g::CARDINALITY };
     };
 }
