@@ -1,15 +1,15 @@
-<div align="center"> <h1> {{name}} {{version}} </h1> </div>
+<div align="center"> <h1> {{ package.name }} {{ package.version }} </h1> </div>
 
 <p align="center">
     <em> 
 
-{{description}}
+{{ package.description }}
     </em>
 </p>
 
 <div align="right">
-    <a href="https://github.com/Magicolo/{{name}}/actions/workflows/test.yml"> <img src="https://github.com/Magicolo/{{name}}/actions/workflows/test.yml/badge.svg"> </a>
-    <a href="https://crates.io/crates/{{name}}"> <img src="https://img.shields.io/crates/v/{{name}}.svg"> </a>
+    <a href="https://github.com/Magicolo/{{ package.name }}/actions/workflows/test.yml"> <img src="https://github.com/Magicolo/{{ package.name }}/actions/workflows/test.yml/badge.svg"> </a>
+    <a href="https://crates.io/crates/{{ package.name }}"> <img src="https://img.shields.io/crates/v/{{ package.name }}.svg"> </a>
 </div>
 
 ---
@@ -17,11 +17,11 @@
 
 The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
 
-- When writing a `{{name}}` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
+- When writing a `{{ package.name }}` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
 - Generators can produce arbitrary complex values with its combinators in a similar way that `Iterator`s can.
-- Given a proper generator, `{{name}}` will sample the input space to find a failing case for your test.
-- Once a failing case is found, `{{name}}` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process much easier.
-- Note that `{{name}}` does not guarantee any kind of exhaustive search of the input space (the size of it gets out of hand rather quickly) and is meant as a complement to other testing strategies.
+- Given a proper generator, `{{ package.name }}` will sample the input space to find a failing case for your test.
+- Once a failing case is found, `{{ package.name }}` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process much easier.
+- Note that `{{ package.name }}` does not guarantee any kind of exhaustive search of the input space (the size of it gets out of hand rather quickly) and is meant as a complement to other testing strategies.
 - It is recommended to write a regular unit test with the exact failing input to prevent a regression and to truly guarantee that the failing input is always tested.
 
 ---
@@ -36,16 +36,16 @@ The purpose of the library is to test general properties of a program rather tha
 ### Cheat Sheet
 
 ```rust
-{{examples/cheat.rs}}
+{% include "cheat.rs" %}
 ```
 
 _See the [examples](examples/) and [tests](tests/) folder for more detailed examples._
 
 ---
 ### Contribute
-- If you find a bug or have a feature request, please open an [issues](https://github.com/Magicolo/{{name}}/issues).
-- `{{name}}` is actively maintained and [pull requests](https://github.com/Magicolo/{{name}}/pulls) are welcome.
-- If `{{name}}` was useful to you, please consider leaving a [star](https://github.com/Magicolo/{{name}})!
+- If you find a bug or have a feature request, please open an [issues](https://github.com/Magicolo/{{ package.name }}/issues).
+- `{{ package.name }}` is actively maintained and [pull requests](https://github.com/Magicolo/{{ package.name }}/pulls) are welcome.
+- If `{{ package.name }}` was useful to you, please consider leaving a [star](https://github.com/Magicolo/{{ package.name }})!
 
 ---
 ### Alternatives
