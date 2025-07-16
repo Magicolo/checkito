@@ -55,6 +55,7 @@
                 "mechatroner.rainbow-csv",
                 "dotenv.dotenv-vscode",
                 "fill-labs.dependi",
+                "google.geminicodeassist",
                 // Rust
                 "tamasfe.even-better-toml",
                 "vadimcn.vscode-lldb",
