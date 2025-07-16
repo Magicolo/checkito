@@ -22,10 +22,18 @@ fn weighted_any() {
 
 #[test]
 fn generates_exhaustively() {
-    let set = any([1u16..=5, 10u16..=50, 100u16..=500])
-        .checks(|_| true)
-        .flat_map(|result| result.item())
-        .collect::<HashSet<_>>();
+    let generator = &any([1u16..=5, 10u16..=50, 100u16..=500]);
+    let set = dbg!(
+        any([1u16..=5, 10u16..=50, 100u16..=500])
+            .checks(|_| true)
+            .flat_map(|result| result.item())
+            .collect::<HashSet<_>>()
+    );
+
+    assert_eq!(
+        generator.cardinality(),
+        Some((1u16..=5).len() as u128 + (10u16..=50).len() as u128 + (100u16..=500).len() as u128)
+    );
 
     for i in 0u16..=5 {
         assert!(set.contains(&i));
