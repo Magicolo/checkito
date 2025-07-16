@@ -31,6 +31,15 @@ pub(crate) const fn any_sum(left: Option<u128>, right: Option<u128>) -> Option<u
 }
 
 #[inline]
+pub(crate) const fn any_repeat_static<const N: usize>(value: Option<u128>) -> Option<u128> {
+    match (value, N) {
+        (_, 0) => Some(0),
+        (Some(value), count) => u128::checked_mul(value, count as _),
+        (None, _) => None,
+    }
+}
+
+#[inline]
 pub(crate) const fn all_product(left: Option<u128>, right: Option<u128>) -> Option<u128> {
     match (left, right) {
         (Some(0), _) | (_, Some(0)) => Some(0),
