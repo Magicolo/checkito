@@ -1,7 +1,5 @@
 use crate::{
-    collect::Count,
     generate::Generate,
-    primitive::Range,
     state::{Sizes, State},
 };
 
@@ -21,13 +19,5 @@ impl<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S> Generate for Size<G, F> {
 
     fn cardinality(&self) -> Option<u128> {
         self.0.cardinality()
-    }
-}
-
-impl<C: Count, S: Into<Sizes>, F: Fn(Sizes) -> S> Count for Size<C, F> {
-    const COUNT: Option<Range<usize>> = C::COUNT;
-
-    fn count(&self) -> Range<usize> {
-        self.0.count()
     }
 }

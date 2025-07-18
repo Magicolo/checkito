@@ -23,12 +23,10 @@ fn weighted_any() {
 #[test]
 fn generates_exhaustively() {
     let generator = &any([1u16..=5, 10u16..=50, 100u16..=500]);
-    let set = dbg!(
-        any([1u16..=5, 10u16..=50, 100u16..=500])
-            .checks(|_| true)
-            .flat_map(|result| result.item())
-            .collect::<HashSet<_>>()
-    );
+    let set = any([1u16..=5, 10u16..=50, 100u16..=500])
+        .checks(|_| true)
+        .flat_map(|result| result.item())
+        .collect::<HashSet<_>>();
 
     assert_eq!(
         generator.cardinality(),

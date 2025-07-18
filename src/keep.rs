@@ -1,4 +1,4 @@
-use crate::{collect::Count, generate::Generate, primitive::Range, shrink::Shrink, state::State};
+use crate::{generate::Generate, shrink::Shrink, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Keep<T: ?Sized>(pub(crate) T);
@@ -27,13 +27,5 @@ impl<S: Shrink> Shrink for Keep<S> {
 
     fn shrink(&mut self) -> Option<Self> {
         None
-    }
-}
-
-impl<G: Count + ?Sized> Count for Keep<G> {
-    const COUNT: Option<Range<usize>> = G::COUNT;
-
-    fn count(&self) -> Range<usize> {
-        self.0.count()
     }
 }

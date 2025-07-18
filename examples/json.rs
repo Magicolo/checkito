@@ -74,18 +74,20 @@ fn node() -> impl Generate<Item = Node> {
         // unconditionally (since it would blow up the stack).
         lazy(node)
             // [`Generate::collect_with`] will call the previous generator a number of time defined
-            // by the provided [`Generate<Item = usize>`]. [`Generate::dampen`] is used
-            // to prevent an exponential explosion of nodes by reducing the `size` of the
-            // [`Generate`] it is applied to as recursion goes deeper. When the maximum
-            // depth is reached (see [`Generate::dampen_with`]), the `size` is set to 0.
-            .collect_with((..32usize).dampen())
+            // by the provided [`Generate<Item = usize>`].
+            .collect_with(..32usize)
+            // [`Generate::dampen`] is used to prevent an exponential explosion of nodes by reducing
+            // the `size` of the [`Generate`] it is applied to as recursion goes deeper. When the
+            // maximum depth is reached (see [`Generate::dampen_with`]), the `size` is set to 0.
+            .dampen()
             .map(Node::Array)
             // [`Generate::boxed`] is used to make the return type finite. Without it, since the
             // `impl Generate` type refers to itself through the recursive calls to
             // [`node`], the type never stabilizes.
             .boxed(),
         (string(), lazy(node))
-            .collect_with((..32usize).dampen())
+            .collect_with(..32usize)
+            .dampen()
             .map(Node::Object)
             .boxed(),
     )

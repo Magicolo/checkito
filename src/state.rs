@@ -1,14 +1,15 @@
 use crate::{
-    GENERATES,
+    GENERATES, Generate, Shrink,
     primitive::{Range, u8::U8},
     utility,
 };
 use core::{
-    iter::FusedIterator,
+    iter::{FusedIterator, from_fn},
     ops::{self, Bound},
 };
 use fastrand::Rng;
-use std::{mem::replace, ops::RangeBounds};
+use orn::Or2;
+use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sizes {
@@ -54,7 +55,7 @@ enum Mode {
     // TODO: Can I use this for fuzzing? Add a `Fuzz(Box<dyn Iterator<Item = byte>>)`? Or
     // maybe fuzz through the `Random` object?
     Random(Rng),
-    Exhaustive(u128),
+    Exhaustive(Option<u128>),
 }
 
 impl State {
@@ -72,7 +73,7 @@ impl State {
 
     pub(crate) fn exhaustive(index: usize, count: usize) -> Self {
         Self {
-            mode: Mode::Exhaustive(index as _),
+            mode: Mode::Exhaustive(Some(index as _)),
             sizes: Sizes::default(),
             index,
             count,
@@ -158,6 +159,30 @@ impl State {
         let Range(start, end) = range.into();
         let value = self.u32(Range(start as u32, end as u32));
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
+    }
+
+    pub fn repeat<'a, 'b, G: Generate + ?Sized>(
+        &'a mut self,
+        generator: &'b G,
+        range: Range<usize>,
+    ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
+        let count = match &mut self.mode {
+            Mode::Random(_) => Some(range.generate(self).item()),
+            Mode::Exhaustive(None) => Some(range.start()),
+            Mode::Exhaustive(Some(_)) => None,
+        };
+        match count {
+            Some(count) => Or2::T0(Iterator::map(0..count, move |_| generator.generate(self))),
+            None => Or2::T1(from_fn(move || {
+                if matches!(self.mode, Mode::Exhaustive(Some(1..))) {
+                    Some(generator.generate(self))
+                } else {
+                    None
+                }
+            })),
+        }
+        .into_iter()
+        .map(Or2::into::<G::Shrink>)
     }
 }
 
@@ -348,11 +373,20 @@ macro_rules! integer {
                         }
                         // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
                         Mode::Exhaustive(index) => {
-                            // The `saturating_add(1)` will cause the ranges `u128::MIN..=u128::MAX` and `i128::MIN..=i128::MAX` to never produce the values `u128::MAX` or `-1i128`.
-                            // Considering that it would take `u128::MAX` iterations to reach that value, the inaccuracy is tolerated.
-                            let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
-                            let index = replace(index, *index / range) % range;
-                            u128::wrapping_add(start as _, index) as $integer
+                            let pair = match *index {
+                                Some(index) => {
+                                    // The `saturating_add(1)` will cause the ranges `u128::MIN..=u128::MAX` and `i128::MIN..=i128::MAX` to never produce the values `u128::MAX` or `-1i128`.
+                                    // Considering that it would take `u128::MAX` iterations to reach that value, the inaccuracy is tolerated.
+                                    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
+                                    (
+                                        u128::saturating_div(index, range).checked_sub(1),
+                                        u128::wrapping_add(start as _, index % range) as $integer
+                                    )
+                                },
+                                None => (None, start),
+                            };
+                            *index = pair.0;
+                            pair.1
                         }
                     }
                 }
@@ -416,12 +450,21 @@ macro_rules! floating {
                         }
                         // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
                         Mode::Exhaustive(index) => {
-                            let start = utility::$number::to_bits(start);
-                            let end = utility::$number::to_bits(end);
-                            let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
-                            let index = replace(index, *index / range) % range;
-                            let bits = u128::wrapping_add(start as _, index);
-                            utility::$number::from_bits(bits as _)
+                            let pair = match *index {
+                                Some(index) => {
+                                    let start = utility::$number::to_bits(start);
+                                    let end = utility::$number::to_bits(end);
+                                    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
+                                    let bits = u128::wrapping_add(start as _, index % range);
+                                    (
+                                        u128::saturating_div(index, range).checked_sub(1),
+                                        utility::$number::from_bits(bits as _)
+                                    )
+                                },
+                                None => (None, start),
+                            };
+                            *index = pair.0;
+                            pair.1
                         }
                     }
                 }
@@ -641,9 +684,8 @@ mod tests {
             compare: impl Fn(&T, &T) -> Ordering,
         ) {
             let mut state = State::random(1, 1, 1.0.into(), 0);
-            let mut values = (0..count * 25)
-                .map(|_| generate(&mut state))
-                .collect::<Vec<_>>();
+            let mut values =
+                Iterator::map(0..count * 25, |_| generate(&mut state)).collect::<Vec<_>>();
             values.sort_by(&compare);
             values.dedup_by(|left, right| compare(left, right) == Ordering::Equal);
             assert_eq!(values.len(), count);
@@ -673,9 +715,10 @@ mod tests {
             generate: impl Fn(&mut State) -> T,
             compare: impl Fn(&T, &T) -> Ordering,
         ) {
-            let mut values = (0..count)
-                .map(|i| generate(&mut State::exhaustive(i as _, count)))
-                .collect::<Vec<_>>();
+            let mut values = Iterator::map(0..count, |i| {
+                generate(&mut State::exhaustive(i as _, count))
+            })
+            .collect::<Vec<_>>();
             values.sort_by(&compare);
             values.dedup_by(|left, right| compare(left, right) == Ordering::Equal);
             assert_eq!(values.len(), count);

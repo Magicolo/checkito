@@ -107,7 +107,7 @@ pub const fn array<G: Generate, const N: usize>(generator: G) -> Array<G, N> {
 }
 
 #[inline]
-pub const fn collect<G: Generate, C: Generate<Item = usize> + Count, F: FromIterator<G::Item>>(
+pub const fn collect<G: Generate, C: Count, F: FromIterator<G::Item>>(
     generator: G,
     count: C,
 ) -> Collect<G, C, F> {

@@ -48,8 +48,7 @@ impl<G: Generate, F: FromIterator<G::Item>> Collect<G, Default, F> {
 }
 
 impl<S: Shrink, F: FromIterator<S::Item>> Shrinker<S, F> {
-    pub(crate) fn new(shrinkers: impl IntoIterator<Item = S>, minimum: usize) -> Self {
-        let shrinkers = shrinkers.into_iter().collect::<Vec<_>>();
+    pub(crate) fn new(shrinkers: Vec<S>, minimum: usize) -> Self {
         let item = shrinkers.len();
         Self {
             shrinkers,
@@ -86,9 +85,7 @@ impl<I: Clone, F> Clone for Shrinker<I, F> {
     }
 }
 
-impl<G: Generate + ?Sized, C: Generate<Item = usize> + Count, F: FromIterator<G::Item>> Generate
-    for Collect<G, C, F>
-{
+impl<G: Generate + ?Sized, C: Count, F: FromIterator<G::Item>> Generate for Collect<G, C, F> {
     type Item = F;
     type Shrink = Shrinker<G::Shrink, F>;
 
@@ -99,8 +96,7 @@ impl<G: Generate + ?Sized, C: Generate<Item = usize> + Count, F: FromIterator<G:
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let range = self.count.count();
-        let count = self.count.generate(state).item();
-        let shrinkers = Iterator::map(0..count, |_| self.generator.generate(state));
+        let shrinkers = state.repeat(&self.generator, range).collect();
         Shrinker::new(shrinkers, range.start())
     }
 

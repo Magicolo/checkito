@@ -230,10 +230,7 @@ pub trait Generate {
     /// Generates a variable number of items based on the provided `count`
     /// [`Generate`] and then builds a value of type `F` based on its
     /// implementation of [`FromIterator`].
-    fn collect_with<C: Generate<Item = usize> + Count, F: FromIterator<Self::Item>>(
-        self,
-        count: C,
-    ) -> Collect<Self, C, F>
+    fn collect_with<C: Count, F: FromIterator<Self::Item>>(self, count: C) -> Collect<Self, C, F>
     where
         Self: Sized,
     {
