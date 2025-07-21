@@ -1,4 +1,10 @@
-use crate::{cardinality, generate::Generate, shrink::Shrink, state::State, utility::tuples};
+use crate::{
+    cardinality,
+    generate::Generate,
+    shrink::Shrink,
+    state::{State, Weight},
+    utility::tuples,
+};
 use core::f64;
 use ref_cast::RefCast;
 use std::{rc::Rc, sync::Arc};
@@ -9,71 +15,6 @@ pub struct Any<G: ?Sized>(pub(crate) G);
 
 #[derive(Clone, Debug)]
 pub struct Shrinker<S>(pub(crate) Option<S>);
-
-#[derive(Clone, Debug)]
-pub struct Weight<T: ?Sized> {
-    weight: f64,
-    generator: T,
-}
-
-impl<T> Weight<T> {
-    pub const fn weight(&self) -> f64 {
-        self.weight
-    }
-
-    pub const fn value(&self) -> &T {
-        &self.generator
-    }
-}
-
-impl<G: Generate> Weight<G> {
-    pub fn new(weight: f64, generator: G) -> Self {
-        assert!(weight.is_finite());
-        assert!(weight >= f64::EPSILON);
-        Self { weight, generator }
-    }
-}
-
-impl<G: Generate + ?Sized> Weight<G> {
-    fn cardinality(&self) -> Option<u128> {
-        self.generator.cardinality()
-    }
-}
-
-fn indexed<'a, T>(items: &'a [T], state: &mut State) -> Option<&'a T> {
-    if items.is_empty() {
-        None
-    } else {
-        items.get(state.with().size(1.0).usize(0..items.len()))
-    }
-}
-
-fn weighted<'a, T>(items: &'a [Weight<T>], state: &mut State) -> Option<&'a T> {
-    if items.is_empty() {
-        None
-    } else {
-        let total = items
-            .iter()
-            .map(|Weight { weight, .. }| weight)
-            .sum::<f64>()
-            .min(f64::MAX);
-        debug_assert!(total > 0.0 && total.is_finite());
-        let mut random = state.with().size(1.0).f64(0.0..=total);
-        debug_assert!(random.is_finite());
-        for Weight {
-            weight,
-            generator: value,
-        } in items
-        {
-            if random < *weight {
-                return Some(value);
-            } else {
-                random -= weight;
-            }
-        }
-        unreachable!("there is at least one item in the slice and weights are finite and `> 0.0`");
-    }
-}
 
 impl<T: ?Sized, U: AsRef<T> + ?Sized> AsRef<T> for Any<U> {
     fn as_ref(&self) -> &T {
@@ -169,7 +110,7 @@ macro_rules! slice {
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker(
-                    $i(as_slice(self.as_ref()), state).map(|generator| generator.generate(state)),
+                    state.$i(self.as_ref()).map(|generator| generator.generate(state)),
                 )
             }
 
@@ -189,12 +130,12 @@ macro_rules! slice {
     };
 }
 
-slice!(Any<[G]>, indexed, []);
-slice!(Any<[G; N]>, indexed, [N]);
-slice!(Any<Vec<G>>, indexed, []);
-slice!([Weight<G>], weighted, []);
-slice!([Weight<G>; N], weighted, [N]);
-slice!(Vec<Weight<G>>, weighted, []);
+slice!(Any<[G]>, any_indexed, []);
+slice!(Any<[G; N]>, any_indexed, [N]);
+slice!(Any<Vec<G>>, any_indexed, []);
+slice!([Weight<G>], any_weighted, []);
+slice!([Weight<G>; N], any_weighted, [N]);
+slice!(Vec<Weight<G>>, any_weighted, []);
 
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
@@ -274,14 +215,15 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                let _total = ($(self.$is.weight +)* 0.0).min(f64::MAX);
+                // TODO: Use `State::any_tuple`
+                let _total = ($(self.$is.weight() +)* 0.0).min(f64::MAX);
                 debug_assert!(_total > 0.0 && _total.is_finite());
                 let mut _random = state.with().size(1.0).f64(0.0..=_total);
                 debug_assert!(_random.is_finite());
                 $(
-                    let Weight { weight, generator } = &self.$is;
-                    if _random < *weight {
-                        return orn::$n::Or::$ts(generator.generate(state));
+                    let weight = self.$is.weight();
+                    if _random < weight {
+                        return orn::$n::Or::$ts(self.$is.value().generate(state));
                     } else {
                         _random -= weight;
                     }

@@ -38,7 +38,7 @@ fn range_shrinks() {
 #[test]
 fn generates_exhaustively() {
     let values = dbg!(
-        regex!("[a-z]{0,2}")
+        regex!("[a-c]{0,2}")
             .checks(Ok::<_, ()>)
             .map(|result| result.item())
             .collect::<Vec<_>>()

@@ -5,10 +5,11 @@ use crate::{
 };
 use core::{
     iter::{FusedIterator, from_fn},
+    mem::{replace, take},
     ops::{self, Bound},
 };
 use fastrand::Rng;
-use orn::Or2;
+use orn::Or3;
 use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug)]
@@ -44,6 +45,36 @@ pub(crate) enum Modes {
     Exhaustive(usize),
 }
 
+#[derive(Clone, Debug)]
+pub struct Weight<T: ?Sized> {
+    weight: f64,
+    generator: T,
+}
+
+impl<T> Weight<T> {
+    pub const fn weight(&self) -> f64 {
+        self.weight
+    }
+
+    pub const fn value(&self) -> &T {
+        &self.generator
+    }
+}
+
+impl<G: Generate> Weight<G> {
+    pub fn new(weight: f64, generator: G) -> Self {
+        assert!(weight.is_finite());
+        assert!(weight >= f64::EPSILON);
+        Self { weight, generator }
+    }
+}
+
+impl<G: Generate + ?Sized> Weight<G> {
+    pub(crate) fn cardinality(&self) -> Option<u128> {
+        self.generator.cardinality()
+    }
+}
+
 pub struct With<'a> {
     state: &'a mut State,
     sizes: Sizes,
@@ -55,7 +86,7 @@ enum Mode {
     // TODO: Can I use this for fuzzing? Add a `Fuzz(Box<dyn Iterator<Item = byte>>)`? Or
     // maybe fuzz through the `Random` object?
     Random(Rng),
-    Exhaustive(Option<u128>),
+    Exhaustive(u128),
 }
 
 impl State {
@@ -73,7 +104,7 @@ impl State {
 
     pub(crate) fn exhaustive(index: usize, count: usize) -> Self {
         Self {
-            mode: Mode::Exhaustive(Some(index as _)),
+            mode: Mode::Exhaustive(index as _),
             sizes: Sizes::default(),
             index,
             count,
@@ -81,6 +112,22 @@ impl State {
             depth: 0,
             seed: 0,
         }
+    }
+
+    pub(crate) fn any_exhaustive<I: IntoIterator<Item: Generate, IntoIter: Clone>>(
+        index: &mut u128,
+        generators: I,
+    ) -> Option<I::Item> {
+        for generator in generators.into_iter().cycle() {
+            match generator.cardinality() {
+                Some(cardinality) if *index <= cardinality => {
+                    return Some(generator);
+                }
+                Some(cardinality) => *index -= cardinality,
+                None => return Some(generator),
+            }
+        }
+        None
     }
 
     #[inline]
@@ -161,29 +208,88 @@ impl State {
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 
-    pub fn repeat<'a, 'b, G: Generate + ?Sized>(
+    pub(crate) fn any_indexed<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
+        let end = generators.len().checked_sub(1)?;
+        match &mut self.mode {
+            Mode::Random(_) => {
+                let index = self.with().size(1.0).usize(Range(0, end));
+                generators.get(index)
+            }
+            Mode::Exhaustive(index) => Self::any_exhaustive(index, generators),
+        }
+    }
+
+    pub(crate) fn any_weighted<'a, G: Generate>(
+        &mut self,
+        generators: &'a [Weight<G>],
+    ) -> Option<&'a G> {
+        if generators.is_empty() {
+            return None;
+        }
+
+        match &mut self.mode {
+            Mode::Random(_) => {
+                let total = generators
+                    .iter()
+                    .map(|Weight { weight, .. }| weight)
+                    .sum::<f64>()
+                    .min(f64::MAX);
+                debug_assert!(total > 0.0 && total.is_finite());
+                let mut random = self.with().size(1.0).f64(0.0..=total);
+                debug_assert!(random.is_finite());
+                for Weight {
+                    weight,
+                    generator: value,
+                } in generators
+                {
+                    if random < *weight {
+                        return Some(value);
+                    } else {
+                        random -= weight;
+                    }
+                }
+                unreachable!(
+                    "there is at least one item in the slice and weights are finite and `> 0.0`"
+                );
+            }
+            Mode::Exhaustive(index) => {
+                Self::any_exhaustive(index, generators.iter().map(Weight::value))
+            }
+        }
+    }
+
+    // TODO: Implement `any_tuple_indexed` and `any_tuple_weighted`...
+
+    pub(crate) fn repeat<'a, 'b, G: Generate + ?Sized>(
         &'a mut self,
         generator: &'b G,
         range: Range<usize>,
     ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
-        let count = match &mut self.mode {
-            Mode::Random(_) => Some(range.generate(self).item()),
-            Mode::Exhaustive(None) => Some(range.start()),
-            Mode::Exhaustive(Some(_)) => None,
-        };
-        match count {
-            Some(count) => Or2::T0(Iterator::map(0..count, move |_| generator.generate(self))),
-            None => Or2::T1(from_fn(move || {
-                if matches!(self.mode, Mode::Exhaustive(Some(1..))) {
-                    Some(generator.generate(self))
-                } else {
-                    None
-                }
-            })),
+        match &mut self.mode {
+            Mode::Random(_) => {
+                let count = range.generate(self).item();
+                Or3::T0(Iterator::map(0..count, move |_| generator.generate(self)))
+            }
+            Mode::Exhaustive(0) => Or3::T1([] as [G::Shrink; 0]),
+            Mode::Exhaustive(index @ 1..) => {
+                *index -= 1;
+                let mut first = true;
+                Or3::T2(from_fn(move || match &mut self.mode {
+                    _ if take(&mut first) => Some(generator.generate(self)),
+                    Mode::Exhaustive(1..) => Some(generator.generate(self)),
+                    _ => None,
+                }))
+            }
         }
         .into_iter()
-        .map(Or2::into::<G::Shrink>)
+        .map(|or| or.into())
     }
+}
+
+const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
+    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
+    let index = replace(index, index.saturating_div(range)) % range;
+    u128::wrapping_add(start as _, index)
 }
 
 impl<'a> With<'a> {
@@ -366,28 +472,13 @@ macro_rules! integer {
                                 let center = (range / 2) as $integer;
                                 let remain = (range % 2) as $integer;
                                 let shift = (start + center).max(0) + (end - center - remain).min(0);
-                                let a = value.wrapping_add(shift).wrapping_sub(center);
-                                debug_assert!(a >= start && a <= end);
-                                a
+                                let wrap = value.wrapping_add(shift).wrapping_sub(center);
+                                debug_assert!(wrap >= start && wrap <= end);
+                                wrap
                             }
                         }
                         // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
-                        Mode::Exhaustive(index) => {
-                            let pair = match *index {
-                                Some(index) => {
-                                    // The `saturating_add(1)` will cause the ranges `u128::MIN..=u128::MAX` and `i128::MIN..=i128::MAX` to never produce the values `u128::MAX` or `-1i128`.
-                                    // Considering that it would take `u128::MAX` iterations to reach that value, the inaccuracy is tolerated.
-                                    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
-                                    (
-                                        u128::saturating_div(index, range).checked_sub(1),
-                                        u128::wrapping_add(start as _, index % range) as $integer
-                                    )
-                                },
-                                None => (None, start),
-                            };
-                            *index = pair.0;
-                            pair.1
-                        }
+                        Mode::Exhaustive(index) => consume(index, start as _, end as _) as $integer,
                     }
                 }
                 generate(self, range.into())
@@ -449,23 +540,10 @@ macro_rules! floating {
                             }
                         }
                         // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
-                        Mode::Exhaustive(index) => {
-                            let pair = match *index {
-                                Some(index) => {
-                                    let start = utility::$number::to_bits(start);
-                                    let end = utility::$number::to_bits(end);
-                                    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
-                                    let bits = u128::wrapping_add(start as _, index % range);
-                                    (
-                                        u128::saturating_div(index, range).checked_sub(1),
-                                        utility::$number::from_bits(bits as _)
-                                    )
-                                },
-                                None => (None, start),
-                            };
-                            *index = pair.0;
-                            pair.1
-                        }
+                        Mode::Exhaustive(index) => utility::$number::from_bits(consume(
+                            index,
+                            utility::$number::to_bits(start) as _,
+                            utility::$number::to_bits(end) as _) as _),
                     }
                 }
                 generate(self, range.into())

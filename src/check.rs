@@ -638,7 +638,7 @@ mod asynchronous {
         pin::Pin,
         task::{Context, Poll, ready},
     };
-    use futures::Stream;
+    use futures_lite::Stream;
 
     pub struct Run;
 
