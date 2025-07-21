@@ -15,7 +15,7 @@ rust-version = "1.65.0"
 proc-macro = true
 
 [features]
-default = ["regex", "check", "constant"]
+default = []
 regex = ["regex-syntax/unicode"]
 check = []
 constant = []
