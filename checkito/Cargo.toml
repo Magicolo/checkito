@@ -16,11 +16,11 @@ rust-version = "1.70"
 github = { repository = "Magicolo/checkito", workflow = "test" }
 
 [features]
-default = ["check", "regex", "constant", "asynchronous"]
+default = ["check", "regex", "constant", "asynchronous", "parallel"]
 check = ["checkito_macro/check"]
 regex = ["regex-syntax/unicode", "checkito_macro/regex"]
 constant = ["checkito_macro/constant"]
-asynchronous = ["futures-lite", "checkito_macro/asynchronous"]
+asynchronous = ["futures-lite", "async-io", "checkito_macro/asynchronous"]
 parallel = ["rayon", "checkito_macro/parallel"]
 
 [dependencies]
@@ -28,13 +28,11 @@ orn = "0.6.1"
 fastrand = "2.3.0"
 ref-cast = "1.0.24"
 rustversion = "1.0.21"
-# TODO: Probably add `no-default-features`.
 futures-lite = { version = "2.6.0", default-features = false, optional = true }
 rayon = { version = "*", default-features = false, optional = true }
 checkito_macro = { version = "0.5.0", path = "../checkito_macro", default-features = false, optional = true }
 regex-syntax = { version = "0.8.5", default-features = false, optional = true }
+async-io = { version = "2.5.0", default-features = false, optional = true }
 
 [dev-dependencies]
-regex = "1.11.0"
-# TODO: Probably remove this.
-smol = "2.0.2"
+regex = { version = "1.11.0", default-features = false }

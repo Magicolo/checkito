@@ -1,14 +1,14 @@
 use core::{fmt, mem::replace, ops::Deref, str::FromStr};
-use quote::{format_ident, quote_spanned, ToTokens};
+use quote::{ToTokens, format_ident, quote_spanned};
 use std::{collections::HashSet, env};
 use syn::{
+    __private::{Span, TokenStream2},
+    Error, Expr, ExprAssign, ExprField, ExprLit, ExprPath, ExprRange, FnArg, Ident, Lit, LitBool,
+    Member, Meta, PatType, Path, PathSegment, RangeLimits, Signature,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
-    Error, Expr, ExprAssign, ExprField, ExprLit, ExprPath, ExprRange, FnArg, Ident, Lit, LitBool,
-    Member, Meta, PatType, Path, PathSegment, RangeLimits, Signature,
-    __private::{Span, TokenStream2},
 };
 
 pub struct Check {
@@ -20,6 +20,8 @@ pub struct Check {
     pub color: Option<bool>,
     #[cfg(feature = "constant")]
     pub constant: Option<bool>,
+    #[cfg(feature = "asynchronous")]
+    pub asynchronous: Option<bool>,
     pub verbose: Option<bool>,
 }
 
@@ -30,6 +32,8 @@ pub enum Key {
     Verbose,
     #[cfg(feature = "constant")]
     Constant,
+    #[cfg(feature = "asynchronous")]
+    Asynchronous,
     GenerateCount,
     GenerateSeed,
     GenerateSize,
@@ -47,6 +51,8 @@ static KEYS: &[Key] = &[
     Key::Verbose,
     #[cfg(feature = "constant")]
     Key::Constant,
+    #[cfg(feature = "asynchronous")]
+    Key::Asynchronous,
     Key::GenerateCount,
     Key::GenerateSeed,
     Key::GenerateSize,
@@ -80,6 +86,8 @@ impl From<Key> for &'static str {
             Key::Verbose => "verbose",
             #[cfg(feature = "constant")]
             Key::Constant => "constant",
+            #[cfg(feature = "asynchronous")]
+            Key::Asynchronous => "asynchronous",
             Key::GenerateCount => "generate.count",
             Key::GenerateSeed => "generate.seed",
             Key::GenerateSize => "generate.sizes",
@@ -176,6 +184,8 @@ impl Check {
             verbose: parse("CHECKITO_VERBOSE"),
             #[cfg(feature = "constant")]
             constant: parse("CHECKITO_CONSTANT"),
+            #[cfg(feature = "asynchronous")]
+            asynchronous: None,
         }
     }
 
@@ -272,28 +282,38 @@ impl Check {
                 Key::Debug | Key::Color | Key::Verbose => continue,
                 #[cfg(feature = "constant")]
                 Key::Constant => continue,
+                #[cfg(feature = "asynchronous")]
+                Key::Asynchronous => continue,
             });
         }
 
         let name = &signature.ident;
         let color = self.color.unwrap_or(true);
         let verbose = self.verbose.unwrap_or(false);
+        let mut module = Ident::new("synchronous", signature.span());
+        #[cfg(feature = "asynchronous")]
+        {
+            let asynchronous = self.asynchronous.unwrap_or(signature.asyncness.is_some());
+            if asynchronous {
+                module = Ident::new("asynchronous", signature.span());
+            }
+        }
         Ok(match self.debug {
-            Some(true) => quote_spanned!(self.span => ::checkito::check::run::debug(
+            Some(true) => quote_spanned!(self.span => ::checkito::run::#module::debug(
                 (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
-            Some(false) => quote_spanned!(self.span => ::checkito::check::run::minimal(
+            Some(false) => quote_spanned!(self.span => ::checkito::run::#module::minimal(
                 (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
-            None => quote_spanned!(self.span => ::checkito::check::run::default(
+            None => quote_spanned!(self.span => ::checkito::run::#module::default(
                 (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
@@ -329,6 +349,11 @@ impl Parse for Check {
                             #[cfg(feature = "constant")]
                             Key::Constant => {
                                 check.constant = Some(as_bool(&right)?);
+                                continue;
+                            }
+                            #[cfg(feature = "asynchronous")]
+                            Key::Asynchronous => {
+                                check.asynchronous = Some(as_bool(&right)?);
                                 continue;
                             }
                             _ => right.to_token_stream(),

@@ -118,6 +118,7 @@ pub trait Check: Generate {
         Checker::new(self, state::seed())
     }
 
+    // TODO: Use the parallel implementation?
     fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
         self,
         check: F,
@@ -128,15 +129,12 @@ pub trait Check: Generate {
         self.checker().checks(check)
     }
 
+    // TODO: Use the parallel implementation?
     fn check<P: Prove, F: FnMut(Self::Item) -> P>(
         &self,
         check: F,
     ) -> Option<Fail<Self::Item, P::Error>> {
-        let mut checker = self.checker();
-        checker.generate.items = false;
-        checker.shrink.items = false;
-        checker.shrink.errors = false;
-        checker.checks(check).last()?.fail(false)
+        self.checker().check(check)
     }
 }
 
@@ -493,7 +491,7 @@ impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
 
 impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
-mod synchronous {
+pub(crate) mod synchronous {
     use super::*;
 
     pub struct Run;
@@ -513,6 +511,16 @@ mod synchronous {
     }
 
     impl<G: Generate> Checker<G, Run> {
+        pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
+            mut self,
+            check: F,
+        ) -> Option<Fail<G::Item, P::Error>> {
+            self.generate.items = false;
+            self.shrink.items = false;
+            self.shrink.errors = false;
+            self.checks(check).last()?.fail(false)
+        }
+
         pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(
             self,
             check: F,
@@ -631,14 +639,14 @@ mod synchronous {
 }
 
 #[cfg(feature = "asynchronous")]
-mod asynchronous {
+pub(crate) mod asynchronous {
     use super::*;
     use core::{
         future::Future,
         pin::Pin,
         task::{Context, Poll, ready},
     };
-    use futures_lite::Stream;
+    use futures_lite::{Stream, StreamExt};
 
     pub struct Run;
 
@@ -673,8 +681,24 @@ mod asynchronous {
         Done,
     }
 
-    impl<G: Generate> Checker<G, Run> {
-        pub fn checks<P: Future<Output: Prove>, F: FnMut(G::Item) -> P>(
+    impl<G: Generate<Shrink: Unpin> + Unpin> Checker<G, Run> {
+        pub async fn check<
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            F: FnMut(G::Item) -> P + Unpin,
+        >(
+            mut self,
+            check: F,
+        ) -> Option<Fail<G::Item, <P::Output as Prove>::Error>> {
+            self.generate.items = false;
+            self.shrink.items = false;
+            self.shrink.errors = false;
+            self.checks(check).last().await?.fail(false)
+        }
+
+        pub fn checks<
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            F: FnMut(G::Item) -> P + Unpin,
+        >(
             self,
             check: F,
         ) -> Checks<F, Machine<G, P>> {
@@ -699,12 +723,10 @@ mod asynchronous {
     }
 
     impl<
-        G: Generate + Unpin,
+        G: Generate<Shrink: Unpin> + Unpin,
         P: Future<Output: Prove<Error: Unpin> + Unpin>,
         F: FnMut(G::Item) -> P + Unpin,
     > Stream for Checks<F, Machine<G, P>>
-    where
-        G::Shrink: Unpin,
     {
         type Item = Result<G::Item, P::Output>;
 
@@ -862,333 +884,6 @@ mod asynchronous {
                 Err(error) => Poll::Ready(Err(Cause::Disprove(error))),
             },
             Err(error) => Poll::Ready(Err(Cause::Panic(cast(error)))),
-        }
-    }
-}
-
-#[doc(hidden)]
-pub mod run {
-    use super::{Check, Checker, Fail, Generate, Pass, Prove, Result, environment, hook};
-    use core::{
-        any::type_name,
-        fmt::{self, Arguments},
-    };
-
-    struct Colors {
-        red: &'static str,
-        green: &'static str,
-        yellow: &'static str,
-        dim: &'static str,
-        bold: &'static str,
-        reset: &'static str,
-    }
-
-    impl Colors {
-        pub const fn new(color: bool) -> Self {
-            if color {
-                Self {
-                    red: "\x1b[31m",
-                    green: "\x1b[32m",
-                    yellow: "\x1b[33m",
-                    bold: "\x1b[1m",
-                    dim: "\x1b[2m",
-                    reset: "\x1b[0m",
-                }
-            } else {
-                Self {
-                    red: "",
-                    green: "",
-                    yellow: "",
-                    bold: "",
-                    dim: "",
-                    reset: "",
-                }
-            }
-        }
-    }
-
-    #[track_caller]
-    pub fn default<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) where
-        G::Item: fmt::Debug,
-        P::Proof: fmt::Debug,
-        P::Error: fmt::Debug,
-    {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| {
-                println!(
-                    "{prefix} {{ item: {:?}, seed: {}, size: {}, proof: {:?} }}",
-                    &pass.item,
-                    pass.seed(),
-                    pass.size(),
-                    &pass.proof,
-                )
-            },
-            |prefix, fail| {
-                eprintln!(
-                    "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
-                    &fail.item,
-                    fail.seed(),
-                    fail.size(),
-                    fail.message(),
-                )
-            },
-        );
-    }
-
-    #[track_caller]
-    pub fn debug<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) where
-        G::Item: fmt::Debug,
-        P::Proof: fmt::Debug,
-        P::Error: fmt::Debug,
-    {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| println!("{prefix} {pass:?}"),
-            |prefix, fail| eprintln!("{prefix} {fail:?}"),
-        );
-    }
-
-    #[track_caller]
-    pub fn minimal<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| {
-                println!(
-                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                    type_name::<G::Item>(),
-                    pass.seed(),
-                    pass.size(),
-                )
-            },
-            |prefix, fail| {
-                eprintln!(
-                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                    type_name::<G::Item>(),
-                    fail.seed(),
-                    fail.size(),
-                )
-            },
-        );
-    }
-
-    #[track_caller]
-    fn with<
-        G: Generate,
-        U: FnOnce(&mut Checker<G>),
-        P: Prove,
-        C: Fn(G::Item) -> P,
-        WP: Fn(Arguments, Pass<G::Item, P::Proof>),
-        WF: Fn(Arguments, Fail<G::Item, P::Error>),
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-        pass: WP,
-        fail: WF,
-    ) {
-        let mut checker = generator.checker();
-        checker.generate.items = verbose;
-        checker.shrink.items = verbose;
-        checker.shrink.errors = verbose;
-        environment::update(&mut checker);
-        (update)(&mut checker);
-        let Colors {
-            red,
-            green,
-            yellow,
-            dim,
-            bold,
-            reset,
-        } = Colors::new(color);
-
-        hook::begin();
-        for result in checker.checks(hook::silent(check)) {
-            match result {
-                Result::Pass(value @ Pass { generates, .. }) => {
-                    pass(format_args!("{green}PASS({generates}){reset}"), value)
-                }
-                Result::Shrink(value @ Pass { shrinks, .. }) => pass(
-                    format_args!("{dim}{yellow}SHRINK({shrinks}, {green}PASS{yellow}){reset}"),
-                    value,
-                ),
-                Result::Shrunk(value @ Fail { shrinks, .. }) => fail(
-                    format_args!("{yellow}SHRUNK({shrinks}, {red}FAIL{yellow}){reset}"),
-                    value,
-                ),
-                Result::Fail(
-                    value @ Fail {
-                        generates, shrinks, ..
-                    },
-                ) => {
-                    fail(
-                        format_args!("{bold}{red}FAIL({generates}, {shrinks}){reset}"),
-                        value,
-                    );
-                    hook::panic();
-                }
-            }
-        }
-        hook::end();
-    }
-}
-
-mod hook {
-    use core::cell::Cell;
-    use std::panic;
-
-    #[rustversion::since(1.81)]
-    type Handle = Box<dyn Fn(&panic::PanicHookInfo) + 'static + Sync + Send>;
-    #[rustversion::before(1.81)]
-    type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
-    thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
-
-    pub fn begin() {
-        HOOK.with(|cell| cell.set(Some(panic::take_hook())));
-        panic::set_hook(Box::new(|panic| {
-            HOOK.with(|cell| {
-                if let Some(hook) = cell.replace(None) {
-                    hook(panic);
-                    cell.set(Some(hook));
-                }
-            });
-        }));
-    }
-
-    pub fn silent<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
-        move |input| {
-            HOOK.with(|cell| {
-                let hook = cell.replace(None);
-                let output = function(input);
-                cell.set(hook);
-                output
-            })
-        }
-    }
-
-    pub fn end() {
-        HOOK.with(|cell| {
-            if let Some(hook) = cell.take() {
-                panic::set_hook(hook);
-            }
-        });
-    }
-
-    pub fn panic() -> ! {
-        end();
-        panic!();
-    }
-}
-
-mod environment {
-    use super::Checker;
-    use core::str::FromStr;
-    use std::env;
-
-    mod generate {
-        use super::*;
-
-        pub fn count() -> Option<usize> {
-            parse("CHECKITO_GENERATE_COUNT")
-        }
-
-        pub fn size() -> Option<f64> {
-            parse("CHECKITO_GENERATE_SIZE")
-        }
-
-        pub fn seed() -> Option<u64> {
-            parse("CHECKITO_GENERATE_SEED")
-        }
-
-        pub fn items() -> Option<bool> {
-            parse("CHECKITO_GENERATE_ITEMS")
-        }
-
-        pub fn update<G>(checker: &mut Checker<G>) {
-            if let Some(value) = size() {
-                checker.generate.sizes = (value..=value).into();
-            }
-            if let Some(value) = count() {
-                checker.generate.count = value;
-            }
-            if let Some(value) = seed() {
-                checker.generate.seed = value;
-            }
-            if let Some(value) = items() {
-                checker.generate.items = value;
-            }
-        }
-    }
-
-    mod shrink {
-        use super::*;
-
-        pub fn count() -> Option<usize> {
-            parse("CHECKITO_SHRINK_COUNT")
-        }
-
-        pub fn items() -> Option<bool> {
-            parse("CHECKITO_SHRINK_ITEMS")
-        }
-
-        pub fn errors() -> Option<bool> {
-            parse("CHECKITO_SHRINK_ERRORS")
-        }
-
-        pub fn update<G>(checker: &mut Checker<G>) {
-            if let Some(value) = count() {
-                checker.shrink.count = value;
-            }
-            if let Some(value) = items() {
-                checker.shrink.items = value;
-            }
-            if let Some(value) = errors() {
-                checker.shrink.errors = value;
-            }
-        }
-    }
-
-    pub fn update<G>(checker: &mut Checker<G>) {
-        generate::update(checker);
-        shrink::update(checker);
-    }
-
-    fn parse<T: FromStr>(key: &str) -> Option<T> {
-        match env::var(key) {
-            Ok(value) => value.parse().ok(),
-            Err(_) => None,
         }
     }
 }

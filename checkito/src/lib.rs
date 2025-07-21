@@ -21,6 +21,8 @@ mod prelude;
 pub mod primitive;
 pub mod prove;
 pub mod regex;
+#[doc(hidden)]
+pub mod run;
 pub mod same;
 pub mod sample;
 pub mod shrink;
