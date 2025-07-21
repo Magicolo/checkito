@@ -1,4 +1,4 @@
-#![cfg(all(feature = "check", feature = "asynchronous"))]
+#![cfg(feature = "asynchronous")]
 
 pub mod common;
 use async_io::block_on;
@@ -15,10 +15,15 @@ fn executes_to_completion() {
     );
 }
 
-#[check]
-async fn compiles_with_async_function() {}
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
 
-#[check(asynchronous = true)]
-fn compiles_with_asynchronous_option() -> impl Future<Output = ()> {
-    ready(())
+    #[check]
+    async fn compiles_with_async_function() {}
+
+    #[check(asynchronous = true)]
+    fn compiles_with_asynchronous_option() -> impl Future<Output = ()> {
+        ready(())
+    }
 }
