@@ -19,7 +19,8 @@ default = ["regex", "check", "constant"]
 regex = ["regex-syntax/unicode"]
 check = []
 constant = []
-# parallel = []
+parallel = []
+asynchronous = []
 
 [dependencies]
 syn = { version = "2.0.96", features = [

@@ -1,0 +1,210 @@
+<div align="center"> <h1> checkito 3.2.5 </h1> </div>
+
+<p align="center">
+    <em> 
+
+A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing.
+    </em>
+</p>
+
+<div align="right">
+    <a href="https://github.com/Magicolo/checkito/actions/workflows/test.yml"> <img src="https://github.com/Magicolo/checkito/actions/workflows/test.yml/badge.svg"> </a>
+    <a href="https://crates.io/crates/checkito"> <img src="https://img.shields.io/crates/v/checkito.svg"> </a>
+</div>
+
+---
+### In Brief
+
+The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
+
+- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
+- Generators can produce arbitrary complex values with its combinators in a similar way that `Iterator`s can.
+- Given a proper generator, `checkito` will sample the input space to find a failing case for your test.
+- Once a failing case is found, `checkito` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process much easier.
+- Note that `checkito` does not guarantee any kind of exhaustive search of the input space (the size of it gets out of hand rather quickly) and is meant as a complement to other testing strategies.
+- It is recommended to write a regular unit test with the exact failing input to prevent a regression and to truly guarantee that the failing input is always tested.
+
+---
+### Main Traits
+-   [`Generate`](src/generate.rs): is implemented for many of rust's standard types and allows the generation of any random composite/structured data through combinator (such as tuples, [`Any`](src/any.rs), [`Map`](src/map.rs), [`Flatten`](src/flatten.rs) and more). It is designed for composability and its usage should feel like working with `Iterator`s.
+-   [`Shrink`](src/shrink.rs): tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk below `10`). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, and so on.
+-   [`Prove`](src/prove.rs): represents a desirable property of a program under test. It is used mainly in the context of the [`Check::check`](src/check.rs) or [`Checker::check`](src/check.rs) methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `()`, `bool` and `Result`. A `panic!()` is also considered as a failing property, thus standard `assert!()` macros (or any other panicking assertions) can be used to check the property.
+   
+*To ensure safety, this library is `#![forbid(unsafe_code)]`.*
+
+---
+### Cheat Sheet
+
+```rust
+use checkito::*;
+
+/// The `#[check]` attribute is designed to be as thin as possible and
+/// everything that is expressible with it is also ergonomically expressible as
+/// _regular_ code (see below). Each `#[check]` attribute expands to a single
+/// function call.
+///
+/// An empty `#[check]` attribute acts just like `#[test]`. It is allowed for
+/// consistency between tests.
+#[check]
+fn empty() {}
+
+/// The builtin `letter()` generator will yield ascii letters.
+///
+/// This test will be run many times with different generated values to find a
+/// failing input.
+#[check(letter())]
+fn is_letter(value: char) {
+    assert!(value.is_ascii_alphabetic());
+}
+
+/// Ranges can be used as generators and will yield values within its bounds.
+///
+/// A [`bool`] can be returned and if `true`, it will be considered as evidence
+/// that the property under test holds.
+#[check(0usize..=100)]
+fn is_in_range(value: usize) -> bool {
+    value <= 100
+}
+
+/// Regexes can be used and validated either dynamically using the [`regex`]
+/// generator or at compile-time with the [`regex!`] macro.
+///
+/// Usual panicking assertions can be used in the body of the checking function
+/// since a panic is considered a failed property.
+#[check(regex("{", None).ok(), regex!("[a-zA-Z0-9_]*"))]
+fn is_ascii(invalid: Option<String>, valid: String) {
+    assert!(invalid.is_none());
+    assert!(valid.is_ascii());
+}
+
+/// The `_` and `..` operators can be used to infer the [`FullGenerate`]
+/// generator implementation for a type. Specifically, the `..` operator works
+/// the same way as slice match patterns.
+///
+/// Since this test will panic, `#[should_panic]` can be used in the usual way.
+#[check(..)]
+#[check(_, _, _, _)]
+#[check(negative::<f64>(), ..)]
+#[check(.., negative::<i16>())]
+#[check(_, .., _)]
+#[check(negative::<f64>(), _, .., _, negative::<i16>())]
+#[should_panic]
+fn is_negative(first: f64, second: i8, third: isize, fourth: i16) {
+    assert!(first < 0.0);
+    assert!(second < 0);
+    assert!(third < 0);
+    assert!(fourth < 0);
+}
+
+/// `color = false` disables coloring of the output.
+/// `verbose = true` will display all the steps taken by the [`check::Checker`]
+/// while generating and shrinking values.
+///
+/// The shrinking process is pretty good at finding minimal inputs to reproduce
+/// a failing property and in this case, it will always shrink values over
+/// `1000` to exactly `1000`.
+#[check(0u64..1_000_000, color = false, verbose = true)]
+#[should_panic]
+fn is_small(value: u64) {
+    assert!(value < 1000);
+}
+
+/// Multiple checks can be performed.
+///
+/// If all generators always yield the same value, the check becomes a
+/// parameterized unit test and will run only once.
+#[check(3001, 6000)]
+#[check(4500, 4501)]
+#[check(9000, 1)]
+fn sums_to_9001(left: i32, right: i32) {
+    assert_eq!(left + right, 9001);
+}
+
+/// Generics can be used as inputs to the checking function.
+///
+/// [`Generate::map`] can be used to map a value to another.
+#[check(111119)]
+#[check(Generate::map(10..1000, |value| value * 10 - 1))]
+#[check("a string that ends with 9")]
+#[check(regex!("[a-z]*9"))]
+fn ends_with_9(value: impl std::fmt::Display) -> bool {
+    format!("{value}").ends_with('9')
+}
+
+pub struct Person {
+    pub name: String,
+    pub age: usize,
+}
+/// Use tuples to combine generators and build more complex structured types.
+/// Alternatively implement the [`FullGenerate`] trait for the [`Person`]
+/// struct.
+///
+/// Any generator combinator can be used here; see the other examples in the
+/// _examples_ folder for more details.
+///
+/// Disable `debug` if a generated type does not implement [`Debug`] which
+/// removes the only requirement that `#[check]` requires from input types.
+#[check((letter().collect(), 18usize..=100).map(|(name, age)| Person { name, age }), debug = false)]
+fn person_has_valid_name_and_is_major(person: Person) {
+    assert!(person.name.is_ascii());
+    assert!(person.age >= 18);
+}
+
+/// The `#[check]` attribute essentially expands to a call to [`Check::check`]
+/// with pretty printing. For some more complex scenarios, it may become more
+/// convenient to simply call the [`Check::check`] manually.
+///
+/// The [`Generate::any`] combinator chooses from its inputs. The produced
+/// `Or<..>` preserves the information about the choice but here, it can be
+/// simply collapsed using [`Generate::unify<T>`].
+#[test]
+fn has_even_hundred() {
+    (0..100, 200..300, 400..500)
+        .any()
+        .unify::<i32>()
+        .check(|value| assert!((value / 100) % 2 == 0));
+}
+
+fn main() {
+    // `checkito` comes with a bunch of builtin generators such as this generic
+    // number generator. An array of generators will produce an array of values.
+    let generator = &[(); 10].map(|_| number::<f64>());
+
+    // For more configuration and control over the generation and shrinking
+    // processes, retrieve a [`check::Checker`] from any generator.
+    let mut checker = generator.checker();
+    checker.generate.count = 1_000_000;
+    checker.shrink.items = false;
+
+    // [`check::Checker::checks`] produces an iterator of [`check::Result`] which
+    // hold rich information about what happened during each check.
+    for result in checker.checks(|values| values.iter().sum::<f64>() < 1000.0) {
+        match result {
+            check::Result::Pass(_pass) => {}
+            check::Result::Shrink(_pass) => {}
+            check::Result::Shrunk(_fail) => {}
+            check::Result::Fail(_fail) => {}
+        }
+    }
+
+    // For simply sampling random values from a generator, use [`Sample::samples`].
+    // Just like in the checking process, samples will get increasingly larger.
+    for _sample in generator.samples(1000) {}
+}
+
+```
+
+_See the [examples](examples/) and [tests](tests/) folder for more detailed examples._
+
+---
+### Contribute
+- If you find a bug or have a feature request, please open an [issues](https://github.com/Magicolo/checkito/issues).
+- `checkito` is actively maintained and [pull requests](https://github.com/Magicolo/checkito/pulls) are welcome.
+- If `checkito` was useful to you, please consider leaving a [star](https://github.com/Magicolo/checkito)!
+
+---
+### Alternatives
+- [proptest](https://crates.io/crates/proptest)
+- [quickcheck](https://crates.io/crates/quickcheck)
+- [arbitrary](https://crates.io/crates/arbitrary)
+- [monkey_test](https://crates.io/crates/monkey_test)
