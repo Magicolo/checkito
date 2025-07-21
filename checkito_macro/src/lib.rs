@@ -23,12 +23,9 @@ Converts the input expressions to a constant representation of it. The
 added benefit of doing this is mainly to be able to compute statically
 the cardinality of generators which, in some cases, helps with
 determining the correct number of iterations for a `Checker::checks`.
- - Primitives ('u8', 'isize', 'bool', 'char', etc.) will be converted to a
-  wrapper that uses `const N: {T}` (ex: `Usize::<100>`).
-- Ranges ('0..100', '0..=100', etc.) will be converted such that the
-  bounds use the primitive wrappers.
-- Some constant expressions that wrap the previous ones will be converted
-  (ex: `{ 100i8 }`, `{ 1u16 + 13 }`).
+- Primitives ('u8', 'isize', 'bool', 'char', etc.) will be converted to a wrapper that uses `const N: {T}` (ex: `Usize::<100>`).
+- Ranges ('0..100', '0..=100', etc.) will be converted such that the bounds use the primitive wrappers.
+- Some constant expressions that wrap the previous ones will be converted (ex: `{ 100i8 }`, `{ 1u16 + 13 }`).
 - All other expressions will be left as is.
 */
 #[cfg(feature = "constant")]

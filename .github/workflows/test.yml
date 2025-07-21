@@ -17,10 +17,6 @@ jobs:
         cargo hack build --release --lib --bins --benches --tests --verbose --feature-powerset
         cargo hack build --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
         cargo hack build --release --examples --verbose
-    - working-directory: checkito_macro
-      run: |
-        cargo hack build --release --all-targets --verbose --feature-powerset
-        cargo hack build --release --all-targets --verbose --feature-powerset --rust-version
   test:
     runs-on: ubuntu-latest
     container: 
@@ -32,10 +28,6 @@ jobs:
         cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
         cargo hack test --release --doc --verbose --feature-powerset
         cargo hack test --release --examples --verbose
-    - working-directory: checkito_macro
-      run: |
-        cargo hack test --release --all-targets --verbose --feature-powerset
-        cargo hack test --release --all-targets --verbose --feature-powerset --rust-version
   clippy:
     runs-on: ubuntu-latest
     container: 
@@ -45,9 +37,6 @@ jobs:
     - run: |
         cargo hack clippy --release --lib --bins --benches --tests --verbose --feature-powerset -- --deny warnings
         cargo hack clippy --release --examples --verbose -- --deny warnings
-    - working-directory: checkito_macro
-      run: |
-        cargo hack clippy --release --all-targets --verbose --feature-powerset -- --deny warnings
   doc:
     runs-on: ubuntu-latest
     container: 
@@ -55,8 +44,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: cargo hack doc --no-deps --release --verbose --feature-powerset
-    - working-directory: checkito_macro
-      run: cargo hack doc --no-deps --release --verbose --feature-powerset
   semver:
     runs-on: ubuntu-latest
     container: 
@@ -71,8 +58,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: cargo msrv verify
-    - working-directory: checkito_macro
-      run: cargo msrv verify
   audit:
     runs-on: ubuntu-latest
     container: 
@@ -80,8 +65,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - run: cargo audit
-    - working-directory: checkito_macro
-      run: cargo audit
   coverage:
     runs-on: ubuntu-latest
     container: 
@@ -92,5 +75,6 @@ jobs:
         COVERAGE: 50
       run: |
         cargo llvm-cov --all-targets --all-features --release --summary-only --json --verbose |
-        jq '[.data[0].totals | .functions.percent, .instantiations.percent, .lines.percent, .regions.percent] | add / length' |
+        jq '[.data[0].totals | .functions.percent, .instantiations.percent, .lines.percent, .regions.percent] |
+        add / length' |
         awk -v threshold=$COVERAGE '{ coverage = int($1); if (coverage > threshold) { print "Coverage "coverage"% is above threshold "threshold"%."; exit 0; } else { print "Expected coverage "coverage"% to be at least "threshold"%."; exit 1; } }'

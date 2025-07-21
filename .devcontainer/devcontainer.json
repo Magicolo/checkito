@@ -61,6 +61,7 @@
                 "dotenv.dotenv-vscode",
                 "fill-labs.dependi",
                 "google.geminicodeassist",
+                "github.vscode-github-actions",
                 // Rust
                 "tamasfe.even-better-toml",
                 "vadimcn.vscode-lldb",

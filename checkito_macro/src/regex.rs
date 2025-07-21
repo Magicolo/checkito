@@ -2,11 +2,11 @@ use proc_macro::TokenStream;
 use quote::quote;
 use regex_syntax::Parser;
 use syn::{
-    Error, Expr, ExprLit, Lit, LitStr,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
+    Error, Expr, ExprLit, Lit, LitStr,
 };
 
 pub struct Regex(pub LitStr, pub Option<Expr>);
