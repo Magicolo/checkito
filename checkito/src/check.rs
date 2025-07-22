@@ -109,7 +109,6 @@ pub struct Checker<G: ?Sized, R: ?Sized = sequential_synchronous::Run> {
 ///   [`Generates::count`] [`Result::Pass`] results.
 pub struct Checks<F, M> {
     yields: (bool, bool, bool),
-    shrinks: ops::Range<usize>,
     check: F,
     machine: M,
 }
@@ -508,10 +507,12 @@ pub(crate) mod sequential_synchronous {
         Generate {
             generator: G,
             states: States,
+            shrinks: ops::Range<usize>,
         },
         Shrink {
             index: usize,
             state: State,
+            shrinks: ops::Range<usize>,
             shrinker: G::Shrink,
             cause: Cause<P::Error>,
         },
@@ -552,10 +553,10 @@ pub(crate) mod sequential_synchronous {
             );
             Checks {
                 yields: (self.generate.items, self.shrink.items, self.shrink.errors),
-                shrinks: 0..self.shrink.count,
                 machine: Machine::Generate {
                     generator: self.generator,
                     states: modes.into(),
+                    shrinks: 0..self.shrink.count,
                 },
                 check,
             }
@@ -571,12 +572,17 @@ pub(crate) mod sequential_synchronous {
                     Machine::Generate {
                         generator,
                         mut states,
+                        shrinks,
                     } => {
                         let mut state = states.next()?;
                         let shrinker = generator.generate(&mut state);
                         match handle(shrinker.item(), &mut self.check) {
                             Ok(proof) => {
-                                self.machine = Machine::Generate { generator, states };
+                                self.machine = Machine::Generate {
+                                    generator,
+                                    states,
+                                    shrinks,
+                                };
                                 if self.yields.0 {
                                     break Some(pass(shrinker.item(), state, proof));
                                 }
@@ -586,6 +592,7 @@ pub(crate) mod sequential_synchronous {
                                     index: 0,
                                     state,
                                     shrinker,
+                                    shrinks,
                                     cause,
                                 };
                             }
@@ -594,21 +601,22 @@ pub(crate) mod sequential_synchronous {
                     Machine::Shrink {
                         index,
                         state,
-                        mut shrinker,
-                        cause,
+                        mut shrinks,
+                        shrinker: mut old_shrinker,
+                        cause: old_cause,
                     } => {
-                        let next = match self.shrinks.next() {
+                        let next = match shrinks.next() {
                             Some(index) => index,
                             None => {
                                 self.machine = Machine::Done;
-                                break Some(fail(shrinker.item(), index, state, cause));
+                                break Some(fail(old_shrinker.item(), index, state, old_cause));
                             }
                         };
-                        let new_shrinker = match shrinker.shrink() {
+                        let new_shrinker = match old_shrinker.shrink() {
                             Some(shrinker) => shrinker,
                             None => {
                                 self.machine = Machine::Done;
-                                break Some(fail(shrinker.item(), index, state, cause));
+                                break Some(fail(old_shrinker.item(), index, state, old_cause));
                             }
                         };
                         match handle(new_shrinker.item(), &mut self.check) {
@@ -616,8 +624,9 @@ pub(crate) mod sequential_synchronous {
                                 self.machine = Machine::Shrink {
                                     index: next,
                                     state: state.clone(),
-                                    shrinker,
-                                    cause,
+                                    shrinks,
+                                    shrinker: old_shrinker,
+                                    cause: old_cause,
                                 };
                                 if self.yields.1 {
                                     break Some(shrink(new_shrinker.item(), next, state, proof));
@@ -627,11 +636,17 @@ pub(crate) mod sequential_synchronous {
                                 self.machine = Machine::Shrink {
                                     index: next,
                                     state: state.clone(),
+                                    shrinks,
                                     shrinker: new_shrinker,
                                     cause: new_cause,
                                 };
                                 if self.yields.2 {
-                                    break Some(shrunk(shrinker.item(), next, state, cause));
+                                    break Some(shrunk(
+                                        old_shrinker.item(),
+                                        next,
+                                        state,
+                                        old_cause,
+                                    ));
                                 }
                             }
                         }
@@ -654,18 +669,21 @@ pub(crate) mod sequential_asynchronous {
         Generate {
             generator: G,
             states: States,
+            shrinks: ops::Range<usize>,
             pin: Option<Pin<Box<P>>>,
         },
         Handle1 {
             generator: G,
             states: States,
             state: State,
+            shrinks: ops::Range<usize>,
             shrinker: G::Shrink,
             pin: Pin<Box<P>>,
         },
         Shrink {
             index: usize,
             state: State,
+            shrinks: ops::Range<usize>,
             shrinker: G::Shrink,
             cause: Cause<<P::Output as Prove>::Error>,
             pin: Option<Pin<Box<P>>>,
@@ -673,6 +691,7 @@ pub(crate) mod sequential_asynchronous {
         Handle2 {
             index: usize,
             state: State,
+            shrinks: ops::Range<usize>,
             old: G::Shrink,
             new: G::Shrink,
             cause: Cause<<P::Output as Prove>::Error>,
@@ -720,9 +739,9 @@ pub(crate) mod sequential_asynchronous {
             );
             Checks {
                 yields: (self.generate.items, self.shrink.items, self.shrink.errors),
-                shrinks: 0..self.shrink.count,
                 machine: Machine::Generate {
                     generator: self.generator,
+                    shrinks: 0..self.shrink.count,
                     states: modes.into(),
                     pin: None,
                 },
@@ -746,6 +765,7 @@ pub(crate) mod sequential_asynchronous {
                     Machine::Generate {
                         generator,
                         mut states,
+                        shrinks,
                         mut pin,
                     } => {
                         let Some(mut state) = states.next() else {
@@ -758,6 +778,7 @@ pub(crate) mod sequential_asynchronous {
                                     generator,
                                     states,
                                     state,
+                                    shrinks,
                                     shrinker,
                                     pin,
                                 }
@@ -766,6 +787,7 @@ pub(crate) mod sequential_asynchronous {
                                 checks.machine = Machine::Shrink {
                                     index: 0,
                                     state,
+                                    shrinks,
                                     shrinker,
                                     cause,
                                     pin,
@@ -777,6 +799,7 @@ pub(crate) mod sequential_asynchronous {
                         generator,
                         states,
                         state,
+                        shrinks,
                         shrinker,
                         mut pin,
                     } => match ready!(handle(pin.as_mut(), cx)) {
@@ -784,6 +807,7 @@ pub(crate) mod sequential_asynchronous {
                             checks.machine = Machine::Generate {
                                 generator,
                                 states,
+                                shrinks,
                                 pin: Some(pin),
                             };
                             if checks.yields.0 {
@@ -794,6 +818,7 @@ pub(crate) mod sequential_asynchronous {
                             checks.machine = Machine::Shrink {
                                 index: 0,
                                 state,
+                                shrinks,
                                 shrinker,
                                 cause,
                                 pin: Some(pin),
@@ -803,11 +828,12 @@ pub(crate) mod sequential_asynchronous {
                     Machine::Shrink {
                         index,
                         state,
+                        mut shrinks,
                         shrinker: mut old_shrinker,
                         cause: old_cause,
                         mut pin,
                     } => {
-                        let next = match checks.shrinks.next() {
+                        let next = match shrinks.next() {
                             Some(index) => index,
                             None => {
                                 checks.machine = Machine::Done;
@@ -838,6 +864,7 @@ pub(crate) mod sequential_asynchronous {
                                     state,
                                     old: old_shrinker,
                                     new: new_shrinker,
+                                    shrinks,
                                     cause: old_cause,
                                     pin,
                                 }
@@ -846,6 +873,7 @@ pub(crate) mod sequential_asynchronous {
                                 checks.machine = Machine::Shrink {
                                     index: next,
                                     state: state.clone(),
+                                    shrinks,
                                     shrinker: new_shrinker,
                                     cause: new_cause,
                                     pin,
@@ -866,6 +894,7 @@ pub(crate) mod sequential_asynchronous {
                         state,
                         old,
                         new,
+                        shrinks,
                         cause,
                         mut pin,
                     } => match ready!(handle(pin.as_mut(), cx)) {
@@ -873,6 +902,7 @@ pub(crate) mod sequential_asynchronous {
                             checks.machine = Machine::Shrink {
                                 index,
                                 state: state.clone(),
+                                shrinks,
                                 shrinker: old,
                                 cause,
                                 pin: Some(pin),
@@ -885,6 +915,7 @@ pub(crate) mod sequential_asynchronous {
                             checks.machine = Machine::Shrink {
                                 index,
                                 state: state.clone(),
+                                shrinks,
                                 shrinker: new,
                                 cause: new_cause,
                                 pin: Some(pin),
@@ -945,6 +976,7 @@ pub(crate) mod parallel_synchronous {
     pub struct Machine<G: Generate> {
         generator: G,
         states: States,
+        shrinks: ops::Range<usize>,
     }
 
     impl<G: Generate> Checker<G, Run> {
@@ -978,10 +1010,10 @@ pub(crate) mod parallel_synchronous {
             );
             Checks {
                 yields: (self.generate.items, self.shrink.items, self.shrink.errors),
-                shrinks: 0..self.shrink.count,
                 machine: Machine {
                     generator: self.generator,
                     states: modes.into(),
+                    shrinks: 0..self.shrink.count,
                 },
                 check,
             }
@@ -1002,7 +1034,6 @@ pub(crate) mod parallel_synchronous {
         {
             let Self {
                 yields,
-                shrinks,
                 check,
                 machine,
             } = self;
@@ -1040,7 +1071,8 @@ pub(crate) mod parallel_synchronous {
                             let pair = Mutex::new(Some((shrinker, cause)));
                             let count = AtomicUsize::new(0);
                             Or3::T2(
-                                shrinks
+                                machine
+                                    .shrinks
                                     .clone()
                                     .into_par_iter()
                                     .filter_map(move |_| {
@@ -1124,6 +1156,7 @@ pub(crate) mod parallel_asynchronous {
     pub struct Machine<G: Generate> {
         generator: G,
         states: States,
+        shrinks: ops::Range<usize>,
     }
 
     impl<G: Generate> Checker<G, Run> {
@@ -1159,10 +1192,10 @@ pub(crate) mod parallel_asynchronous {
             );
             Checks {
                 yields: (self.generate.items, self.shrink.items, self.shrink.errors),
-                shrinks: 0..self.shrink.count,
                 machine: Machine {
                     generator: self.generator,
                     states: modes.into(),
+                    shrinks: 0..self.shrink.count,
                 },
                 check,
             }
