@@ -743,7 +743,6 @@ pub(crate) mod parallel {
         where
             C: UnindexedConsumer<Self::Item>,
         {
-            // TODO: Investigate `walk_tree`
             let Self {
                 yields,
                 shrinks,
