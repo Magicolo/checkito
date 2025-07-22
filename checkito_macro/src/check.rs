@@ -22,6 +22,8 @@ pub struct Check {
     pub constant: Option<bool>,
     #[cfg(feature = "asynchronous")]
     pub asynchronous: Option<bool>,
+    #[cfg(feature = "parallel")]
+    pub parallel: Option<bool>,
     pub verbose: Option<bool>,
 }
 
@@ -34,6 +36,8 @@ pub enum Key {
     Constant,
     #[cfg(feature = "asynchronous")]
     Asynchronous,
+    #[cfg(feature = "parallel")]
+    Parallel,
     GenerateCount,
     GenerateSeed,
     GenerateSize,
@@ -53,6 +57,8 @@ static KEYS: &[Key] = &[
     Key::Constant,
     #[cfg(feature = "asynchronous")]
     Key::Asynchronous,
+    #[cfg(feature = "parallel")]
+    Key::Parallel,
     Key::GenerateCount,
     Key::GenerateSeed,
     Key::GenerateSize,
@@ -88,6 +94,8 @@ impl From<Key> for &'static str {
             Key::Constant => "constant",
             #[cfg(feature = "asynchronous")]
             Key::Asynchronous => "asynchronous",
+            #[cfg(feature = "parallel")]
+            Key::Parallel => "parallel",
             Key::GenerateCount => "generate.count",
             Key::GenerateSeed => "generate.seed",
             Key::GenerateSize => "generate.sizes",
@@ -185,7 +193,9 @@ impl Check {
             #[cfg(feature = "constant")]
             constant: parse("CHECKITO_CONSTANT"),
             #[cfg(feature = "asynchronous")]
-            asynchronous: None,
+            asynchronous: parse("CHECKITO_ASYNCHRONOUS"),
+            #[cfg(feature = "parallel")]
+            parallel: parse("CHECKITO_PARALLEL"),
         }
     }
 
@@ -284,20 +294,25 @@ impl Check {
                 Key::Constant => continue,
                 #[cfg(feature = "asynchronous")]
                 Key::Asynchronous => continue,
+                #[cfg(feature = "parallel")]
+                Key::Parallel => continue,
             });
         }
 
         let name = &signature.ident;
         let color = self.color.unwrap_or(true);
         let verbose = self.verbose.unwrap_or(false);
-        let mut module = Ident::new("synchronous", signature.span());
-        #[cfg(feature = "asynchronous")]
-        {
-            let asynchronous = self.asynchronous.unwrap_or(signature.asyncness.is_some());
-            if asynchronous {
-                module = Ident::new("asynchronous", signature.span());
-            }
+        let mut prefix = "sequential";
+        let mut suffix = "synchronous";
+        #[cfg(feature = "parallel")]
+        if self.parallel.unwrap_or(false) {
+            prefix = "parallel";
         }
+        #[cfg(feature = "asynchronous")]
+        if self.asynchronous.unwrap_or(signature.asyncness.is_some()) {
+            suffix = "asynchronous";
+        }
+        let module = Ident::new(&format!("{prefix}_{suffix}"), signature.span());
         Ok(match self.debug {
             Some(true) => quote_spanned!(self.span => ::checkito::run::#module::debug(
                 (#(#generators,)*),
@@ -354,6 +369,11 @@ impl Parse for Check {
                             #[cfg(feature = "asynchronous")]
                             Key::Asynchronous => {
                                 check.asynchronous = Some(as_bool(&right)?);
+                                continue;
+                            }
+                            #[cfg(feature = "parallel")]
+                            Key::Parallel => {
+                                check.parallel = Some(as_bool(&right)?);
                                 continue;
                             }
                             _ => right.to_token_stream(),

@@ -7,11 +7,14 @@ use crate::{
 };
 use core::{
     fmt,
+    future::Future,
     marker::PhantomData,
     mem::replace,
-    ops::{self, Deref, DerefMut, Range},
+    ops::{self, Deref, DerefMut},
     panic::AssertUnwindSafe,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    pin::Pin,
+    sync::atomic::{AtomicUsize, Ordering},
+    task::{Context, Poll, ready},
 };
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
 
@@ -67,7 +70,7 @@ pub struct Shrinks {
 /// The [`Checker`] structure holds a reference to a [`Generate`] instance and
 /// some configuration options for the checking and shrinking processes.
 #[derive(Debug, Clone)]
-pub struct Checker<G: ?Sized, R: ?Sized = synchronous::Run> {
+pub struct Checker<G: ?Sized, R: ?Sized = sequential_synchronous::Run> {
     /// Bounds the generation process.
     pub generate: Generates,
     /// Bounds the shrinking process.
@@ -123,7 +126,7 @@ pub trait Check: Generate {
     fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
         self,
         check: F,
-    ) -> Checks<F, synchronous::Machine<Self, P>>
+    ) -> Checks<F, sequential_synchronous::Machine<Self, P>>
     where
         Self: Sized,
     {
@@ -205,15 +208,6 @@ impl<G: Generate, R: ?Sized> Checker<G, R> {
             },
             _run: PhantomData,
         }
-    }
-
-    pub fn synchronous(self) -> Checker<G, synchronous::Run> {
-        self.map()
-    }
-
-    #[cfg(feature = "asynchronous")]
-    pub fn asynchronous(self) -> Checker<G, asynchronous::Run> {
-        self.map()
     }
 
     fn map<S>(self) -> Checker<G, S> {
@@ -505,7 +499,7 @@ impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
 
 impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
 
-pub(crate) mod synchronous {
+pub(crate) mod sequential_synchronous {
     use super::*;
 
     pub struct Run;
@@ -525,6 +519,16 @@ pub(crate) mod synchronous {
     }
 
     impl<G: Generate> Checker<G, Run> {
+        #[cfg(feature = "parallel")]
+        pub fn parallel(self) -> Checker<G, parallel_synchronous::Run> {
+            self.map()
+        }
+
+        #[cfg(feature = "asynchronous")]
+        pub fn asynchronous(self) -> Checker<G, sequential_asynchronous::Run> {
+            self.map()
+        }
+
         pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
             mut self,
             check: F,
@@ -639,96 +643,349 @@ pub(crate) mod synchronous {
     }
 }
 
-#[cfg(feature = "parallel")]
-pub(crate) mod parallel {
+#[cfg(feature = "asynchronous")]
+pub(crate) mod sequential_asynchronous {
     use super::*;
-    use core::iter::from_fn;
+    use futures_lite::{Stream, StreamExt};
+
+    pub struct Run;
+
+    pub enum Machine<G: Generate, P: Future<Output: Prove>> {
+        Generate {
+            generator: G,
+            states: States,
+            pin: Option<Pin<Box<P>>>,
+        },
+        Handle1 {
+            generator: G,
+            states: States,
+            state: State,
+            shrinker: G::Shrink,
+            pin: Pin<Box<P>>,
+        },
+        Shrink {
+            index: usize,
+            state: State,
+            shrinker: G::Shrink,
+            cause: Cause<<P::Output as Prove>::Error>,
+            pin: Option<Pin<Box<P>>>,
+        },
+        Handle2 {
+            index: usize,
+            state: State,
+            old: G::Shrink,
+            new: G::Shrink,
+            cause: Cause<<P::Output as Prove>::Error>,
+            pin: Pin<Box<P>>,
+        },
+        Done,
+    }
+
+    impl<G: Generate<Shrink: Unpin> + Unpin> Checker<G, Run> {
+        #[cfg(feature = "parallel")]
+        pub fn parallel(self) -> Checker<G, parallel_asynchronous::Run> {
+            self.map()
+        }
+
+        pub fn synchronous(self) -> Checker<G, sequential_synchronous::Run> {
+            self.map()
+        }
+
+        pub async fn check<
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            F: FnMut(G::Item) -> P + Unpin,
+        >(
+            mut self,
+            check: F,
+        ) -> Option<Fail<G::Item, <P::Output as Prove>::Error>> {
+            self.generate.items = false;
+            self.shrink.items = false;
+            self.shrink.errors = false;
+            self.checks(check).last().await?.fail(false)
+        }
+
+        pub fn checks<
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            F: FnMut(G::Item) -> P + Unpin,
+        >(
+            self,
+            check: F,
+        ) -> Checks<F, Machine<G, P>> {
+            let modes = Modes::with(
+                self.generate.count,
+                self.generate.sizes,
+                self.generate.seed,
+                self.generator.cardinality(),
+                self.generate.exhaustive,
+            );
+            Checks {
+                yields: (self.generate.items, self.shrink.items, self.shrink.errors),
+                shrinks: 0..self.shrink.count,
+                machine: Machine::Generate {
+                    generator: self.generator,
+                    states: modes.into(),
+                    pin: None,
+                },
+                check,
+            }
+        }
+    }
+
+    impl<
+        G: Generate<Shrink: Unpin> + Unpin,
+        P: Future<Output: Prove<Error: Unpin> + Unpin>,
+        F: FnMut(G::Item) -> P + Unpin,
+    > Stream for Checks<F, Machine<G, P>>
+    {
+        type Item = Result<G::Item, P::Output>;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let checks = Pin::into_inner(self);
+            loop {
+                match replace(&mut checks.machine, Machine::Done) {
+                    Machine::Generate {
+                        generator,
+                        mut states,
+                        mut pin,
+                    } => {
+                        let Some(mut state) = states.next() else {
+                            break Poll::Ready(None);
+                        };
+                        let shrinker = generator.generate(&mut state);
+                        match prepare(shrinker.item(), &mut checks.check, &mut pin) {
+                            Ok(pin) => {
+                                checks.machine = Machine::Handle1 {
+                                    generator,
+                                    states,
+                                    state,
+                                    shrinker,
+                                    pin,
+                                }
+                            }
+                            Err(cause) => {
+                                checks.machine = Machine::Shrink {
+                                    index: 0,
+                                    state,
+                                    shrinker,
+                                    cause,
+                                    pin,
+                                }
+                            }
+                        };
+                    }
+                    Machine::Handle1 {
+                        generator,
+                        states,
+                        state,
+                        shrinker,
+                        mut pin,
+                    } => match ready!(handle(pin.as_mut(), cx)) {
+                        Ok(proof) => {
+                            checks.machine = Machine::Generate {
+                                generator,
+                                states,
+                                pin: Some(pin),
+                            };
+                            if checks.yields.0 {
+                                break Poll::Ready(Some(pass(shrinker.item(), state, proof)));
+                            }
+                        }
+                        Err(cause) => {
+                            checks.machine = Machine::Shrink {
+                                index: 0,
+                                state,
+                                shrinker,
+                                cause,
+                                pin: Some(pin),
+                            };
+                        }
+                    },
+                    Machine::Shrink {
+                        index,
+                        state,
+                        shrinker: mut old_shrinker,
+                        cause: old_cause,
+                        mut pin,
+                    } => {
+                        let next = match checks.shrinks.next() {
+                            Some(index) => index,
+                            None => {
+                                checks.machine = Machine::Done;
+                                break Poll::Ready(Some(fail(
+                                    old_shrinker.item(),
+                                    index,
+                                    state,
+                                    old_cause,
+                                )));
+                            }
+                        };
+                        let new_shrinker = match old_shrinker.shrink() {
+                            Some(shrinker) => shrinker,
+                            None => {
+                                checks.machine = Machine::Done;
+                                break Poll::Ready(Some(fail(
+                                    old_shrinker.item(),
+                                    index,
+                                    state,
+                                    old_cause,
+                                )));
+                            }
+                        };
+                        match prepare(new_shrinker.item(), &mut checks.check, &mut pin) {
+                            Ok(pin) => {
+                                checks.machine = Machine::Handle2 {
+                                    index: next,
+                                    state,
+                                    old: old_shrinker,
+                                    new: new_shrinker,
+                                    cause: old_cause,
+                                    pin,
+                                }
+                            }
+                            Err(new_cause) => {
+                                checks.machine = Machine::Shrink {
+                                    index: next,
+                                    state: state.clone(),
+                                    shrinker: new_shrinker,
+                                    cause: new_cause,
+                                    pin,
+                                };
+                                if checks.yields.2 {
+                                    break Poll::Ready(Some(shrunk(
+                                        old_shrinker.item(),
+                                        next,
+                                        state,
+                                        old_cause,
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    Machine::Handle2 {
+                        index,
+                        state,
+                        old,
+                        new,
+                        cause,
+                        mut pin,
+                    } => match ready!(handle(pin.as_mut(), cx)) {
+                        Ok(proof) => {
+                            checks.machine = Machine::Shrink {
+                                index,
+                                state: state.clone(),
+                                shrinker: old,
+                                cause,
+                                pin: Some(pin),
+                            };
+                            if checks.yields.1 {
+                                break Poll::Ready(Some(shrink(new.item(), index, state, proof)));
+                            }
+                        }
+                        Err(new_cause) => {
+                            checks.machine = Machine::Shrink {
+                                index,
+                                state: state.clone(),
+                                shrinker: new,
+                                cause: new_cause,
+                                pin: Some(pin),
+                            };
+                            if checks.yields.2 {
+                                break Poll::Ready(Some(shrunk(old.item(), index, state, cause)));
+                            }
+                        }
+                    },
+                    Machine::Done => break Poll::Ready(None),
+                }
+            }
+        }
+    }
+
+    fn prepare<T, P: Future<Output: Prove>, F: FnMut(T) -> P>(
+        item: T,
+        mut check: F,
+        pin: &mut Option<Pin<Box<P>>>,
+    ) -> result::Result<Pin<Box<P>>, Cause<<P::Output as Prove>::Error>> {
+        match catch_unwind(AssertUnwindSafe(move || check(item))) {
+            Ok(check) => Ok(match pin.take() {
+                Some(mut pin) => {
+                    pin.set(check);
+                    pin
+                }
+                None => Box::pin(check),
+            }),
+            Err(error) => Err(Cause::Panic(cast(error))),
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn handle<P: Future<Output: Prove>>(
+        check: Pin<&mut P>,
+        context: &mut Context,
+    ) -> Poll<result::Result<<P::Output as Prove>::Proof, Cause<<P::Output as Prove>::Error>>> {
+        match catch_unwind(AssertUnwindSafe(move || check.poll(context))) {
+            Ok(Poll::Pending) => Poll::Pending,
+            Ok(Poll::Ready(prove)) => match prove.prove() {
+                Ok(ok) => Poll::Ready(Ok(ok)),
+                Err(error) => Poll::Ready(Err(Cause::Disprove(error))),
+            },
+            Err(error) => Poll::Ready(Err(Cause::Panic(cast(error)))),
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub(crate) mod parallel_synchronous {
+    use super::*;
     use orn::Or3;
     use rayon::iter::{IntoParallelIterator, ParallelIterator, plumbing::UnindexedConsumer};
     use std::sync::{Mutex, RwLock};
 
     pub struct Run;
 
-    // struct Machine<G: Generate> {
-    //     generator: G,
-    // }
-
-    // impl<G: Generate> Checker<G, Run> {
-    //     pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
-    //         mut self,
-    //         check: F,
-    //     ) -> Option<Fail<G::Item, P::Error>> {
-    //         self.generate.items = false;
-    //         self.shrink.items = false;
-    //         self.shrink.errors = false;
-    //         self.checks(check).last()?.fail(false)
-    //     }
-
-    //     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(
-    //         self,
-    //         check: F,
-    //     ) -> Checks<F, Machine<G, P>> {
-    //         let modes = Modes::with(
-    //             self.generate.count,
-    //             self.generate.sizes,
-    //             self.generate.seed,
-    //             self.generator.cardinality(),
-    //             self.generate.exhaustive,
-    //         );
-    //         Checks {
-    //             yields: (self.generate.items, self.shrink.items,
-    // self.shrink.errors),             shrinks: 0..self.shrink.count,
-    //             machine: Machine::Generate {
-    //                 generator: self.generator,
-    //                 states: modes.into(),
-    //             },
-    //             check,
-    //         }
-    //     }
-    // }
-
-    // fn boba<G: Generate + Send + Sync>(
-    //     generator: G,
-    //     states: States,
-    //     parallelism: Option<NonZeroUsize>,
-    // ) {
-    //     match parallelism.or_else(|| available_parallelism().ok()) {
-    //         Some(parallelism) => {
-    //             let (send, receive) = channel();
-    //             let mut handles = Vec::with_capacity(parallelism.get());
-    //             let state = Arc::new((generator, Mutex::new(states)));
-    //             for index in 0..parallelism.get() {
-    //                 let send = send.clone();
-    //                 let state = state.clone();
-    //                 handles.push(spawn(move || {
-    //                     let (generator, states) = state.as_ref();
-    //                     loop {
-    //                         let state = states.lock().ok()?.next()?;
-    //                         send.send(state).ok()?;
-    //                     }
-    //                     Some(())
-    //                 }));
-    //             }
-    //             // let (send, receive) = bounded(parallelism.get());
-    //             // spawn_broadcast(op);
-    //             /*
-    //             let future = pin!(check(item));
-    //             match future.poll(cx) {
-    //                 Poll::Ready(prove) => { ... },
-    //                 Poll::Pending if self.asynchronous => { },
-    //                 Poll::Pending => unreachable!(),
-    //             }
-    //              */
-    //         }
-    //         None => {
-    //             // TODO: Run sequentially.
-    //         }
-    //     }
-    // }
-
     pub struct Machine<G: Generate> {
         generator: G,
         states: States,
+    }
+
+    impl<G: Generate> Checker<G, Run> {
+        pub fn sequential(self) -> Checker<G, sequential_synchronous::Run> {
+            self.map()
+        }
+
+        #[cfg(feature = "asynchronous")]
+        pub fn asynchronous(self) -> Checker<G, parallel_asynchronous::Run> {
+            self.map()
+        }
+
+        pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
+            mut self,
+            check: F,
+        ) -> Option<Fail<G::Item, P::Error>> {
+            self.generate.items = false;
+            self.shrink.items = false;
+            self.shrink.errors = false;
+            todo!();
+            // self.checks(check).last()?.fail(false)
+        }
+
+        pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(self, check: F) -> Checks<F, Machine<G>> {
+            let modes = Modes::with(
+                self.generate.count,
+                self.generate.sizes,
+                self.generate.seed,
+                self.generator.cardinality(),
+                self.generate.exhaustive,
+            );
+            Checks {
+                yields: (self.generate.items, self.shrink.items, self.shrink.errors),
+                shrinks: 0..self.shrink.count,
+                machine: Machine {
+                    generator: self.generator,
+                    states: modes.into(),
+                },
+                check,
+            }
+        }
     }
 
     impl<
@@ -857,138 +1114,42 @@ pub(crate) mod parallel {
                 .drive_unindexed(consumer)
         }
     }
-
-    // fn shrinks<S: Shrink<Item: Send>, P: Prove<Proof: Send, Error: Send>, F:
-    // Fn(S::Item) -> P>(     mut shrinker: S,
-    //     cause: Cause<P::Error>,
-    //     index: usize,
-    //     mut indices: Range<usize>,
-    //     state: State,
-    //     depth: usize,
-    //     check: F,
-    //     yields: (bool, bool),
-    //     dig: &AtomicUsize,
-    // ) -> impl ParallelIterator<Item = Result<S::Item, P>> {
-    //     let next = match indices.next() {
-    //         Some(index) => index,
-    //         None => {
-    //             return Or5::T0([fail(shrinker.item(), index, state,
-    // cause)].into_par_iter());         }
-    //     };
-    //     let new = match shrinker.shrink() {
-    //         Some(shrinker) => shrinker,
-    //         None => return Or5::T0([fail(shrinker.item(), index, state,
-    // cause)].into_par_iter()),     };
-    //     match handle(new.item(), &check) {
-    //         Ok(proof) if yields.0 => Or5::T1(
-    //             [shrink(new.item(), next, state.clone(), proof)]
-    //                 .into_par_iter()
-    //                 .chain(shrinks(
-    //                     shrinker, cause, next, indices, state, depth, check,
-    // yields, dig,                 )),
-    //         ),
-    //         Ok(_) => Or5::T2(shrinks(
-    //             shrinker, cause, next, indices, state, depth, check, yields,
-    // dig,         )),
-    //         Err(new_cause) if yields.1 => Or5::T3(
-    //             [shrunk(shrinker.item(), next, state.clone(), cause)]
-    //                 .into_par_iter()
-    //                 .chain(shrinks(
-    //                     new,
-    //                     new_cause,
-    //                     next,
-    //                     indices,
-    //                     state,
-    //                     depth + 1,
-    //                     check,
-    //                     yields,
-    //                     dig,
-    //                 )),
-    //         ),
-    //         Err(new_cause) => Or5::T4(shrinks(
-    //             new, new_cause, next, indices, state, depth, check, yields,
-    // dig,         )),
-    //     }
-    // }
-
-    // fn handle<T, P: Prove, F: Fn(T) -> P>(
-    //     item: T,
-    //     check: F,
-    // ) -> result::Result<P::Proof, Cause<P::Error>> {
-    //     match catch_unwind(AssertUnwindSafe(move || check(item))) {
-    //         Ok(prove) => match prove.prove() {
-    //             Ok(ok) => Ok(ok),
-    //             Err(error) => Err(Cause::Disprove(error)),
-    //         },
-    //         Err(error) => Err(Cause::Panic(cast(error))),
-    //     }
-    // }
 }
 
-#[cfg(feature = "asynchronous")]
-pub(crate) mod asynchronous {
+#[cfg(all(feature = "parallel", feature = "asynchronous"))]
+pub(crate) mod parallel_asynchronous {
     use super::*;
-    use core::{
-        future::Future,
-        pin::Pin,
-        task::{Context, Poll, ready},
-    };
-    use futures_lite::{Stream, StreamExt};
-
     pub struct Run;
 
-    pub enum Machine<G: Generate, P: Future<Output: Prove>> {
-        Generate {
-            generator: G,
-            states: States,
-            pin: Option<Pin<Box<P>>>,
-        },
-        Handle1 {
-            generator: G,
-            states: States,
-            state: State,
-            shrinker: G::Shrink,
-            pin: Pin<Box<P>>,
-        },
-        Shrink {
-            index: usize,
-            state: State,
-            shrinker: G::Shrink,
-            cause: Cause<<P::Output as Prove>::Error>,
-            pin: Option<Pin<Box<P>>>,
-        },
-        Handle2 {
-            index: usize,
-            state: State,
-            old: G::Shrink,
-            new: G::Shrink,
-            cause: Cause<<P::Output as Prove>::Error>,
-            pin: Pin<Box<P>>,
-        },
-        Done,
+    pub struct Machine<G: Generate> {
+        generator: G,
+        states: States,
     }
 
-    impl<G: Generate<Shrink: Unpin> + Unpin> Checker<G, Run> {
-        pub async fn check<
-            P: Future<Output: Prove<Error: Unpin> + Unpin>,
-            F: FnMut(G::Item) -> P + Unpin,
-        >(
+    impl<G: Generate> Checker<G, Run> {
+        pub fn sequential(self) -> Checker<G, sequential_asynchronous::Run> {
+            self.map()
+        }
+
+        pub fn synchronous(self) -> Checker<G, parallel_synchronous::Run> {
+            self.map()
+        }
+
+        pub fn check<P: Future<Output: Prove>, F: Fn(G::Item) -> P>(
             mut self,
             check: F,
         ) -> Option<Fail<G::Item, <P::Output as Prove>::Error>> {
             self.generate.items = false;
             self.shrink.items = false;
             self.shrink.errors = false;
-            self.checks(check).last().await?.fail(false)
+            todo!()
+            // self.checks(check).last()?.fail(false)
         }
 
-        pub fn checks<
-            P: Future<Output: Prove<Error: Unpin> + Unpin>,
-            F: FnMut(G::Item) -> P + Unpin,
-        >(
+        pub fn checks<P: Future<Output: Prove>, F: Fn(G::Item) -> P>(
             self,
             check: F,
-        ) -> Checks<F, Machine<G, P>> {
+        ) -> Checks<F, Machine<G>> {
             let modes = Modes::with(
                 self.generate.count,
                 self.generate.sizes,
@@ -999,178 +1160,12 @@ pub(crate) mod asynchronous {
             Checks {
                 yields: (self.generate.items, self.shrink.items, self.shrink.errors),
                 shrinks: 0..self.shrink.count,
-                machine: Machine::Generate {
+                machine: Machine {
                     generator: self.generator,
                     states: modes.into(),
-                    pin: None,
                 },
                 check,
             }
-        }
-    }
-
-    impl<
-        G: Generate<Shrink: Unpin> + Unpin,
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        F: FnMut(G::Item) -> P + Unpin,
-    > Stream for Checks<F, Machine<G, P>>
-    {
-        type Item = Result<G::Item, P::Output>;
-
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            let checks = Pin::into_inner(self);
-            loop {
-                match replace(&mut checks.machine, Machine::Done) {
-                    Machine::Generate {
-                        generator,
-                        mut states,
-                        pin,
-                    } => {
-                        let Some(mut state) = states.next() else {
-                            break Poll::Ready(None);
-                        };
-                        let shrinker = generator.generate(&mut state);
-                        let pin = prepare(shrinker.item(), &mut checks.check, pin);
-                        checks.machine = Machine::Handle1 {
-                            generator,
-                            states,
-                            state,
-                            shrinker,
-                            pin,
-                        };
-                    }
-                    Machine::Handle1 {
-                        generator,
-                        states,
-                        state,
-                        shrinker,
-                        mut pin,
-                    } => match ready!(handle(pin.as_mut(), cx)) {
-                        Ok(proof) => {
-                            checks.machine = Machine::Generate {
-                                generator,
-                                states,
-                                pin: Some(pin),
-                            };
-                            if checks.yields.0 {
-                                break Poll::Ready(Some(pass(shrinker.item(), state, proof)));
-                            }
-                        }
-                        Err(cause) => {
-                            checks.machine = Machine::Shrink {
-                                index: 0,
-                                state,
-                                shrinker,
-                                cause,
-                                pin: Some(pin),
-                            };
-                        }
-                    },
-                    Machine::Shrink {
-                        index,
-                        state,
-                        mut shrinker,
-                        cause,
-                        pin,
-                    } => {
-                        let next = match checks.shrinks.next() {
-                            Some(index) => index,
-                            None => {
-                                checks.machine = Machine::Done;
-                                break Poll::Ready(Some(fail(
-                                    shrinker.item(),
-                                    index,
-                                    state,
-                                    cause,
-                                )));
-                            }
-                        };
-                        let new = match shrinker.shrink() {
-                            Some(shrinker) => shrinker,
-                            None => {
-                                checks.machine = Machine::Done;
-                                break Poll::Ready(Some(fail(
-                                    shrinker.item(),
-                                    index,
-                                    state,
-                                    cause,
-                                )));
-                            }
-                        };
-                        let pin = prepare(new.item(), &mut checks.check, pin);
-                        checks.machine = Machine::Handle2 {
-                            index: next,
-                            state,
-                            old: shrinker,
-                            new,
-                            cause,
-                            pin,
-                        };
-                    }
-                    Machine::Handle2 {
-                        index,
-                        state,
-                        old,
-                        new,
-                        cause,
-                        mut pin,
-                    } => match ready!(handle(pin.as_mut(), cx)) {
-                        Ok(proof) => {
-                            checks.machine = Machine::Shrink {
-                                index,
-                                state: state.clone(),
-                                shrinker: old,
-                                cause,
-                                pin: Some(pin),
-                            };
-                            if checks.yields.1 {
-                                break Poll::Ready(Some(shrink(new.item(), index, state, proof)));
-                            }
-                        }
-                        Err(new_cause) => {
-                            checks.machine = Machine::Shrink {
-                                index,
-                                state: state.clone(),
-                                shrinker: new,
-                                cause: new_cause,
-                                pin: Some(pin),
-                            };
-                            if checks.yields.2 {
-                                break Poll::Ready(Some(shrunk(old.item(), index, state, cause)));
-                            }
-                        }
-                    },
-                    Machine::Done => break Poll::Ready(None),
-                }
-            }
-        }
-    }
-
-    fn prepare<T, P, F: FnMut(T) -> P>(
-        item: T,
-        mut check: F,
-        pin: Option<Pin<Box<P>>>,
-    ) -> Pin<Box<P>> {
-        match pin {
-            Some(mut pin) => {
-                pin.set(check(item));
-                pin
-            }
-            None => Box::pin(check(item)),
-        }
-    }
-
-    fn handle<P: Prove, F: Future<Output = P>>(
-        check: Pin<&mut F>,
-        context: &mut Context,
-    ) -> Poll<result::Result<P::Proof, Cause<P::Error>>> {
-        match catch_unwind(AssertUnwindSafe(move || check.poll(context))) {
-            Ok(Poll::Pending) => Poll::Pending,
-            Ok(Poll::Ready(prove)) => match prove.prove() {
-                Ok(ok) => Poll::Ready(Ok(ok)),
-                Err(error) => Poll::Ready(Err(Cause::Disprove(error))),
-            },
-            Err(error) => Poll::Ready(Err(Cause::Panic(cast(error)))),
         }
     }
 }
