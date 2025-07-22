@@ -312,6 +312,13 @@ impl Check {
         if self.asynchronous.unwrap_or(signature.asyncness.is_some()) {
             suffix = "asynchronous";
         }
+        #[cfg(not(feature = "asynchronous"))]
+        if signature.asyncness.is_some() {
+            return Err(error(signature.asyncness, |_| {
+                "for `async` or `Future`-returning function support, add the 'asynchronous' feature to the checkito dependency in this project's 'Cargo.toml'".to_string()
+            }));
+        }
+
         let module = Ident::new(&format!("{prefix}_{suffix}"), signature.span());
         Ok(match self.debug {
             Some(true) => quote_spanned!(self.span => ::checkito::run::#module::debug(
