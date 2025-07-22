@@ -60,8 +60,8 @@
                 "mechatroner.rainbow-csv",
                 "dotenv.dotenv-vscode",
                 "fill-labs.dependi",
-                "google.geminicodeassist",
                 "github.vscode-github-actions",
+                "Codeium.codeium",
                 // Rust
                 "tamasfe.even-better-toml",
                 "vadimcn.vscode-lldb",

@@ -1,9 +1,9 @@
 #![cfg(feature = "asynchronous")]
 
 pub mod common;
-use async_io::block_on;
 use common::*;
 use core::future::{Future, ready};
+use futures_lite::future::block_on;
 
 #[test]
 fn executes_to_completion() {

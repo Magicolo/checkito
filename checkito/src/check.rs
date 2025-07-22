@@ -9,8 +9,9 @@ use core::{
     fmt,
     marker::PhantomData,
     mem::replace,
-    ops::{self, Deref, DerefMut},
+    ops::{self, Deref, DerefMut, Range},
     panic::AssertUnwindSafe,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use std::{any::Any, borrow::Cow, error, panic::catch_unwind, result};
 
@@ -483,6 +484,19 @@ fn cast(error: Box<dyn Any + Send>) -> Option<Cow<'static, str>> {
     }
 }
 
+fn handle<T, P: Prove, F: FnMut(T) -> P>(
+    item: T,
+    mut check: F,
+) -> result::Result<P::Proof, Cause<P::Error>> {
+    match catch_unwind(AssertUnwindSafe(move || check(item))) {
+        Ok(prove) => match prove.prove() {
+            Ok(ok) => Ok(ok),
+            Err(error) => Err(Cause::Disprove(error)),
+        },
+        Err(error) => Err(Cause::Panic(cast(error))),
+    }
+}
+
 impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
@@ -586,14 +600,14 @@ pub(crate) mod synchronous {
                                 break Some(fail(shrinker.item(), index, state, cause));
                             }
                         };
-                        let new = match shrinker.shrink() {
+                        let new_shrinker = match shrinker.shrink() {
                             Some(shrinker) => shrinker,
                             None => {
                                 self.machine = Machine::Done;
                                 break Some(fail(shrinker.item(), index, state, cause));
                             }
                         };
-                        match handle(new.item(), &mut self.check) {
+                        match handle(new_shrinker.item(), &mut self.check) {
                             Ok(proof) => {
                                 self.machine = Machine::Shrink {
                                     index: next,
@@ -602,14 +616,14 @@ pub(crate) mod synchronous {
                                     cause,
                                 };
                                 if self.yields.1 {
-                                    break Some(shrink(new.item(), next, state, proof));
+                                    break Some(shrink(new_shrinker.item(), next, state, proof));
                                 }
                             }
                             Err(new_cause) => {
                                 self.machine = Machine::Shrink {
                                     index: next,
                                     state: state.clone(),
-                                    shrinker: new,
+                                    shrinker: new_shrinker,
                                     cause: new_cause,
                                 };
                                 if self.yields.2 {
@@ -623,19 +637,293 @@ pub(crate) mod synchronous {
             }
         }
     }
+}
 
-    fn handle<T, P: Prove, F: FnMut(T) -> P>(
-        item: T,
-        mut check: F,
-    ) -> result::Result<P::Proof, Cause<P::Error>> {
-        match catch_unwind(AssertUnwindSafe(move || check(item))) {
-            Ok(prove) => match prove.prove() {
-                Ok(ok) => Ok(ok),
-                Err(error) => Err(Cause::Disprove(error)),
-            },
-            Err(error) => Err(Cause::Panic(cast(error))),
+#[cfg(feature = "parallel")]
+pub(crate) mod parallel {
+    use super::*;
+    use core::iter::from_fn;
+    use orn::Or3;
+    use rayon::iter::{IntoParallelIterator, ParallelIterator, plumbing::UnindexedConsumer};
+    use std::sync::{Mutex, RwLock};
+
+    pub struct Run;
+
+    // struct Machine<G: Generate> {
+    //     generator: G,
+    // }
+
+    // impl<G: Generate> Checker<G, Run> {
+    //     pub fn check<P: Prove, F: FnMut(G::Item) -> P>(
+    //         mut self,
+    //         check: F,
+    //     ) -> Option<Fail<G::Item, P::Error>> {
+    //         self.generate.items = false;
+    //         self.shrink.items = false;
+    //         self.shrink.errors = false;
+    //         self.checks(check).last()?.fail(false)
+    //     }
+
+    //     pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(
+    //         self,
+    //         check: F,
+    //     ) -> Checks<F, Machine<G, P>> {
+    //         let modes = Modes::with(
+    //             self.generate.count,
+    //             self.generate.sizes,
+    //             self.generate.seed,
+    //             self.generator.cardinality(),
+    //             self.generate.exhaustive,
+    //         );
+    //         Checks {
+    //             yields: (self.generate.items, self.shrink.items,
+    // self.shrink.errors),             shrinks: 0..self.shrink.count,
+    //             machine: Machine::Generate {
+    //                 generator: self.generator,
+    //                 states: modes.into(),
+    //             },
+    //             check,
+    //         }
+    //     }
+    // }
+
+    // fn boba<G: Generate + Send + Sync>(
+    //     generator: G,
+    //     states: States,
+    //     parallelism: Option<NonZeroUsize>,
+    // ) {
+    //     match parallelism.or_else(|| available_parallelism().ok()) {
+    //         Some(parallelism) => {
+    //             let (send, receive) = channel();
+    //             let mut handles = Vec::with_capacity(parallelism.get());
+    //             let state = Arc::new((generator, Mutex::new(states)));
+    //             for index in 0..parallelism.get() {
+    //                 let send = send.clone();
+    //                 let state = state.clone();
+    //                 handles.push(spawn(move || {
+    //                     let (generator, states) = state.as_ref();
+    //                     loop {
+    //                         let state = states.lock().ok()?.next()?;
+    //                         send.send(state).ok()?;
+    //                     }
+    //                     Some(())
+    //                 }));
+    //             }
+    //             // let (send, receive) = bounded(parallelism.get());
+    //             // spawn_broadcast(op);
+    //             /*
+    //             let future = pin!(check(item));
+    //             match future.poll(cx) {
+    //                 Poll::Ready(prove) => { ... },
+    //                 Poll::Pending if self.asynchronous => { },
+    //                 Poll::Pending => unreachable!(),
+    //             }
+    //              */
+    //         }
+    //         None => {
+    //             // TODO: Run sequentially.
+    //         }
+    //     }
+    // }
+
+    pub struct Machine<G: Generate> {
+        generator: G,
+        states: States,
+    }
+
+    impl<
+        G: Generate<Item: Send, Shrink: Send> + Send + Sync,
+        P: Prove<Proof: Send, Error: Send>,
+        F: Fn(G::Item) -> P + Send + Sync,
+    > ParallelIterator for Checks<F, Machine<G>>
+    {
+        type Item = Result<G::Item, P>;
+
+        fn drive_unindexed<C>(self, consumer: C) -> C::Result
+        where
+            C: UnindexedConsumer<Self::Item>,
+        {
+            // TODO: Investigate `walk_tree`
+            let Self {
+                yields,
+                shrinks,
+                check,
+                machine,
+            } = self;
+            let check = RwLock::new(Some(check));
+            machine
+                .states
+                .into_par_iter()
+                .flat_map(move |mut state| {
+                    let shrinker = machine.generator.generate(&mut state);
+                    let Ok(guard) = check.try_read() else {
+                        return Or3::T0([] as [Self::Item; 0]);
+                    };
+                    let Some(guard) = guard.as_ref() else {
+                        return Or3::T0([] as [Self::Item; 0]);
+                    };
+                    let result = handle(shrinker.item(), guard);
+                    match result {
+                        Ok(proof) => {
+                            if yields.0 {
+                                Or3::T1([pass::<_, P>(shrinker.item(), state, proof)])
+                            } else {
+                                Or3::T0([] as [Self::Item; 0])
+                            }
+                        }
+                        Err(cause) => {
+                            let check = {
+                                let Ok(mut guard) = check.write() else {
+                                    return Or3::T0([] as [Self::Item; 0]);
+                                };
+                                let Some(check) = guard.take() else {
+                                    return Or3::T0([] as [Self::Item; 0]);
+                                };
+                                check
+                            };
+                            let pair = Mutex::new(Some((shrinker, cause)));
+                            let count = AtomicUsize::new(0);
+                            Or3::T2(
+                                shrinks
+                                    .clone()
+                                    .into_par_iter()
+                                    .filter_map(move |_| {
+                                        let index = count.fetch_add(1, Ordering::Relaxed);
+                                        let new_shrinker = {
+                                            let Ok(mut guard) = pair.lock() else {
+                                                return Some(None);
+                                            };
+                                            let Some((mut old_shrinker, old_cause)) = guard.take()
+                                            else {
+                                                return Some(None);
+                                            };
+                                            match old_shrinker.shrink() {
+                                                Some(new_shrinker) => {
+                                                    *guard = Some((old_shrinker, old_cause));
+                                                    new_shrinker
+                                                }
+                                                None => {
+                                                    return Some(Some(fail::<_, P>(
+                                                        old_shrinker.item(),
+                                                        index,
+                                                        state.clone(),
+                                                        old_cause,
+                                                    )));
+                                                }
+                                            }
+                                        };
+
+                                        match handle(new_shrinker.item(), &check) {
+                                            Ok(new_proof) => {
+                                                if yields.1 {
+                                                    Some(Some(shrink(
+                                                        new_shrinker.item(),
+                                                        index + 1,
+                                                        state.clone(),
+                                                        new_proof,
+                                                    )))
+                                                } else {
+                                                    None
+                                                }
+                                            }
+                                            Err(new_cause) => {
+                                                let Ok(mut guard) = pair.lock() else {
+                                                    return Some(None);
+                                                };
+                                                let Some(pair) = guard.as_mut() else {
+                                                    return Some(None);
+                                                };
+                                                let (old_shrinker, old_cause) =
+                                                    replace(pair, (new_shrinker, new_cause));
+
+                                                if yields.2 {
+                                                    Some(Some(shrunk(
+                                                        old_shrinker.item(),
+                                                        index + 1,
+                                                        state.clone(),
+                                                        old_cause,
+                                                    )))
+                                                } else {
+                                                    None
+                                                }
+                                            }
+                                        }
+                                    })
+                                    .while_some(),
+                            )
+                        }
+                    }
+                })
+                .map(|or| or.into())
+                .drive_unindexed(consumer)
         }
     }
+
+    // fn shrinks<S: Shrink<Item: Send>, P: Prove<Proof: Send, Error: Send>, F:
+    // Fn(S::Item) -> P>(     mut shrinker: S,
+    //     cause: Cause<P::Error>,
+    //     index: usize,
+    //     mut indices: Range<usize>,
+    //     state: State,
+    //     depth: usize,
+    //     check: F,
+    //     yields: (bool, bool),
+    //     dig: &AtomicUsize,
+    // ) -> impl ParallelIterator<Item = Result<S::Item, P>> {
+    //     let next = match indices.next() {
+    //         Some(index) => index,
+    //         None => {
+    //             return Or5::T0([fail(shrinker.item(), index, state,
+    // cause)].into_par_iter());         }
+    //     };
+    //     let new = match shrinker.shrink() {
+    //         Some(shrinker) => shrinker,
+    //         None => return Or5::T0([fail(shrinker.item(), index, state,
+    // cause)].into_par_iter()),     };
+    //     match handle(new.item(), &check) {
+    //         Ok(proof) if yields.0 => Or5::T1(
+    //             [shrink(new.item(), next, state.clone(), proof)]
+    //                 .into_par_iter()
+    //                 .chain(shrinks(
+    //                     shrinker, cause, next, indices, state, depth, check,
+    // yields, dig,                 )),
+    //         ),
+    //         Ok(_) => Or5::T2(shrinks(
+    //             shrinker, cause, next, indices, state, depth, check, yields,
+    // dig,         )),
+    //         Err(new_cause) if yields.1 => Or5::T3(
+    //             [shrunk(shrinker.item(), next, state.clone(), cause)]
+    //                 .into_par_iter()
+    //                 .chain(shrinks(
+    //                     new,
+    //                     new_cause,
+    //                     next,
+    //                     indices,
+    //                     state,
+    //                     depth + 1,
+    //                     check,
+    //                     yields,
+    //                     dig,
+    //                 )),
+    //         ),
+    //         Err(new_cause) => Or5::T4(shrinks(
+    //             new, new_cause, next, indices, state, depth, check, yields,
+    // dig,         )),
+    //     }
+    // }
+
+    // fn handle<T, P: Prove, F: Fn(T) -> P>(
+    //     item: T,
+    //     check: F,
+    // ) -> result::Result<P::Proof, Cause<P::Error>> {
+    //     match catch_unwind(AssertUnwindSafe(move || check(item))) {
+    //         Ok(prove) => match prove.prove() {
+    //             Ok(ok) => Ok(ok),
+    //             Err(error) => Err(Cause::Disprove(error)),
+    //         },
+    //         Err(error) => Err(Cause::Panic(cast(error))),
+    //     }
+    // }
 }
 
 #[cfg(feature = "asynchronous")]

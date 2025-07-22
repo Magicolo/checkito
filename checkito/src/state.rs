@@ -102,10 +102,10 @@ impl State {
         }
     }
 
-    pub(crate) fn exhaustive(index: usize, count: usize) -> Self {
+    pub(crate) const fn exhaustive(index: usize, count: usize) -> Self {
         Self {
             mode: Mode::Exhaustive(index as _),
-            sizes: Sizes::default(),
+            sizes: Sizes::DEFAULT,
             index,
             count,
             limit: 0,
@@ -674,6 +674,44 @@ impl DoubleEndedIterator for States {
 }
 
 impl FusedIterator for States {}
+
+#[cfg(feature = "parallel")]
+mod parallel {
+    use super::*;
+    use rayon::{
+        iter::{IntoParallelIterator, ParallelIterator},
+        range::Iter,
+    };
+
+    pub struct Iterator(Iter<usize>, Modes);
+
+    impl IntoParallelIterator for States {
+        type Item = State;
+        type Iter = Iterator;
+
+        fn into_par_iter(self) -> Self::Iter {
+            Iterator(self.indices.into_par_iter(), self.modes)
+        }
+    }
+
+    impl ParallelIterator for Iterator {
+        type Item = State;
+
+        fn drive_unindexed<C>(self, consumer: C) -> C::Result
+        where
+            C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+        {
+            let Self(indices, modes) = self;
+            indices
+                .map(move |index| modes.state(index))
+                .drive_unindexed(consumer)
+        }
+
+        fn opt_len(&self) -> Option<usize> {
+            self.0.opt_len()
+        }
+    }
+}
 
 impl Sizes {
     pub(crate) const DEFAULT: Self = Self::new(0.0, 1.0, Self::SCALE);

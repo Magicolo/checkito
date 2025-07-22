@@ -45,13 +45,13 @@ pub use prove::Prove;
 pub use sample::Sample;
 pub use shrink::Shrink;
 
-const GENERATES: usize = 1_024;
-const SHRINKS: usize = 1_048_576;
-const SAMPLES: usize = 128;
-const COLLECTS: usize = 1_024;
-const RETRIES: usize = 256;
+const GENERATES: usize = 1 << 10;
+const SHRINKS: usize = 1 << 20;
+const SAMPLES: usize = 1 << 7;
+const COLLECTS: usize = 1 << 10;
+const RETRIES: usize = 1 << 8;
 #[cfg(feature = "regex")]
-const REPEATS: u32 = 64;
+const REPEATS: u32 = 1 << 6;
 
 /*
     TODO:

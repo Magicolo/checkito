@@ -1,11 +1,12 @@
 use crate::{
     Generate, Prove,
-    check::{Check, Checker, Fail, Pass, Result},
+    check::{self, Check, Checker, Fail, Pass, Result},
 };
 use core::{
     any::type_name,
     cell::Cell,
     fmt::{self, Arguments},
+    ops::{Deref, DerefMut},
     str::FromStr,
 };
 use hook::Guard;
@@ -48,13 +49,14 @@ fn prepare<G: Generate + ?Sized, R: ?Sized, U: FnOnce(&mut Checker<G, R>)>(
     checker: &mut Checker<G, R>,
     update: U,
     verbose: bool,
-) -> hook::Guard {
+    color: bool,
+) -> hook::Guard<Colors> {
     checker.generate.items = verbose;
     checker.shrink.items = verbose;
     checker.shrink.errors = verbose;
     environment::update(checker);
     update(checker);
-    Guard::new()
+    Guard::new(Colors::new(color))
 }
 
 fn handle<
@@ -101,46 +103,86 @@ fn handle<
     }
 }
 
+fn handle_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
+    result: Result<T, P>,
+    colors: &Colors,
+) {
+    handle(
+        result,
+        colors,
+        |prefix, pass| {
+            println!(
+                "{prefix} {{ item: {:?}, seed: {}, size: {}, proof: {:?} }}",
+                &pass.item,
+                pass.seed(),
+                pass.size(),
+                &pass.proof,
+            )
+        },
+        |prefix, fail| {
+            eprintln!(
+                "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
+                &fail.item,
+                fail.seed(),
+                fail.size(),
+                fail.message(),
+            )
+        },
+    )
+}
+
+fn handle_debug<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
+    result: Result<T, P>,
+    colors: &Colors,
+) {
+    handle(
+        result,
+        colors,
+        |prefix, pass| println!("{prefix} {pass:?}"),
+        |prefix, fail| eprintln!("{prefix} {fail:?}"),
+    )
+}
+
+fn handle_minimal<T, P: Prove>(result: Result<T, P>, colors: &Colors) {
+    handle(
+        result,
+        colors,
+        |prefix, pass| {
+            println!(
+                "{prefix} {{ type: {}, seed: {}, size: {} }}",
+                type_name::<T>(),
+                pass.seed(),
+                pass.size(),
+            )
+        },
+        |prefix, fail| {
+            eprintln!(
+                "{prefix} {{ type: {}, seed: {}, size: {} }}",
+                type_name::<T>(),
+                fail.seed(),
+                fail.size(),
+            )
+        },
+    )
+}
+
 pub mod synchronous {
     use super::*;
 
     #[track_caller]
-    pub fn default<G: Generate, U: FnOnce(&mut Checker<G>), P: Prove, C: Fn(G::Item) -> P>(
+    pub fn default<
+        G: Generate<Item: fmt::Debug>,
+        U: FnOnce(&mut Checker<G, check::synchronous::Run>),
+        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
+        C: Fn(G::Item) -> P,
+    >(
         generator: G,
         update: U,
         check: C,
         color: bool,
         verbose: bool,
-    ) where
-        G::Item: fmt::Debug,
-        P::Proof: fmt::Debug,
-        P::Error: fmt::Debug,
-    {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| {
-                println!(
-                    "{prefix} {{ item: {:?}, seed: {}, size: {}, proof: {:?} }}",
-                    &pass.item,
-                    pass.seed(),
-                    pass.size(),
-                    &pass.proof,
-                )
-            },
-            |prefix, fail| {
-                eprintln!(
-                    "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
-                    &fail.item,
-                    fail.seed(),
-                    fail.size(),
-                    fail.message(),
-                )
-            },
-        );
+    ) {
+        with(generator, update, check, color, verbose, handle_default)
     }
 
     #[track_caller]
@@ -155,15 +197,7 @@ pub mod synchronous {
         P::Proof: fmt::Debug,
         P::Error: fmt::Debug,
     {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| println!("{prefix} {pass:?}"),
-            |prefix, fail| eprintln!("{prefix} {fail:?}"),
-        );
+        with(generator, update, check, color, verbose, handle_debug);
     }
 
     #[track_caller]
@@ -174,29 +208,7 @@ pub mod synchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| {
-                println!(
-                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                    type_name::<G::Item>(),
-                    pass.seed(),
-                    pass.size(),
-                )
-            },
-            |prefix, fail| {
-                eprintln!(
-                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                    type_name::<G::Item>(),
-                    fail.seed(),
-                    fail.size(),
-                )
-            },
-        );
+        with(generator, update, check, color, verbose, handle_minimal);
     }
 
     #[track_caller]
@@ -205,23 +217,20 @@ pub mod synchronous {
         U: FnOnce(&mut Checker<G>),
         P: Prove,
         C: Fn(G::Item) -> P,
-        WP: Fn(Arguments, Pass<G::Item, P::Proof>),
-        WF: Fn(Arguments, Fail<G::Item, P::Error>),
+        H: Fn(Result<G::Item, P>, &Colors),
     >(
         generator: G,
         update: U,
         check: C,
         color: bool,
         verbose: bool,
-        pass: WP,
-        fail: WF,
+        handle: H,
     ) {
         let mut checker = generator.checker();
-        let colors = Colors::new(color);
-        let _guard = prepare(&mut checker, update, verbose);
-        for result in checker.checks(hook::silent(check)) {
-            handle(result, &colors, &pass, &fail);
-        }
+        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+        checker
+            .checks(hook::silent(check))
+            .for_each(|result| handle(result, colors));
     }
 }
 
@@ -229,15 +238,14 @@ pub mod synchronous {
 pub mod asynchronous {
     use super::*;
     use crate::check;
-    use async_io::block_on;
     use core::future::Future;
-    use futures_lite::StreamExt;
+    use futures_lite::{StreamExt, future::block_on};
 
     #[track_caller]
     pub fn default<
-        G: Generate<Shrink: Unpin> + Unpin,
+        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
         U: FnOnce(&mut Checker<G, check::asynchronous::Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
+        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
         C: Fn(G::Item) -> P + Unpin,
     >(
         generator: G,
@@ -245,43 +253,15 @@ pub mod asynchronous {
         check: C,
         color: bool,
         verbose: bool,
-    ) where
-        G::Item: fmt::Debug,
-        <P::Output as Prove>::Proof: fmt::Debug,
-        <P::Output as Prove>::Error: fmt::Debug,
-    {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| {
-                println!(
-                    "{prefix} {{ item: {:?}, seed: {}, size: {}, proof: {:?} }}",
-                    &pass.item,
-                    pass.seed(),
-                    pass.size(),
-                    &pass.proof,
-                )
-            },
-            |prefix, fail| {
-                eprintln!(
-                    "{prefix} {{ item: {:?}, seed: {}, size: {}, message: \"{}\" }}",
-                    &fail.item,
-                    fail.seed(),
-                    fail.size(),
-                    fail.message(),
-                )
-            },
-        )
+    ) {
+        with(generator, update, check, color, verbose, handle_default)
     }
 
     #[track_caller]
-    pub fn debug<
-        G: Generate<Shrink: Unpin> + Unpin,
+    pub fn debugt<
+        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
         U: FnOnce(&mut Checker<G, check::asynchronous::Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
+        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
         C: Fn(G::Item) -> P + Unpin,
     >(
         generator: G,
@@ -294,15 +274,7 @@ pub mod asynchronous {
         <P::Output as Prove>::Proof: fmt::Debug,
         <P::Output as Prove>::Error: fmt::Debug,
     {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| println!("{prefix} {pass:?}"),
-            |prefix, fail| eprintln!("{prefix} {fail:?}"),
-        )
+        with(generator, update, check, color, verbose, handle_debug)
     }
 
     #[track_caller]
@@ -318,29 +290,7 @@ pub mod asynchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(
-            generator,
-            update,
-            check,
-            color,
-            verbose,
-            |prefix, pass| {
-                println!(
-                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                    type_name::<G::Item>(),
-                    pass.seed(),
-                    pass.size(),
-                )
-            },
-            |prefix, fail| {
-                eprintln!(
-                    "{prefix} {{ type: {}, seed: {}, size: {} }}",
-                    type_name::<G::Item>(),
-                    fail.seed(),
-                    fail.size(),
-                )
-            },
-        )
+        with(generator, update, check, color, verbose, handle_minimal)
     }
 
     #[track_caller]
@@ -349,31 +299,30 @@ pub mod asynchronous {
         U: FnOnce(&mut Checker<G, check::asynchronous::Run>),
         P: Future<Output: Prove<Error: Unpin> + Unpin>,
         C: Fn(G::Item) -> P + Unpin,
-        WP: Fn(Arguments, Pass<G::Item, <P::Output as Prove>::Proof>),
-        WF: Fn(Arguments, Fail<G::Item, <P::Output as Prove>::Error>),
+        H: Fn(Result<G::Item, P::Output>, &Colors),
     >(
         generator: G,
         update: U,
         check: C,
-        color: bool,
         verbose: bool,
-        pass: WP,
-        fail: WF,
+        color: bool,
+        handle: H,
     ) {
         let mut checker = generator.checker().asynchronous();
-        let colors = Colors::new(color);
-        let _guard = prepare(&mut checker, update, verbose);
-        let mut checks = checker.checks(hook::silent(check));
-        while let Some(result) = block_on(checks.next()) {
-            handle(result, &colors, &pass, &fail);
-        }
+        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+        block_on(
+            checker
+                // TODO: Is it possible to use `hook::silent` (adapted for futures) here?
+                .checks(check)
+                .for_each(|result| handle(result, colors)),
+        );
     }
 }
 
 mod hook {
     use super::*;
 
-    pub struct Guard;
+    pub struct Guard<T: ?Sized>(pub T);
 
     #[rustversion::since(1.81)]
     type Handle = Box<dyn Fn(&panic::PanicHookInfo) + 'static + Sync + Send>;
@@ -381,14 +330,40 @@ mod hook {
     type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
-    impl Guard {
-        pub fn new() -> Self {
+    impl<T> Guard<T> {
+        pub fn new(state: T) -> Self {
             begin();
-            Self
+            Self(state)
         }
     }
 
-    impl Drop for Guard {
+    impl<T: ?Sized> Deref for Guard<T> {
+        type Target = T;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl<T: ?Sized> DerefMut for Guard<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+
+    impl<T: ?Sized> AsRef<T> for Guard<T> {
+        fn as_ref(&self) -> &T {
+            &self.0
+        }
+    }
+
+    impl<T: ?Sized> AsMut<T> for Guard<T> {
+        fn as_mut(&mut self) -> &mut T {
+            &mut self.0
+        }
+    }
+
+    impl<T: ?Sized> Drop for Guard<T> {
         fn drop(&mut self) {
             end();
         }
