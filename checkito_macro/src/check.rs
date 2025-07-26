@@ -302,15 +302,11 @@ impl Check {
         let name = &signature.ident;
         let color = self.color.unwrap_or(true);
         let verbose = self.verbose.unwrap_or(false);
-        let mut prefix = "sequential";
-        let mut suffix = "synchronous";
-        #[cfg(feature = "parallel")]
-        if self.parallel.unwrap_or(false) {
-            prefix = "parallel";
-        }
+        let mut prefix = "synchronous";
+        let mut suffix = "sequential";
         #[cfg(feature = "asynchronous")]
         if self.asynchronous.unwrap_or(signature.asyncness.is_some()) {
-            suffix = "asynchronous";
+            prefix = "asynchronous";
         }
         #[cfg(not(feature = "asynchronous"))]
         if signature.asyncness.is_some() {
@@ -318,31 +314,28 @@ impl Check {
                 "for `async` or `Future`-returning function support, add the 'asynchronous' feature to the checkito dependency in this project's 'Cargo.toml'".to_string()
             }));
         }
+        #[cfg(feature = "parallel")]
+        if self.parallel.unwrap_or(false) {
+            suffix = "parallel";
+        }
 
-        let module = Ident::new(&format!("{prefix}_{suffix}"), signature.span());
-        Ok(match self.debug {
-            Some(true) => quote_spanned!(self.span => ::checkito::run::#module::debug(
+        let prefix = Ident::new(prefix, self.span);
+        let suffix = Ident::new(suffix, self.span);
+        let function = match self.debug {
+            Some(true) => "debug",
+            Some(false) => "minimal",
+            None => "default",
+        };
+        let function = Ident::new(function, self.span);
+        Ok(
+            quote_spanned!(self.span => ::checkito::run::#prefix::#suffix::#function(
                 (#(#generators,)*),
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
                 #verbose,
             )),
-            Some(false) => quote_spanned!(self.span => ::checkito::run::#module::minimal(
-                (#(#generators,)*),
-                |_checker| { #(#updates)* },
-                |(#(#arguments,)*)| #name(#(#arguments,)*),
-                #color,
-                #verbose,
-            )),
-            None => quote_spanned!(self.span => ::checkito::run::#module::default(
-                (#(#generators,)*),
-                |_checker| { #(#updates)* },
-                |(#(#arguments,)*)| #name(#(#arguments,)*),
-                #color,
-                #verbose,
-            )),
-        })
+        )
     }
 }
 

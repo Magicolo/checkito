@@ -45,7 +45,7 @@ impl Colors {
     }
 }
 
-fn prepare<G: Generate + ?Sized, R: ?Sized, U: FnOnce(&mut Checker<G, R>)>(
+fn prepare<G: Generate + ?Sized, R, U: FnOnce(&mut Checker<G, R>)>(
     checker: &mut Checker<G, R>,
     update: U,
     verbose: bool,
@@ -166,316 +166,332 @@ fn handle_minimal<T, P: Prove>(result: Result<T, P>, colors: &Colors) {
     )
 }
 
-pub mod sequential_synchronous {
+pub mod synchronous {
     use super::*;
 
-    type Run = check::sequential_synchronous::Run;
+    pub mod sequential {
+        use super::*;
 
-    #[track_caller]
-    pub fn default<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
-        C: Fn(G::Item) -> P,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_default)
+        type Run = check::synchronous::sequential::Run;
+
+        #[track_caller]
+        pub fn default<
+            G: Generate<Item: fmt::Debug>,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
+            C: Fn(G::Item) -> P,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_default)
+        }
+
+        #[track_caller]
+        pub fn debug<
+            G: Generate<Item: fmt::Debug>,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
+            C: Fn(G::Item) -> P,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_debug);
+        }
+
+        #[track_caller]
+        pub fn minimal<
+            G: Generate,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove,
+            C: Fn(G::Item) -> P,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_minimal);
+        }
+
+        #[track_caller]
+        fn with<
+            G: Generate,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove,
+            C: Fn(G::Item) -> P,
+            H: Fn(Result<G::Item, P>, &Colors),
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+            handle: H,
+        ) {
+            let mut checker = generator.checker();
+            let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+            checker
+                .checks(hook::silent(check))
+                .for_each(|result| handle(result, colors));
+        }
     }
 
-    #[track_caller]
-    pub fn debug<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
-        C: Fn(G::Item) -> P,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_debug);
-    }
+    #[cfg(feature = "parallel")]
+    pub mod parallel {
+        use super::*;
+        use crate::check;
+        use rayon::iter::ParallelIterator;
 
-    #[track_caller]
-    pub fn minimal<G: Generate, U: FnOnce(&mut Checker<G, Run>), P: Prove, C: Fn(G::Item) -> P>(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_minimal);
-    }
+        type Run = check::synchronous::parallel::Run;
 
-    #[track_caller]
-    fn with<
-        G: Generate,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Prove,
-        C: Fn(G::Item) -> P,
-        H: Fn(Result<G::Item, P>, &Colors),
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-        handle: H,
-    ) {
-        let mut checker = generator.checker();
-        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
-        checker
-            .checks(hook::silent(check))
-            .for_each(|result| handle(result, colors));
+        #[track_caller]
+        pub fn default<
+            G: Generate<Item: fmt::Debug + Send, Shrink: Send> + Send + Sync,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove<Proof: fmt::Debug + Send, Error: fmt::Debug + Send>,
+            C: Fn(G::Item) -> P + Send + Sync,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_default)
+        }
+
+        #[track_caller]
+        pub fn debug<
+            G: Generate<Item: fmt::Debug + Send, Shrink: Send> + Send + Sync,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove<Proof: fmt::Debug + Send, Error: fmt::Debug + Send>,
+            C: Fn(G::Item) -> P + Send + Sync,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_debug)
+        }
+
+        #[track_caller]
+        pub fn minimal<
+            G: Generate<Item: Send, Shrink: Send> + Send + Sync,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove<Proof: Send, Error: Send>,
+            C: Fn(G::Item) -> P + Send + Sync,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_minimal)
+        }
+
+        #[track_caller]
+        fn with<
+            G: Generate<Item: Send, Shrink: Send> + Send + Sync,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Prove<Proof: Send, Error: Send>,
+            C: Fn(G::Item) -> P + Send + Sync,
+            H: Fn(Result<G::Item, P>, &Colors) + Send + Sync,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            verbose: bool,
+            color: bool,
+            handle: H,
+        ) {
+            let mut checker = generator.checker().parallel();
+            let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+            checker
+                .checks(check)
+                .for_each(|result| handle(result, colors));
+        }
     }
 }
 
 #[cfg(feature = "asynchronous")]
-pub mod sequential_asynchronous {
+pub mod asynchronous {
     use super::*;
-    use crate::check;
-    use core::future::Future;
-    use futures_lite::{StreamExt, future::block_on};
 
-    type Run = check::sequential_asynchronous::Run;
+    pub mod sequential {
+        use super::*;
+        use crate::check;
+        use core::future::Future;
+        use futures_lite::{StreamExt, future::block_on};
 
-    #[track_caller]
-    pub fn default<
-        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_default)
+        type Run = check::asynchronous::sequential::Run;
+
+        #[track_caller]
+        pub fn default<
+            G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_default)
+        }
+
+        #[track_caller]
+        pub fn debug<
+            G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_debug)
+        }
+
+        #[track_caller]
+        pub fn minimal<
+            G: Generate<Shrink: Unpin> + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_minimal)
+        }
+
+        #[track_caller]
+        fn with<
+            G: Generate<Shrink: Unpin> + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+            H: Fn(Result<G::Item, P::Output>, &Colors),
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            verbose: bool,
+            color: bool,
+            handle: H,
+        ) {
+            let mut checker = generator.checker().asynchronous();
+            let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+            block_on(
+                checker
+                    // TODO: Is it possible to use `hook::silent` (adapted for futures) here?
+                    .checks(check)
+                    .for_each(|result| handle(result, colors)),
+            );
+        }
     }
 
-    #[track_caller]
-    pub fn debug<
-        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_debug)
-    }
+    #[cfg(feature = "parallel")]
+    pub mod parallel {
+        use super::*;
+        use crate::check;
+        use core::future::Future;
 
-    #[track_caller]
-    pub fn minimal<
-        G: Generate<Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_minimal)
-    }
+        type Run = check::asynchronous::parallel::Run;
 
-    #[track_caller]
-    fn with<
-        G: Generate<Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-        H: Fn(Result<G::Item, P::Output>, &Colors),
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        verbose: bool,
-        color: bool,
-        handle: H,
-    ) {
-        let mut checker = generator.checker().asynchronous();
-        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
-        block_on(
-            checker
-                // TODO: Is it possible to use `hook::silent` (adapted for futures) here?
-                .checks(check)
-                .for_each(|result| handle(result, colors)),
-        );
-    }
-}
+        #[track_caller]
+        pub fn default<
+            G: Generate<Item: fmt::Debug + Send, Shrink: Send + Unpin> + Send + Sync + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_default)
+        }
 
-#[cfg(feature = "parallel")]
-pub mod parallel_synchronous {
-    use super::*;
-    use crate::check;
+        #[track_caller]
+        pub fn debug<
+            G: Generate<Item: fmt::Debug + Send, Shrink: Send + Unpin> + Send + Sync + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_debug)
+        }
 
-    type Run = check::parallel_synchronous::Run;
+        #[track_caller]
+        pub fn minimal<
+            G: Generate<Item: Send, Shrink: Send + Unpin> + Send + Sync + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            color: bool,
+            verbose: bool,
+        ) {
+            with(generator, update, check, color, verbose, handle_minimal)
+        }
 
-    #[track_caller]
-    pub fn default<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
-        C: Fn(G::Item) -> P,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_default)
-    }
-
-    #[track_caller]
-    pub fn debug<
-        G: Generate<Item: fmt::Debug>,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Prove<Proof: fmt::Debug, Error: fmt::Debug>,
-        C: Fn(G::Item) -> P,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_debug)
-    }
-
-    #[track_caller]
-    pub fn minimal<G: Generate, U: FnOnce(&mut Checker<G, Run>), P: Prove, C: Fn(G::Item) -> P>(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_minimal)
-    }
-
-    #[track_caller]
-    fn with<
-        G: Generate,
-        U: FnOnce(&mut Checker<G, check::parallel_synchronous::Run>),
-        P: Prove,
-        C: Fn(G::Item) -> P,
-        H: Fn(Result<G::Item, P>, &Colors),
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        verbose: bool,
-        color: bool,
-        handle: H,
-    ) {
-        let mut checker = generator.checker().parallel();
-        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
-        todo!();
-        // checker
-        //     // TODO: Is it possible to use `hook::silent` (adapted for
-        // futures) here?     .checks(check)
-        //     .for_each(|result| handle(result, colors));
-    }
-}
-
-#[cfg(all(feature = "parallel", feature = "asynchronous"))]
-pub mod parallel_asynchronous {
-    use super::*;
-    use crate::check;
-    use core::future::Future;
-    use futures_lite::{StreamExt, future::block_on};
-
-    type Run = check::parallel_asynchronous::Run;
-
-    #[track_caller]
-    pub fn default<
-        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_default)
-    }
-
-    #[track_caller]
-    pub fn debug<
-        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_debug)
-    }
-
-    #[track_caller]
-    pub fn minimal<
-        G: Generate<Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        color: bool,
-        verbose: bool,
-    ) {
-        with(generator, update, check, color, verbose, handle_minimal)
-    }
-
-    #[track_caller]
-    fn with<
-        G: Generate<Shrink: Unpin> + Unpin,
-        U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
-        H: Fn(Result<G::Item, P::Output>, &Colors),
-    >(
-        generator: G,
-        update: U,
-        check: C,
-        verbose: bool,
-        color: bool,
-        handle: H,
-    ) {
-        let mut checker = generator.checker().parallel().asynchronous();
-        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
-        todo!();
-        // block_on(
-        //     checker
-        //         // TODO: Is it possible to use `hook::silent` (adapted for
-        // futures) here?         .checks(check)
-        //         .for_each(|result| handle(result, colors)),
-        // );
+        #[track_caller]
+        fn with<
+            G: Generate<Item: Send, Shrink: Send + Unpin> + Send + Sync + Unpin,
+            U: FnOnce(&mut Checker<G, Run>),
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            C: Fn(G::Item) -> P + Unpin,
+            H: Fn(Result<G::Item, P::Output>, &Colors),
+        >(
+            generator: G,
+            update: U,
+            check: C,
+            verbose: bool,
+            color: bool,
+            handle: H,
+        ) {
+            let mut checker = generator.checker().parallel().asynchronous();
+            let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+            todo!();
+            // block_on(
+            //     checker
+            //         // TODO: Is it possible to use `hook::silent` (adapted
+            // for futures) here?         .checks(check)
+            //         .for_each(|result| handle(result, colors)),
+            // );
+        }
     }
 }
 
@@ -588,7 +604,7 @@ mod environment {
             parse("CHECKITO_GENERATE_ITEMS")
         }
 
-        pub fn update<G: ?Sized, R: ?Sized>(checker: &mut Checker<G, R>) {
+        pub fn update<G: ?Sized, R>(checker: &mut Checker<G, R>) {
             if let Some(value) = size() {
                 checker.generate.sizes = (value..=value).into();
             }
@@ -619,7 +635,7 @@ mod environment {
             parse("CHECKITO_SHRINK_ERRORS")
         }
 
-        pub fn update<G: ?Sized, R: ?Sized>(checker: &mut Checker<G, R>) {
+        pub fn update<G: ?Sized, R>(checker: &mut Checker<G, R>) {
             if let Some(value) = count() {
                 checker.shrink.count = value;
             }
@@ -632,7 +648,7 @@ mod environment {
         }
     }
 
-    pub fn update<G: ?Sized, R: ?Sized>(checker: &mut Checker<G, R>) {
+    pub fn update<G: ?Sized, R>(checker: &mut Checker<G, R>) {
         generate::update(checker);
         shrink::update(checker);
     }
