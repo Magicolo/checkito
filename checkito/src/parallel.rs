@@ -1,7 +1,7 @@
 use core::{
     iter,
     marker::PhantomData,
-    mem::{forget, replace},
+    mem::forget,
     num::NonZeroUsize,
     ops::Range,
     sync::atomic::{AtomicUsize, Ordering},
@@ -34,7 +34,6 @@ pub struct Yield<'a, T>(&'a Sender<Message<T>>);
 /// iterators.
 pub struct Token<'a>(bool, PhantomData<&'a ()>);
 
-#[derive(Clone)]
 pub struct Pool(Arc<State>);
 
 pub struct Executor {
@@ -73,6 +72,11 @@ impl Pool {
 
     pub fn new(size: Option<usize>) -> Self {
         Self(Arc::new(State::new(size)))
+    }
+
+    pub fn with(self, size: usize) -> Self {
+        self.0.size.end.store(size, Ordering::Relaxed);
+        Self(self.0)
     }
 
     pub fn executor(&self, parallelism: Option<NonZeroUsize>) -> Executor {
@@ -124,34 +128,33 @@ impl State {
         }
     }
 
-    fn spawn(state: &Arc<Self>, index: usize) -> usize {
-        let weak = Arc::downgrade(state);
+    fn spawn(strong: &Arc<Self>, index: usize) -> usize {
+        // Use a weak reference to allow the pool to drop the state if there is no more
+        // user-side reference to it.
+        let weak = Arc::downgrade(strong);
         spawn(move || Self::run(weak, index));
-        state.ready.fetch_add(1, Ordering::Relaxed)
+        strong.ready.fetch_add(1, Ordering::Relaxed)
     }
 
     fn run(state: Weak<Self>, index: usize) {
-        struct DoneOnDrop(Arc<dyn Task>);
-        struct SpawnOnDrop(Weak<State>, usize);
+        struct DoneOnDrop<'a>(&'a dyn Task);
+        struct SpawnOnDrop<'a>(&'a Arc<State>, usize);
 
-        impl Drop for DoneOnDrop {
+        impl Drop for DoneOnDrop<'_> {
             fn drop(&mut self) {
                 // `Task::done` must be called even in the event of a panic.
                 self.0.done();
             }
         }
 
-        impl Drop for SpawnOnDrop {
+        impl Drop for SpawnOnDrop<'_> {
             fn drop(&mut self) {
-                if let Some(state) = replace(&mut self.0, Weak::new()).upgrade() {
-                    State::spawn(&state, self.1);
-                }
+                State::spawn(self.0, self.1);
             }
         }
 
-        let sentinel = SpawnOnDrop(state, index);
-        while let Some(state) = sentinel.0.upgrade() {
-            if state.size.end.load(Ordering::Relaxed) < sentinel.1 {
+        while let Some(state) = state.upgrade() {
+            if state.size.end.load(Ordering::Relaxed) < index {
                 // The pool has shrunk.
                 state.size.start.fetch_sub(1, Ordering::Relaxed);
                 break;
@@ -161,14 +164,17 @@ impl State {
                 break;
             };
             state.ready.fetch_sub(1, Ordering::Relaxed);
-            let next = index + 1;
-            if next < count.get() {
-                state.send.send((task.clone(), next, count)).ok();
+            {
+                let state = SpawnOnDrop(&state, index);
+                let next = index + 1;
+                if next < count.get() {
+                    state.0.send.send((task.clone(), next, count)).ok();
+                }
+                DoneOnDrop(&task).0.run(index, count.get());
+                forget(state);
             }
-            DoneOnDrop(task).0.run(index, count.get());
             state.ready.fetch_add(1, Ordering::Relaxed);
         }
-        forget(sentinel);
     }
 }
 
@@ -385,7 +391,7 @@ fn try_take<T>(lock: &RwLock<Option<T>>) -> Option<T> {
 fn size(size: Option<usize>) -> usize {
     match size {
         Some(size) => size,
-        None => available_parallelism().map_or(8, NonZeroUsize::get),
+        None => available_parallelism().map_or(8, NonZeroUsize::get) * 2,
     }
 }
 
