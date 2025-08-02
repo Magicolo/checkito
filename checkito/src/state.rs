@@ -596,10 +596,20 @@ impl Modes {
         }
     }
 
-    pub(crate) fn state(self, index: usize) -> State {
+    pub(crate) fn state(self, index: usize) -> Option<State> {
         match self {
-            Modes::Random { count, sizes, seed } => State::random(index, count, sizes, seed),
-            Modes::Exhaustive(count) => State::exhaustive(index, count),
+            Modes::Random { count, sizes, seed } if index < count => {
+                Some(State::random(index, count, sizes, seed))
+            }
+            Modes::Exhaustive(count) if index < count => Some(State::exhaustive(index, count)),
+            Modes::Random { .. } | Modes::Exhaustive(..) => None,
+        }
+    }
+
+    pub(crate) const fn count(&self) -> usize {
+        match *self {
+            Modes::Random { count, .. } => count,
+            Modes::Exhaustive(count) => count,
         }
     }
 }
@@ -637,7 +647,7 @@ impl Iterator for States {
     type Item = State;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(self.modes.state(self.indices.next()?))
+        self.modes.state(self.indices.next()?)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -649,11 +659,11 @@ impl Iterator for States {
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        Some(self.modes.state(self.indices.nth(n)?))
+        self.modes.state(self.indices.nth(n)?)
     }
 
     fn last(self) -> Option<Self::Item> {
-        Some(self.modes.state(self.indices.last()?))
+        self.modes.state(self.indices.last()?)
     }
 }
 
@@ -665,11 +675,11 @@ impl ExactSizeIterator for States {
 
 impl DoubleEndedIterator for States {
     fn next_back(&mut self) -> Option<Self::Item> {
-        Some(self.modes.state(self.indices.next_back()?))
+        self.modes.state(self.indices.next_back()?)
     }
 
     fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
-        Some(self.modes.state(self.indices.nth_back(n)?))
+        self.modes.state(self.indices.nth_back(n)?)
     }
 }
 
@@ -703,7 +713,7 @@ mod parallel {
         {
             let Self(indices, modes) = self;
             indices
-                .map(move |index| modes.state(index))
+                .filter_map(move |index| modes.state(index))
                 .drive_unindexed(consumer)
         }
 

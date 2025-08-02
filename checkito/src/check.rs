@@ -486,19 +486,6 @@ fn cast(error: Box<dyn Any + Send>) -> Option<Cow<'static, str>> {
     }
 }
 
-fn handle<T, P: Prove, F: FnMut(T) -> P>(
-    item: T,
-    mut check: F,
-) -> result::Result<P::Proof, Cause<P::Error>> {
-    match catch_unwind(AssertUnwindSafe(move || check(item))) {
-        Ok(prove) => match prove.prove() {
-            Ok(ok) => Ok(ok),
-            Err(error) => Err(Cause::Disprove(error)),
-        },
-        Err(error) => Err(Cause::Panic(cast(error))),
-    }
-}
-
 impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
@@ -684,6 +671,7 @@ pub(crate) mod synchronous {
     #[cfg(feature = "parallel")]
     pub(crate) mod parallel {
         use super::*;
+        use crate::parallel::iterate;
         use orn::Or2;
         use rayon::iter::{
             IntoParallelIterator, ParallelIterator, empty, once, plumbing::UnindexedConsumer,
@@ -720,6 +708,45 @@ pub(crate) mod synchronous {
                 self.checks(check)
                     .find_last(|result| matches!(result, Result::Fail(..)))?
                     .fail(false)
+            }
+
+            pub fn checkz<
+                'a,
+                P: Prove<Proof: Send, Error: Send> + 'a,
+                F: Fn(G::Item) -> P + Send + Sync + 'a,
+            >(
+                self,
+                check: F,
+            ) -> crate::parallel::Iterator<'a, Result<G::Item, P>>
+            where
+                G: 'a,
+            {
+                enum Machine<G> {
+                    Generate {
+                        generator: G,
+                        modes: Modes,
+                        shrinks: ops::Range<usize>,
+                    },
+                }
+                let modes = Modes::with(
+                    self.generate.count,
+                    self.generate.sizes,
+                    self.generate.seed,
+                    self.generator.cardinality(),
+                    self.generate.exhaustive,
+                );
+                let index = AtomicUsize::new(0);
+                iterate(move |yields| {
+                    let index = index.fetch_add(1, Ordering::Relaxed);
+                    let Some(mut state) = modes.state(index) else {
+                        return yields.done();
+                    };
+                    let shrinker = self.generator.generate(&mut state);
+                    match handle(shrinker.item(), &check) {
+                        Ok(proof) => yields.next(pass(shrinker.item(), state, proof)),
+                        Err(cause) => yields.last(fail(shrinker.item(), 0, state, cause)),
+                    }
+                })
             }
 
             pub fn checks<P: Prove<Proof: Send, Error: Send>, F: Fn(G::Item) -> P + Send + Sync>(
@@ -1196,22 +1223,6 @@ pub(crate) mod asynchronous {
                 Err(error) => Err(Cause::Panic(cast(error))),
             }
         }
-
-        #[allow(clippy::type_complexity)]
-        fn handle<P: Future<Output: Prove>>(
-            check: Pin<&mut P>,
-            context: &mut Context,
-        ) -> Poll<result::Result<<P::Output as Prove>::Proof, Cause<<P::Output as Prove>::Error>>>
-        {
-            match catch_unwind(AssertUnwindSafe(move || check.poll(context))) {
-                Ok(Poll::Pending) => Poll::Pending,
-                Ok(Poll::Ready(prove)) => match prove.prove() {
-                    Ok(ok) => Poll::Ready(Ok(ok)),
-                    Err(error) => Poll::Ready(Err(Cause::Disprove(error))),
-                },
-                Err(error) => Poll::Ready(Err(Cause::Panic(cast(error)))),
-            }
-        }
     }
 
     #[cfg(feature = "parallel")]
@@ -1267,6 +1278,21 @@ pub(crate) mod asynchronous {
                     check,
                 }
             }
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn handle<P: Future<Output: Prove>>(
+        check: Pin<&mut P>,
+        context: &mut Context,
+    ) -> Poll<result::Result<<P::Output as Prove>::Proof, Cause<<P::Output as Prove>::Error>>> {
+        match catch_unwind(AssertUnwindSafe(move || check.poll(context))) {
+            Ok(Poll::Pending) => Poll::Pending,
+            Ok(Poll::Ready(prove)) => match prove.prove() {
+                Ok(ok) => Poll::Ready(Ok(ok)),
+                Err(error) => Poll::Ready(Err(Cause::Disprove(error))),
+            },
+            Err(error) => Poll::Ready(Err(Cause::Panic(cast(error)))),
         }
     }
 }

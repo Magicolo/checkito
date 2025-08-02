@@ -1,5 +1,5 @@
 #![doc = include_str!("../../README.md")]
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 
 pub mod all;
 pub mod any;
@@ -17,6 +17,8 @@ pub mod generate;
 pub mod keep;
 pub mod lazy;
 pub mod map;
+#[cfg(feature = "parallel")]
+mod parallel;
 mod prelude;
 pub mod primitive;
 pub mod prove;
