@@ -1,20 +1,234 @@
+use crate::utility::cast_ref;
 use core::{
+    any::Any,
     iter,
     marker::PhantomData,
-    mem::forget,
+    mem::swap,
     num::NonZeroUsize,
-    ops::Range,
+    ops::{Deref, DerefMut, Range},
+    panic::RefUnwindSafe,
+    pin::Pin,
+    ptr::null,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use crossbeam_channel::{Receiver, Sender, unbounded};
+use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use std::{
-    sync::{Arc, OnceLock, RwLock, TryLockError, Weak},
+    panic::{catch_unwind, resume_unwind},
+    rc::Rc,
+    sync::{Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard, TryLockError, Weak},
     thread::{available_parallelism, spawn},
 };
 
+/*
+TODO:
+- Can I extract to a library *only* only for the lifetime extension mechanism?
+fn extend_fn<'a, F: Fn() + 'a>() -> Handle {}
+fn extend_fn_once<'a, F: FnOnce() + 'a>() -> Handle {}
+fn extend_fn_mut<'a, F: FnMut() + 'a>() -> Handle {}
+
+- It is never safe to give a `&'static T` from a `&'a T`, even within a closure, since static references may escape the closure.
+- Even when hidden within a data handle, it must be known that it the handle may escape the closure.
+- Call the crate `dalitafe` for the `Data`, `Life` splitter.
+
+Evil things that must be impossible:
+- Storing an extended lifetime value in a `static` field.
+    - Unsized values prevent most of the issues...
+    - `Split` and `SplitMut` traits should be `unsafe`.
+    static EVIL: OnceLock<Arc<Mutex<dyn Fn() + Send + Sync + 'static>>> = OnceLock::new();
+    let (mut data, life) = split_mut::<dyn Fn() + Send + Sync + 'static>(f);
+    let evil = EVIL.get_or_init(|| Arc::new(Mutex::new(|| {})));
+    swap(
+        data.borrow_mut().deref_mut(),
+        evil.lock().unwrap().deref_mut(),
+    );
+- *NEVER* allow giving out a `static` reference to the inner type even though its lifetime is `'static`.
+*/
+struct Data<T>(Arc<RwLock<Option<T>>>);
+struct Life<'a> {
+    data: *const (),
+    drop: unsafe fn(*const ()) -> bool,
+    _marker: PhantomData<&'a ()>,
+}
+struct Ref<T: ?Sized>(*const T);
+struct Mut<T: ?Sized>(*mut T);
+struct DataRefGuard<'a, T: ?Sized>(RwLockReadGuard<'a, T>);
+struct DataMutGuard<'a, T: ?Sized>(RwLockWriteGuard<'a, T>);
+
+unsafe impl<T: Send + ?Sized> Send for Ref<T> {}
+unsafe impl<T: Sync + ?Sized> Sync for Ref<T> {}
+unsafe impl<T: Send + ?Sized> Send for Mut<T> {}
+unsafe impl<T: Sync + ?Sized> Sync for Mut<T> {}
+
+trait Split<T: ?Sized> {
+    fn split(&self) -> (Data<Ref<T>>, Life<'_>) {
+        todo!()
+    }
+}
+
+trait SplitMut<T: ?Sized>: Split<T> {
+    fn split_mut(&mut self) -> (Data<Mut<T>>, Life<'_>) {
+        todo!()
+    }
+}
+
+// impl<'a, T: 'a> Split<'a, &'static T> for &T {}
+// impl<'a, T: 'a> Split<'a, &'static mut T> for &mut T {}
+// impl<'a, T: 'a, S: Split<'a, T>> Split<'a, Pin<T>> for Pin<S> {}
+
+// impl<T: 'static> Split<'static, dyn Any> for T {}
+// impl<T: Send + 'static> Split<'static, dyn Any + Send> for T {}
+// impl<T: Sync + 'static> Split<'static, dyn Any + Sync> for T {}
+// impl<T: Send + Sync + 'static> Split<'static, dyn Any + Send + Sync> for T {}
+
+impl<F: FnOnce() + Send + Sync> Split<dyn FnOnce() + Send + Sync> for F {}
+impl<F: FnOnce() + Send> Split<dyn FnOnce() + Send> for F {}
+impl<F: FnOnce() + Sync> Split<dyn FnOnce() + Sync> for F {}
+impl<F: FnOnce()> Split<dyn FnOnce()> for F {}
+
+impl<F: FnOnce() + Send + Sync> SplitMut<dyn FnOnce() + Send + Sync> for F {}
+impl<F: FnOnce() + Send> SplitMut<dyn FnOnce() + Send> for F {}
+impl<F: FnOnce() + Sync> SplitMut<dyn FnOnce() + Sync> for F {}
+impl<F: FnOnce()> SplitMut<dyn FnOnce()> for F {}
+
+impl<F: Fn() + Send + Sync> Split<dyn Fn() + Send + Sync> for F {
+    fn split(&self) -> (Data<Ref<dyn Fn() + Send + Sync>>, Life<'_>) {
+        let data = Arc::new(RwLock::new(Some(Ref(self as *const _ as _))));
+        let weak = Arc::downgrade(&data);
+        (
+            Data(data),
+            Life {
+                data: Weak::<RwLock<Option<Ref<dyn Fn() + Send + Sync>>>>::into_raw(weak) as _,
+                drop: |data| {
+                    let weak = unsafe {
+                        Weak::<RwLock<Option<Ref<dyn Fn() + Send + Sync>>>>::from_raw(data as _)
+                    };
+                    // If the upgrade fails, it means that no data handle remain.
+                    if let Some(data) = weak.upgrade() {
+                        // Although one might consider using `try_write` and panicking on a
+                        // `WouldBlock`, this is not sufficient to prevent undefined
+                        // behavior since the `panic` may leave another thread with an
+                        // expired data handle. Therefore, this thread *must* acquire an
+                        // exclusive data lock.
+                        match data.write() {
+                            Ok(mut data) => data.take().is_some(),
+                            Err(mut error) => error.get_mut().take().is_some(),
+                        }
+                    } else {
+                        true
+                    }
+                },
+                _marker: PhantomData,
+            },
+        )
+    }
+}
+
+impl<F: Fn() + Send + Sync> SplitMut<dyn Fn() + Send + Sync> for F {}
+
+impl Life<'_> {
+    pub fn is_alive(&self) -> bool {
+        Weak::strong_count(&unsafe { Weak::<()>::from_raw(self.data) }) > 0
+    }
+}
+
+impl Drop for Life<'_> {
+    fn drop(&mut self) {
+        unsafe { (self.drop)(self.data) };
+    }
+}
+
+impl<T> Split<T> for T {
+    fn split(&self) -> (Data<Ref<T>>, Life<'_>) {
+        panic!("splitting sized types is highly unsafe, thus not supported")
+    }
+}
+
+impl<T> SplitMut<T> for T {
+    fn split_mut(&mut self) -> (Data<Mut<T>>, Life<'_>) {
+        panic!("splitting sized types is highly unsafe, thus not supported")
+    }
+}
+
+impl<T: ?Sized> Deref for DataRefGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ?Sized> Deref for DataMutGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: ?Sized> DerefMut for DataMutGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T: ?Sized> Data<Ref<T>> {
+    fn borrow(&self) -> DataRefGuard<T> {
+        todo!()
+    }
+
+    fn try_borrow(&self) -> Option<DataRefGuard<T>> {
+        todo!()
+    }
+}
+
+impl<T: ?Sized> Data<Mut<T>> {
+    fn borrow(&self) -> DataRefGuard<T> {
+        todo!()
+    }
+
+    fn borrow_mut(&self) -> DataMutGuard<T> {
+        todo!()
+    }
+
+    fn try_borrow(&self) -> Option<DataRefGuard<T>> {
+        todo!()
+    }
+
+    fn try_borrow_mut(&self) -> Option<DataMutGuard<T>> {
+        todo!()
+    }
+}
+
+fn split<T: ?Sized>(value: &impl Split<T>) -> (Data<Ref<T>>, Life<'_>) {
+    value.split()
+}
+
+fn split_mut<T: ?Sized>(value: &mut impl SplitMut<T>) -> (Data<Mut<T>>, Life<'_>) {
+    value.split_mut()
+}
+
+// fn karl() {
+//     let mut a = 'a';
+//     let (d, l) = split_box::<dyn FnOnce() + Send>(move || a = 'b');
+//     drop(l);
+//     if let Some(mut d) = d.try_borrow_mut() {
+//         d();
+//     }
+// }
+
+fn scopeth<'a, F: Fn() + Send + Sync + 'a>(f: &'a mut F) -> Life<'a> {
+    use std::thread::spawn;
+    let (data, life) = split::<dyn Fn() + Send + Sync + 'static>(f);
+    spawn(move || {
+        data.borrow().deref()();
+    });
+    life
+}
+
 pub struct Iterator<'a, T> {
     task: Weak<dyn Task + Send + Sync + 'a>,
-    receive: Option<Receiver<Message<T>>>,
+    item: Option<Receiver<Item<T>>>,
+    error: Receiver<Option<String>>,
 }
 
 /// A yield object which *can* and *must* be used exactly once per call of its
@@ -25,7 +239,7 @@ pub struct Iterator<'a, T> {
 /// iterator closure is to allow synchronization to happen around yielding
 /// items (ex: using a lock), which isn't feasible with a return pattern. This
 /// is particularly useful to guarantee some ordering of the iterator values.
-pub struct Yield<'a, T>(&'a Sender<Message<T>>);
+pub struct Yield<'a, T>(&'a Sender<Item<T>>);
 
 /// A token given as an outcome of a [`Yield<T>`] operation. It is meant to
 /// ensure that [`Yield<T>`] is called exactly once per call of the iterator.
@@ -41,14 +255,21 @@ pub struct Executor {
     parallelism: NonZeroUsize,
 }
 
+struct Message {
+    task: StrongTask,
+    index: usize,
+    count: usize,
+    error: Sender<Option<String>>,
+}
+
 struct State {
-    send: Sender<(StrongTask, usize, NonZeroUsize)>,
-    receive: Receiver<(StrongTask, usize, NonZeroUsize)>,
+    send: Sender<Message>,
+    receive: Receiver<Message>,
     ready: AtomicUsize,
     size: Range<AtomicUsize>,
 }
 
-enum Message<T> {
+enum Item<T> {
     Next(T),
     Last(T),
     Done,
@@ -57,11 +278,27 @@ enum Message<T> {
 type StrongTask = Arc<dyn Task + Send + Sync + 'static>;
 type WeakTask = Weak<dyn Task + Send + Sync + 'static>;
 
-trait Task {
+trait Task: RefUnwindSafe {
     /// Will be called once per thread in the pool providing the `index` of the
     /// thread.
     fn run(&self, index: usize, count: usize);
     fn done(&self) -> bool;
+}
+
+impl Message {
+    pub fn next(&self) -> Option<Self> {
+        let index = self.index + 1;
+        if index < self.count {
+            Some(Message {
+                task: self.task.clone(),
+                index,
+                count: self.count,
+                error: self.error.clone(),
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl Pool {
@@ -95,19 +332,40 @@ impl State {
         }
     }
 
-    fn send(self: &Arc<Self>, strong: StrongTask, parallelism: NonZeroUsize) -> Option<WeakTask> {
-        let weak = Arc::downgrade(&strong);
+    fn ensure(self: &Arc<Self>, parallelism: usize) {
         let mut ready = self.ready.load(Ordering::Relaxed);
-        while ready < parallelism.get() {
+        while ready < parallelism {
             match self.next() {
                 Some(index) => ready = Self::spawn(self, index),
                 None => break,
             }
         }
-        self.send.send((strong, 0, parallelism)).ok()?;
+    }
+
+    fn send(
+        self: &Arc<Self>,
+        strong: StrongTask,
+        parallelism: NonZeroUsize,
+    ) -> (WeakTask, Receiver<Option<String>>) {
+        self.ensure(parallelism.get());
+
         // A weak reference is returned to allow the threads to drop the task as soon as
         // it's done.
-        Some(weak)
+        let weak = Arc::downgrade(&strong);
+        let (send, receive) = bounded(1);
+        let mut outer = Some(Message {
+            task: strong,
+            index: 0,
+            count: parallelism.get(),
+            error: send,
+        });
+        while let Some(inner) = outer.take() {
+            outer = inner.next();
+            self.send.send(inner).expect(
+                "`Sender<T>` and `Receiver<T>` can't be disconnected as long as `Self` lives",
+            );
+        }
+        (weak, receive)
     }
 
     fn next(&self) -> Option<usize> {
@@ -137,41 +395,26 @@ impl State {
     }
 
     fn run(state: Weak<Self>, index: usize) {
-        struct DoneOnDrop<'a>(&'a dyn Task);
-        struct SpawnOnDrop<'a>(&'a Arc<State>, usize);
-
-        impl Drop for DoneOnDrop<'_> {
-            fn drop(&mut self) {
-                // `Task::done` must be called even in the event of a panic.
-                self.0.done();
-            }
-        }
-
-        impl Drop for SpawnOnDrop<'_> {
-            fn drop(&mut self) {
-                State::spawn(self.0, self.1);
-            }
-        }
-
         while let Some(state) = state.upgrade() {
             if state.size.end.load(Ordering::Relaxed) < index {
                 // The pool has shrunk.
                 state.size.start.fetch_sub(1, Ordering::Relaxed);
                 break;
             }
-            let Ok((task, index, count)) = state.receive.recv() else {
+            let Ok(message) = state.receive.recv() else {
                 // The pool has been dropped.
                 break;
             };
             state.ready.fetch_sub(1, Ordering::Relaxed);
-            {
-                let state = SpawnOnDrop(&state, index);
-                let next = index + 1;
-                if next < count.get() {
-                    state.0.send.send((task.clone(), next, count)).ok();
+            let run = catch_unwind(|| message.task.run(message.index, message.count));
+            let done = catch_unwind(|| message.task.done());
+            match (run, done) {
+                (Ok(_), Ok(_)) => {}
+                (Err(error), _) | (_, Err(error)) => {
+                    let _ = message.error.try_send(cast_ref(&error).map(String::from));
+                    State::spawn(&state, index);
+                    resume_unwind(error);
                 }
-                DoneOnDrop(&task).0.run(index, count.get());
-                forget(state);
             }
             state.ready.fetch_add(1, Ordering::Relaxed);
         }
@@ -243,18 +486,19 @@ impl Executor {
         with: W,
         next: N,
     ) -> Iterator<'a, T> {
-        struct State<T, W, N>(RwLock<Option<(W, N, Sender<Message<T>>)>>);
+        struct Inner<T, W, N>(W, N, Sender<Item<T>>);
+        struct Outer<T, W, N>(RwLock<Option<Inner<T, W, N>>>);
 
         impl<S, W: Fn(usize, usize) -> S, T, N: for<'b> Fn(&mut S, Yield<'b, T>) -> Token<'b>> Task
-            for State<T, W, N>
+            for Outer<T, W, N>
         {
             fn run(&self, index: usize, count: usize) {
-                let mut state = if let Ok(Some((with, _, _))) = self.0.try_read().as_deref() {
+                let mut state = if let Ok(Some(Inner(with, _, _))) = self.0.try_read().as_deref() {
                     with(index, count)
                 } else {
                     return;
                 };
-                while let Ok(Some((_, next, send))) = self.0.try_read().as_deref() {
+                while let Ok(Some(Inner(_, next, send))) = self.0.try_read().as_deref() {
                     if next(&mut state, Yield(send)).0 {
                         break;
                     }
@@ -262,12 +506,15 @@ impl Executor {
             }
 
             fn done(&self) -> bool {
-                take(&self.0).is_some()
+                match self.0.write().as_deref_mut() {
+                    Ok(value) => value.take().is_some(),
+                    Err(error) => error.get_mut().take().is_some(),
+                }
             }
         }
 
         let (send, receive) = unbounded();
-        let state = Arc::new(State(RwLock::new(Some((with, next, send)))));
+        let state = Arc::new(Outer(RwLock::new(Some(Inner(with, next, send)))));
         // SAFETY: The lifetimes of `W`, `T` and `N` are tracked by `Iterator` and the
         // `Task` that owns them is guaranteed to be dropped before the lifetime `'a`
         // ends.
@@ -275,14 +522,11 @@ impl Executor {
             // Used the same lifetime extension trick as used in `std::thread::scope`.
             Arc::from_raw(Arc::into_raw(state) as *const (dyn Task + Send + Sync + 'static))
         };
-        // TODO: Find a way to propagate the panic to this thread.
-        let task = self
-            .state
-            .send(task, self.parallelism)
-            .expect("a thread has panicked");
+        let (task, error) = self.state.send(task, self.parallelism);
         Iterator {
             task,
-            receive: Some(receive),
+            item: Some(receive),
+            error,
         }
     }
 }
@@ -293,23 +537,23 @@ impl<'a, T> Yield<'a, T> {
     }
 
     pub fn next(self, item: T) -> Token<'a> {
-        Token(self.0.send(Message::Next(item)).is_err(), PhantomData)
+        Token(self.0.send(Item::Next(item)).is_err(), PhantomData)
     }
 
     pub fn last(self, item: T) -> Token<'a> {
-        let _ = self.0.send(Message::Last(item));
+        let _ = self.0.send(Item::Last(item));
         Token(true, PhantomData)
     }
 
     pub fn done(self) -> Token<'a> {
-        let _ = self.0.send(Message::Done).is_ok();
+        let _ = self.0.send(Item::Done).is_ok();
         Token(true, PhantomData)
     }
 }
 
 impl<T> Iterator<'_, T> {
     fn done(&self) -> bool {
-        self.receive.is_none()
+        self.item.is_none()
     }
 }
 
@@ -317,14 +561,19 @@ impl<T> iter::Iterator for Iterator<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.receive.as_mut()?.recv().ok()? {
-            Message::Next(value) => Some(value),
-            Message::Last(value) => {
-                self.receive.take();
+        if let Ok(error) = self.error.try_recv() {
+            let error = error.as_ref().map_or("a thread panicked", String::as_str);
+            panic!("{error}");
+        }
+
+        match self.item.as_mut()?.recv().ok()? {
+            Item::Next(value) => Some(value),
+            Item::Last(value) => {
+                self.item.take();
                 Some(value)
             }
-            Message::Done => {
-                self.receive.take();
+            Item::Done => {
+                self.item.take();
                 None
             }
         }
@@ -335,7 +584,7 @@ impl<T> iter::FusedIterator for Iterator<'_, T> {}
 
 impl<T> Drop for Iterator<'_, T> {
     fn drop(&mut self) {
-        self.receive.take();
+        self.item.take();
         if let Some(task) = self.task.upgrade() {
             task.done();
         }
@@ -371,21 +620,6 @@ pub fn iterate_with<
     next: N,
 ) -> Iterator<'a, T> {
     Pool::global().executor(None).iterate_with(with, next)
-}
-
-fn take<T>(lock: &RwLock<Option<T>>) -> Option<T> {
-    match lock.write().as_deref_mut() {
-        Ok(value) => value.take(),
-        Err(error) => error.get_mut().take(),
-    }
-}
-
-fn try_take<T>(lock: &RwLock<Option<T>>) -> Option<T> {
-    match lock.try_write().as_deref_mut() {
-        Ok(value) => value.take(),
-        Err(TryLockError::Poisoned(error)) => error.get_mut().take(),
-        Err(TryLockError::WouldBlock) => None,
-    }
 }
 
 fn size(size: Option<usize>) -> usize {

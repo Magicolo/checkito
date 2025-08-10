@@ -2,7 +2,6 @@
 
 <p align="center">
     <em> 
-
 {{ package.description }}
     </em>
 </p>

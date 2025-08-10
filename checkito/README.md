@@ -2,7 +2,6 @@
 
 <p align="center">
     <em> 
-
 A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing.
     </em>
 </p>

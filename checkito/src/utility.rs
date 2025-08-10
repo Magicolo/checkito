@@ -1,3 +1,44 @@
+use core::any::Any;
+use std::borrow::Cow;
+
+pub(crate) fn cast(
+    error: Box<dyn Any + Send + 'static>,
+) -> Result<Cow<'static, str>, Box<dyn Any + Send + 'static>> {
+    let error = match error.downcast::<&'static str>() {
+        Ok(error) => return Ok(Cow::Borrowed(*error)),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<String>() {
+        Ok(error) => return Ok(Cow::Owned(*error)),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<Box<str>>() {
+        Ok(error) => return Ok(Cow::Owned(error.to_string())),
+        Err(error) => error,
+    };
+    let error = match error.downcast::<Cow<'static, str>>() {
+        Ok(error) => return Ok(*error),
+        Err(error) => error,
+    };
+    Err(error)
+}
+
+pub(crate) fn cast_ref<'a>(error: &'a (dyn Any + Send + 'static)) -> Option<&'a str> {
+    if let Some(error) = error.downcast_ref::<&'static str>() {
+        return Some(error);
+    }
+    if let Some(error) = error.downcast_ref::<String>() {
+        return Some(error);
+    }
+    if let Some(error) = error.downcast_ref::<Box<str>>() {
+        return Some(error);
+    }
+    if let Some(error) = error.downcast_ref::<Cow<'static, str>>() {
+        return Some(error);
+    }
+    None
+}
+
 pub(crate) mod f32 {
     const SIGN_MASK: u32 = 0x8000_0000;
     const TINY_BITS: u32 = 0x1;
@@ -221,4 +262,5 @@ macro_rules! tuples {
         );
     };
 }
+
 pub(crate) use tuples;

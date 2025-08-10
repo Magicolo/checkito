@@ -4,6 +4,7 @@ use crate::{
     prove::Prove,
     shrink::Shrink,
     state::{self, Modes, Sizes, State, States},
+    utility::cast,
 };
 use core::{
     fmt,
@@ -467,25 +468,6 @@ const fn shrunk<T, P: Prove>(
     })
 }
 
-fn cast(error: Box<dyn Any + Send>) -> Option<Cow<'static, str>> {
-    let error = match error.downcast::<&'static str>() {
-        Ok(error) => return Some(Cow::Borrowed(*error)),
-        Err(error) => error,
-    };
-    let error = match error.downcast::<String>() {
-        Ok(error) => return Some(Cow::Owned(*error)),
-        Err(error) => error,
-    };
-    let error = match error.downcast::<Box<str>>() {
-        Ok(error) => return Some(Cow::Owned(error.to_string())),
-        Err(error) => error,
-    };
-    match error.downcast::<Cow<'static, str>>() {
-        Ok(error) => Some(*error),
-        Err(_) => None,
-    }
-}
-
 impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
@@ -913,7 +895,7 @@ pub(crate) mod synchronous {
                 Ok(ok) => Ok(ok),
                 Err(error) => Err(Cause::Disprove(error)),
             },
-            Err(error) => Err(Cause::Panic(cast(error))),
+            Err(error) => Err(Cause::Panic(cast(error).ok())),
         }
     }
 }
@@ -1220,7 +1202,7 @@ pub(crate) mod asynchronous {
                     }
                     None => Box::pin(check),
                 }),
-                Err(error) => Err(Cause::Panic(cast(error))),
+                Err(error) => Err(Cause::Panic(cast(error).ok())),
             }
         }
     }
@@ -1292,7 +1274,7 @@ pub(crate) mod asynchronous {
                 Ok(ok) => Poll::Ready(Ok(ok)),
                 Err(error) => Poll::Ready(Err(Cause::Disprove(error))),
             },
-            Err(error) => Poll::Ready(Err(Cause::Panic(cast(error)))),
+            Err(error) => Poll::Ready(Err(Cause::Panic(cast(error).ok()))),
         }
     }
 }
