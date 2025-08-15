@@ -171,12 +171,12 @@ impl State {
     }
 
     #[inline]
-    pub const fn with(&mut self) -> With {
+    pub const fn with(&mut self) -> With<'_> {
         With::new(self)
     }
 
     #[inline]
-    pub const fn descend(&mut self) -> With {
+    pub const fn descend(&mut self) -> With<'_> {
         let with = self.with();
         with.state.depth += 1;
         with.state.limit += 1;
@@ -184,7 +184,7 @@ impl State {
     }
 
     #[inline]
-    pub const fn dampen(&mut self, deepest: usize, limit: usize, pressure: f64) -> With {
+    pub const fn dampen(&mut self, deepest: usize, limit: usize, pressure: f64) -> With<'_> {
         let with = self.with();
         let old = with.state.sizes();
         let new = if with.state.depth >= deepest || with.state.limit >= limit {
