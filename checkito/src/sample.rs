@@ -1,32 +1,48 @@
+//! A utility for generating random values from a generator without running tests.
 use crate::{
-    SAMPLES,
     generate::Generate,
     shrink::{Shrink, Shrinkers},
     state::{self, Modes, Sizes, State},
+    SAMPLES,
 };
 use core::iter;
 
+/// Configures the sampling process.
+///
+/// This struct is created by the [`Sample::sampler`] method and provides a
+/// builder-like interface for configuring how values are sampled.
 #[derive(Debug, Clone)]
 pub struct Sampler<G: ?Sized> {
-    /// Seed for the random number generator used to generate random primitives.
-    /// Defaults to a random value.
+    /// The seed for the random number generator.
+    ///
+    /// Using the same seed will cause the sampler to produce the same sequence of
+    /// random values. It defaults to a random value.
     pub seed: u64,
-    /// Range of sizes that will be gradually traversed while generating values.
-    /// Defaults to `0.0..1.0`.
+    /// The range of sizes (`0.0..=1.0`) that will be gradually traversed while
+    /// generating values.
+    ///
+    /// Defaults to `0.0..=1.0`.
     pub sizes: Sizes,
-    /// Number of samples that will be generated.
-    /// Defaults to [`SAMPLES`].
+    /// The number of samples to generate.
+    ///
+    /// Defaults to `SAMPLES`.
     pub count: usize,
-    /// A generator that will provide the samples.
+    /// The generator that will provide the samples.
     pub generator: G,
 }
 
+/// An iterator that yields random values from a generator.
+///
+/// This struct is created by the [`Sample::samples`] method.
 #[derive(Debug, Clone)]
 pub struct Samples<G: ?Sized>(Shrinkers<G>);
 
+/// An extension trait, implemented for all [`Generate`] types, that provides
+/// methods for sampling random values.
 pub trait Sample: Generate {
-    /// Provides a [`Sampler`] that allows to configure sampling settings and
-    /// generate samples.
+    /// Creates a [`Sampler`] for this generator.
+    ///
+    /// The `Sampler` can be used to configure and control the sampling process.
     fn sampler(self) -> Sampler<Self>
     where
         Self: Sized,
@@ -34,8 +50,10 @@ pub trait Sample: Generate {
         Sampler::new(self, state::seed())
     }
 
-    /// Generates `count` random values that are progressively larger in size.
-    /// For additional sampling settings, see [`Sample::sampler`].
+    /// Creates an iterator that generates `count` random values.
+    ///
+    /// The generated values will have progressively larger sizes. For more control
+    /// over the sampling process, see [`Sample::sampler`].
     fn samples(self, count: usize) -> Samples<Self>
     where
         Self: Sized,
@@ -45,8 +63,10 @@ pub trait Sample: Generate {
         sampler.samples()
     }
 
-    /// Generates a random value of `size` (0.0..=1.0). For additional sampling
-    /// settings, see [`Sample::sampler`].
+    /// Generates a single random value of a specific `size`.
+    ///
+    /// The `size` should be between `0.0` and `1.0`. For more control over the
+    /// sampling process, see [`Sample::sampler`].
     fn sample(&self, size: f64) -> Self::Item {
         self.sampler().sample(size)
     }

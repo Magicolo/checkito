@@ -35,10 +35,98 @@ pub mod unify;
 mod utility;
 
 pub use check::Check;
+/// Turns a function into a property test.
+///
+/// This attribute macro is the primary way to write tests with `checkito`. It takes a
+/// list of generators as input, which are used to produce random arguments for the
+/// function it's attached to.
+///
+/// The function can return `()`, `bool`, or `Result` to indicate whether the property
+/// holds. Any `panic` within the function is also treated as a test failure.
+///
+/// # Arguments
+///
+/// - **Generators**: The first arguments to the macro are a comma-separated list of
+///   generators. The values produced by these generators will be passed as arguments
+///   to the test function. You can use `_` to infer the default generator for a type.
+/// - `verbose`: A boolean (`true` or `false`) to enable or disable verbose output, which
+///   shows every generation and shrink step. Defaults to `false`.
+/// - `color`: A boolean (`true` or `false`) to enable or disable colored output.
+///   Defaults to `true`.
+/// - `debug`: A boolean (`true` or `false`) that controls the output format. If `true`,
+///   the full `Debug` representation of test results is printed. If `false`, a more
+///   minimal output is used. Defaults to `true`.
+///
+/// # Examples
+///
+/// A simple test with a range generator:
+/// ```
+/// # use checkito::check;
+/// #[check(0..100)]
+/// fn is_less_than_100(x: i32) {
+///     assert!(x < 100);
+/// }
+/// ```
+///
+/// Using multiple generators and inferring a type:
+/// ```
+/// # use checkito::check;
+/// #[check(.., 0.0..1.0, _)]
+/// fn complex_test(x: i32, y: f64, z: bool) {
+///     // ...
+/// }
+/// ```
+///
+/// Disabling color and enabling verbose output:
+/// ```
+/// # use checkito::check;
+/// #[check(0..10, color = false, verbose = true)]
+/// #[should_panic]
+/// fn failing_test(x: i32) {
+///    assert!(x > 5);
+/// }
+/// ```
 #[cfg(feature = "check")]
 pub use checkito_macro::check;
+/// Creates a generator from a compile-time constant value.
+///
+/// This macro is useful for embedding constant values directly into generators,
+/// especially for types that do not implement [`Copy`]. The expression inside
+/// the macro is evaluated at compile time.
+///
+/// # Examples
+///
+/// ```
+/// # use checkito::{check, constant, Generate};
+/// const MY_CONSTANT_STRING: String = String::new();
+///
+/// #[check(constant!(MY_CONSTANT_STRING))]
+/// fn test_with_constant(s: String) {
+///     assert!(s.is_empty());
+/// }
+/// ```
 #[cfg(feature = "constant")]
 pub use checkito_macro::constant;
+/// Creates a generator from a regular expression, validated at compile time.
+///
+/// This macro takes a string literal representing a regular expression and produces
+/// a generator that yields strings matching that pattern. The regex is parsed and
+/// validated at compile time, so any errors in the pattern will result in a
+/// compilation failure.
+///
+/// This is generally preferred over the [`regex()`] function, which performs parsing
+/// at runtime.
+///
+/// # Examples
+///
+/// ```
+/// # use checkito::{check, regex};
+/// #[check(regex!("[a-zA-Z0-9]{1,10}"))]
+/// fn has_alphanumeric_content(s: String) {
+///     assert!(s.chars().all(|c| c.is_alphanumeric()));
+///     assert!(s.len() >= 1 && s.len() <= 10);
+/// }
+/// ```
 #[cfg(feature = "regex")]
 pub use checkito_macro::regex;
 pub use generate::{FullGenerate, Generate};

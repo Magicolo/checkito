@@ -4,9 +4,71 @@ use crate::{
 };
 use core::iter;
 
+/// A trait for types that can be "shrunk" to a simpler value.
+///
+/// When a property test fails, `checkito` uses the `Shrink` implementation of the
+/// failing value's generator to find the smallest possible value that still
+/// causes the failure. This process is key to making property testing effective,
+/// as it isolates the failure and makes it easier to debug.
+///
+/// A shrinker is essentially a lazy iterator over simpler versions of a value.
+/// Each call to [`Shrink::shrink`] should produce a new shrinker that is "simpler"
+/// than the previous one. When `shrink` returns `None`, the value is considered
+/// fully shrunk.
+///
+/// # Implementing `Shrink`
+///
+/// While `checkito` provides shrinkers for all primitive types and standard
+/// collections, you may need to implement it for your own custom types, especially
+/// when using custom [`Generate`] implementations.
+///
+/// The goal is to produce a "simpler" value. For numbers, this means moving
+/// closer to zero. For collections, it means making the collection smaller or
+/// shrinking its elements.
+///
+/// # Examples
+///
+/// A shrinker for a custom `Point` struct that shrinks towards `(0, 0)`:
+///
+/// ```
+/// # use checkito::{Shrink, Generate};
+/// #[derive(Clone, Debug, PartialEq)]
+/// struct Point {
+///     x: i32,
+///     y: i32,
+/// }
+///
+/// impl Shrink for Point {
+///     type Item = Self;
+///
+///     fn item(&self) -> Self::Item {
+///         self.clone()
+///     }
+///
+///     fn shrink(&mut self) -> Option<Self> {
+///         // A simple shrinker that tries to shrink x, then y.
+///         // A more advanced shrinker might try shrinking both at once.
+///         if self.x != 0 {
+///             self.x /= 2;
+///             return Some(self.clone());
+///         }
+///         if self.y != 0 {
+///             self.y /= 2;
+///             return Some(self.clone());
+///         }
+///         None
+///     }
+/// }
+/// ```
 pub trait Shrink: Clone {
+    /// The type of the value that this shrinker produces.
     type Item;
+    /// Returns the current value of the shrinker.
     fn item(&self) -> Self::Item;
+    /// Produces the next, "simpler" shrinker.
+    ///
+    /// This method should return `Some(new_shrinker)` if a simpler value can be
+    /// produced, or `None` if the value is fully shrunk.
     fn shrink(&mut self) -> Option<Self>;
 }
 

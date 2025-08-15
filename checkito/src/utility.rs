@@ -73,7 +73,7 @@ pub(crate) mod f32 {
         }
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f32.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f32.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_up(value: f32) -> f32 {
         let bits = value.to_bits();
@@ -93,7 +93,7 @@ pub(crate) mod f32 {
         f32::from_bits(next_bits)
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f32.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f32.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_down(value: f32) -> f32 {
         let bits = value.to_bits();
@@ -164,7 +164,7 @@ pub(crate) mod f64 {
         }
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f64.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f64.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_up(value: f64) -> f64 {
         let bits = value.to_bits();
@@ -184,7 +184,7 @@ pub(crate) mod f64 {
         f64::from_bits(next_bits)
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f64.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f64.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_down(value: f64) -> f64 {
         let bits = value.to_bits();
