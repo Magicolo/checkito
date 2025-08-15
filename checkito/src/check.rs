@@ -7,121 +7,135 @@ use crate::{
     utility::cast,
 };
 use core::{
-    fmt,
+    error,
+    fmt::{self, Debug},
     future::Future,
     mem::replace,
     ops::{self, Deref, DerefMut},
     panic::AssertUnwindSafe,
     pin::Pin,
+    result,
     sync::atomic::{AtomicUsize, Ordering},
     task::{Context, Poll, ready},
 };
 use orn::Or3;
 use std::{
-    any::Any,
     borrow::Cow,
-    error,
     panic::catch_unwind,
-    result,
     sync::{Mutex, RwLock},
 };
 
-/// Bounds the generation process.
+/// Configures the generation process.
 #[derive(Clone, Debug)]
 pub struct Generates {
-    /// Seed for the random number generator used to generate random primitives.
+    /// The seed for the random number generator.
     ///
-    /// Defaults to a random value.
+    /// Using the same seed will cause the generator to produce the same
+    /// sequence of random values, making test runs reproducible. It
+    /// defaults to a random value.
     pub seed: u64,
-    /// Range of sizes that will be gradually traversed while generating values.
+    /// The range of sizes (`0.0..=1.0`) that will be gradually traversed while
+    /// generating values.
     ///
-    /// Defaults to `0.0..1.0`.
+    /// Defaults to `0.0..=1.0`.
     pub sizes: Sizes,
-    /// Maximum number of items that will be generated.
+    /// The maximum number of values to generate and test.
     ///
-    /// Setting this to `0` will cause the [`Checks`] to do nothing.
-    ///
-    /// Defaults to [`GENERATES`].
+    /// Setting this to `0` will prevent any tests from running. Defaults to
+    /// `GENERATES`.
     pub count: usize,
-    /// Whether or not the [`Checks`] iterator will yield generation items.
+    /// Whether the [`Checks`] iterator should yield [`Result::Pass`] items.
     ///
+    /// If `false`, the iterator will be empty for successful test runs.
     /// Defaults to `true`.
     pub items: bool,
-    /// - `Some(true)` => Will generate all possible samples ignoring
-    ///   [`Generates::seed`] and [`Generates::sizes`].
-    /// - `Some(false)` => Will generate [`Generates::count`] random samples
-    ///   using [`Generates::seed`] and [`Generates::sizes`].
-    /// - `None` => Will determine exhaustiveness based on whether
-    ///   [`Generate::cardinality`] is `<=` than [`Generates::count`].
+    /// Overrides the exhaustive check detection.
+    ///
+    /// - `Some(true)`: Forces exhaustive checking, ignoring `seed` and `sizes`.
+    /// - `Some(false)`: Forces random sampling.
+    /// - `None`: Automatically determines whether to be exhaustive based on
+    ///   whether the generator's [`Generate::cardinality`] is less than or
+    ///   equal to `count`.
     pub exhaustive: Option<bool>,
 }
 
-/// Bounds the shrinking process.
+/// Configures the shrinking process.
 #[derive(Clone, Debug)]
 pub struct Shrinks {
-    /// Maximum number of attempts at shrinking an item that has failed a check.
+    /// The maximum number of times to shrink a failing value.
     ///
-    /// Setting this to `0` will disable shrinking.
-    ///
-    /// Defaults to [`SHRINKS`].
+    /// Setting this to `0` disables shrinking. Defaults to `SHRINKS`.
     pub count: usize,
-    /// Whether or not the [`Checks`] iterator will yield shrinking items.
+    /// Whether the [`Checks`] iterator should yield [`Result::Shrink`] items.
     ///
-    /// Defaults to `true`.
+    /// If `false`, successful shrink steps will not be reported. Defaults to
+    /// `true`.
     pub items: bool,
-    /// Whether or not the [`Checks`] iterator will yield shrinking errors.
+    /// Whether the [`Checks`] iterator should yield [`Result::Shrunk`] items.
     ///
-    /// Defaults to `true`.
+    /// If `false`, failing shrink steps will not be reported. Defaults to
+    /// `true`.
     pub errors: bool,
 }
 
-/// The [`Checker`] structure holds a reference to a [`Generate`] instance and
-/// some configuration options for the checking and shrinking processes.
+/// Holds a generator and the configuration for the checking and shrinking
+/// processes.
+///
+/// A `Checker` is created by calling [`Check::checker`] on a generator. It
+/// provides a builder-like interface for configuring the test run before
+/// executing it via [`Checker::check`] or [`Checker::checks`].
 #[derive(Debug, Clone)]
 pub struct Checker<G: ?Sized, R> {
-    /// Bounds the generation process.
+    /// The configuration for the generation process.
     pub generate: Generates,
-    /// Bounds the shrinking process.
+    /// The configuration for the shrinking process.
     pub shrink: Shrinks,
     _run: R,
-    /// A generator that will generate items and their shrinkers for checking a
-    /// property.
+    /// The generator that will produce values for the test.
     pub generator: G,
 }
 
-/// This structure is used to iterate over a sequence of check results.
-/// - The iterator initially starts in a generate phase where it generates items
-///   and it runs check against them.
-/// - If a check passes, a [`Result::Pass`] is produced.
-/// - If a check fails, the iterator enters the shrinking phase.
-/// - When shrinking, the iterator tries to repeatedly shrink the previous item
-///   and run checks against the shrunk items.
-/// - It the check passes, a [`Result::Shrink`] is produced and it means that
-///   the shrunk item has failed to reproduce a failing check.
-/// - If the check fails, a [`Result::Shrunk`] is produced and it means that the
-///   shrunk item has successfully reproduced a failing check and it becomes
-///   current item.
-/// - When the item is fully shrunk, the iterator produces a [`Result::Fail`]
-///   with the final shrunk item in it.
+/// An iterator over the results of a property test.
 ///
-/// This iterator guarantees to:
-/// - Yield no results if [`Generates::count`] is set to `0`.
-/// - Yield no results if [`Generates::items`] is set to `false` and all checks
-///   passed.
-/// - Yield only [`Result::Pass`] results if [`Generates::items`] is set to
-///   `true` and all checks passed.
-/// - Never yield a [`Result::Pass`] after a check has failed.
-/// - Always yield a single final result of [`Result::Fail`] if at least a check
-///   failed.
-/// - Yield at most the smallest number between [`Generate::cardinality`] and
-///   [`Generates::count`] [`Result::Pass`] results.
+/// The iterator first enters a generation phase, where it produces values and
+/// runs the test against them.
+///
+/// - If a check passes, it yields a [`Result::Pass`].
+/// - If a check fails, it enters the shrinking phase.
+///
+/// In the shrinking phase, it repeatedly tries to simplify the failing value.
+///
+/// - If a shrunk value passes the test, it yields a [`Result::Shrink`],
+///   indicating that this simpler value did not reproduce the failure.
+/// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and this
+///   new, simpler value becomes the one to be shrunk further.
+///
+/// Once a value can no longer be shrunk, the iterator yields a final
+/// [`Result::Fail`] and then terminates.
 pub struct Checks<F, M> {
     yields: (bool, bool, bool),
     check: F,
     machine: M,
 }
 
+/// An extension trait, implemented for all [`Generate`] types, that provides
+/// the main entry points for running property tests.
 pub trait Check: Generate {
+    /// Creates a [`Checker`] for this generator.
+    ///
+    /// The `Checker` can be used to configure and run the property test.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use checkito::*;
+    /// let mut checker = (0..100).checker();
+    /// checker.generate.count = 500; // Run 500 test cases.
+    /// checker.shrink.count = 0; // Disable shrinking.
+    ///
+    /// let result = checker.check(|x| x < 100);
+    /// assert!(result.is_none());
+    /// ```
     fn checker(self) -> Checker<Self, synchronous::sequential::Run>
     where
         Self: Sized,
@@ -129,7 +143,21 @@ pub trait Check: Generate {
         Checker::new(self, state::seed())
     }
 
-    // TODO: Use the parallel implementation?
+    /// Creates an iterator that runs the property test.
+    ///
+    /// This is useful for consuming the full sequence of test results,
+    /// including intermediate shrink steps.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use checkito::*;
+    /// let mut checks = (0..10).checks(|x| x < 5);
+    ///
+    /// assert!(matches!(checks.next(), Some(Result::Pass(_))));
+    /// // ...
+    /// assert!(matches!(checks.last(), Some(Result::Fail(_))));
+    /// ```
     fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
         self,
         check: F,
@@ -140,7 +168,26 @@ pub trait Check: Generate {
         self.checker().checks(check)
     }
 
-    // TODO: Use the parallel implementation?
+    /// Runs the property test and returns the final failure, if any.
+    ///
+    /// This is the simplest way to run a test. It consumes the entire test
+    /// iterator and returns `Some(Fail)` if the property was violated, or
+    /// `None` if all test cases passed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use checkito::*;
+    /// let success = (0..100).check(|x| x < 100);
+    /// assert!(success.is_none());
+    ///
+    /// let failure = (0..100).check(|x| x < 50);
+    /// assert!(failure.is_some());
+    ///
+    /// let fail = failure.unwrap();
+    /// // The shrinker will find the minimal failing value.
+    /// assert_eq!(fail.item, 50);
+    /// ```
     fn check<P: Prove, F: FnMut(Self::Item) -> P>(
         &self,
         check: F,
@@ -149,49 +196,59 @@ pub trait Check: Generate {
     }
 }
 
+/// The result of a single step in the property testing process.
 #[derive(Clone, Debug)]
 pub enum Result<T, P: Prove> {
-    /// An item was generated and passed the check.
+    /// A generated value passed the test.
     Pass(Pass<T, P::Proof>),
-    /// An item was shrunk and passed the check, thus the shrinking is rejected.
+    /// A shrunk value passed the test, meaning it did not reproduce the
+    /// failure.
     Shrink(Pass<T, P::Proof>),
-    /// An item was shrunk and failed the check, thus the shrinking is accepted.
+    /// A shrunk value failed the test, becoming the new minimal failing case.
     Shrunk(Fail<T, P::Error>),
-    /// The last generated of shrunk item that failed the check.
+    /// The final, minimal value that failed the test after shrinking is
+    /// complete.
     Fail(Fail<T, P::Error>),
 }
 
+/// Represents a successful test case.
 #[derive(Clone, Debug)]
-/// A structure that represents a passed check.
 pub struct Pass<T, P> {
+    /// The value that passed the test.
     pub item: T,
+    /// The proof produced by the [`Prove`] implementation (e.g., `()` or the
+    /// `Ok` variant of a `Result`).
     pub proof: P,
+    /// The number of generations that occurred before this pass.
     pub generates: usize,
+    /// The number of shrinks that occurred before this pass.
     pub shrinks: usize,
     /// The generator state that produced the item.
     pub state: State,
 }
 
+/// Represents a failed test case.
 #[derive(Clone, Debug)]
-/// A structure that represents a failed check.
 pub struct Fail<T, E> {
+    /// The value that failed the test.
     pub item: T,
+    /// The reason for the failure.
     pub cause: Cause<E>,
+    /// The number of generations that occurred before this failure.
     pub generates: usize,
+    /// The number of shrinks that occurred before this failure.
     pub shrinks: usize,
-    /// The generator state that caused the error.
+    /// The generator state that produced the failing item.
     pub state: State,
 }
 
 /// The cause of a check failure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cause<E> {
-    /// A `Disprove` cause is a value that, when checked, returns a value of
-    /// type `P` that does not satisfy the property.
+    /// The property was disproven by the test function's return value
+    /// (e.g., it returned `false` or `Err`).
     Disprove(E),
-    /// A `Panic` cause is produced when a check panics during its evaluation.
-    /// The message associated with the panic is included if it can be casted to
-    /// a string.
+    /// The test function panicked.
     Panic(Option<Cow<'static, str>>),
 }
 
@@ -318,7 +375,7 @@ impl<T, P> Fail<T, P> {
 
     pub fn message(&self) -> Cow<'static, str>
     where
-        P: fmt::Debug,
+        P: Debug,
     {
         match &self.cause {
             Cause::Panic(Some(message)) => message.clone(),
@@ -468,13 +525,13 @@ const fn shrunk<T, P: Prove>(
     })
 }
 
-impl<T: fmt::Debug, E: fmt::Debug> fmt::Display for Fail<T, E> {
+impl<T: Debug, E: Debug> fmt::Display for Fail<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
+        Debug::fmt(self, f)
     }
 }
 
-impl<T: fmt::Debug, E: fmt::Debug> error::Error for Fail<T, E> {}
+impl<T: Debug, E: Debug> error::Error for Fail<T, E> {}
 
 pub(crate) mod synchronous {
     use super::*;
