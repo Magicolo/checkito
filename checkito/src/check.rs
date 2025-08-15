@@ -1,13 +1,12 @@
 use crate::{
+    GENERATES, SHRINKS,
     generate::Generate,
     prove::Prove,
     shrink::Shrink,
     state::{self, Modes, Sizes, State, States},
     utility::cast,
-    GENERATES, SHRINKS,
 };
 use core::{
-    any::Any,
     error,
     fmt::{self, Debug},
     future::Future,
@@ -31,8 +30,9 @@ use std::{
 pub struct Generates {
     /// The seed for the random number generator.
     ///
-    /// Using the same seed will cause the generator to produce the same sequence of
-    /// random values, making test runs reproducible. It defaults to a random value.
+    /// Using the same seed will cause the generator to produce the same
+    /// sequence of random values, making test runs reproducible. It
+    /// defaults to a random value.
     pub seed: u64,
     /// The range of sizes (`0.0..=1.0`) that will be gradually traversed while
     /// generating values.
@@ -41,7 +41,8 @@ pub struct Generates {
     pub sizes: Sizes,
     /// The maximum number of values to generate and test.
     ///
-    /// Setting this to `0` will prevent any tests from running. Defaults to `GENERATES`.
+    /// Setting this to `0` will prevent any tests from running. Defaults to
+    /// `GENERATES`.
     pub count: usize,
     /// Whether the [`Checks`] iterator should yield [`Result::Pass`] items.
     ///
@@ -52,8 +53,9 @@ pub struct Generates {
     ///
     /// - `Some(true)`: Forces exhaustive checking, ignoring `seed` and `sizes`.
     /// - `Some(false)`: Forces random sampling.
-    /// - `None`: Automatically determines whether to be exhaustive based on whether the
-    ///   generator's [`Generate::cardinality`] is less than or equal to `count`.
+    /// - `None`: Automatically determines whether to be exhaustive based on
+    ///   whether the generator's [`Generate::cardinality`] is less than or
+    ///   equal to `count`.
     pub exhaustive: Option<bool>,
 }
 
@@ -66,19 +68,22 @@ pub struct Shrinks {
     pub count: usize,
     /// Whether the [`Checks`] iterator should yield [`Result::Shrink`] items.
     ///
-    /// If `false`, successful shrink steps will not be reported. Defaults to `true`.
+    /// If `false`, successful shrink steps will not be reported. Defaults to
+    /// `true`.
     pub items: bool,
     /// Whether the [`Checks`] iterator should yield [`Result::Shrunk`] items.
     ///
-    /// If `false`, failing shrink steps will not be reported. Defaults to `true`.
+    /// If `false`, failing shrink steps will not be reported. Defaults to
+    /// `true`.
     pub errors: bool,
 }
 
-/// Holds a generator and the configuration for the checking and shrinking processes.
+/// Holds a generator and the configuration for the checking and shrinking
+/// processes.
 ///
-/// A `Checker` is created by calling [`Check::checker`] on a generator. It provides
-/// a builder-like interface for configuring the test run before executing it via
-/// [`Checker::check`] or [`Checker::checks`].
+/// A `Checker` is created by calling [`Check::checker`] on a generator. It
+/// provides a builder-like interface for configuring the test run before
+/// executing it via [`Checker::check`] or [`Checker::checks`].
 #[derive(Debug, Clone)]
 pub struct Checker<G: ?Sized, R> {
     /// The configuration for the generation process.
@@ -100,21 +105,21 @@ pub struct Checker<G: ?Sized, R> {
 ///
 /// In the shrinking phase, it repeatedly tries to simplify the failing value.
 ///
-/// - If a shrunk value passes the test, it yields a [`Result::Shrink`], indicating
-///   that this simpler value did not reproduce the failure.
-/// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and this new,
-///   simpler value becomes the one to be shrunk further.
+/// - If a shrunk value passes the test, it yields a [`Result::Shrink`],
+///   indicating that this simpler value did not reproduce the failure.
+/// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and this
+///   new, simpler value becomes the one to be shrunk further.
 ///
-/// Once a value can no longer be shrunk, the iterator yields a final [`Result::Fail`]
-/// and then terminates.
+/// Once a value can no longer be shrunk, the iterator yields a final
+/// [`Result::Fail`] and then terminates.
 pub struct Checks<F, M> {
     yields: (bool, bool, bool),
     check: F,
     machine: M,
 }
 
-/// An extension trait, implemented for all [`Generate`] types, that provides the
-/// main entry points for running property tests.
+/// An extension trait, implemented for all [`Generate`] types, that provides
+/// the main entry points for running property tests.
 pub trait Check: Generate {
     /// Creates a [`Checker`] for this generator.
     ///
@@ -140,8 +145,8 @@ pub trait Check: Generate {
 
     /// Creates an iterator that runs the property test.
     ///
-    /// This is useful for consuming the full sequence of test results, including
-    /// intermediate shrink steps.
+    /// This is useful for consuming the full sequence of test results,
+    /// including intermediate shrink steps.
     ///
     /// # Examples
     ///
@@ -166,8 +171,8 @@ pub trait Check: Generate {
     /// Runs the property test and returns the final failure, if any.
     ///
     /// This is the simplest way to run a test. It consumes the entire test
-    /// iterator and returns `Some(Fail)` if the property was violated, or `None`
-    /// if all test cases passed.
+    /// iterator and returns `Some(Fail)` if the property was violated, or
+    /// `None` if all test cases passed.
     ///
     /// # Examples
     ///
@@ -196,11 +201,13 @@ pub trait Check: Generate {
 pub enum Result<T, P: Prove> {
     /// A generated value passed the test.
     Pass(Pass<T, P::Proof>),
-    /// A shrunk value passed the test, meaning it did not reproduce the failure.
+    /// A shrunk value passed the test, meaning it did not reproduce the
+    /// failure.
     Shrink(Pass<T, P::Proof>),
     /// A shrunk value failed the test, becoming the new minimal failing case.
     Shrunk(Fail<T, P::Error>),
-    /// The final, minimal value that failed the test after shrinking is complete.
+    /// The final, minimal value that failed the test after shrinking is
+    /// complete.
     Fail(Fail<T, P::Error>),
 }
 
@@ -209,8 +216,8 @@ pub enum Result<T, P: Prove> {
 pub struct Pass<T, P> {
     /// The value that passed the test.
     pub item: T,
-    /// The proof produced by the [`Prove`] implementation (e.g., `()` or the `Ok`
-    /// variant of a `Result`).
+    /// The proof produced by the [`Prove`] implementation (e.g., `()` or the
+    /// `Ok` variant of a `Result`).
     pub proof: P,
     /// The number of generations that occurred before this pass.
     pub generates: usize,
@@ -706,9 +713,7 @@ pub(crate) mod synchronous {
         use crate::parallel::iterate;
         use orn::Or2;
         use rayon::iter::{
-            empty, once,
-            plumbing::UnindexedConsumer,
-            IntoParallelIterator, ParallelIterator,
+            IntoParallelIterator, ParallelIterator, empty, once, plumbing::UnindexedConsumer,
         };
 
         pub struct Run;
@@ -807,10 +812,10 @@ pub(crate) mod synchronous {
         }
 
         impl<
-                G: Generate<Item: Send, Shrink: Send> + Send + Sync,
-                P: Prove<Proof: Send, Error: Send>,
-                F: Fn(G::Item) -> P + Send + Sync,
-            > ParallelIterator for Checks<F, Machine<G>>
+            G: Generate<Item: Send, Shrink: Send> + Send + Sync,
+            P: Prove<Proof: Send, Error: Send>,
+            F: Fn(G::Item) -> P + Send + Sync,
+        > ParallelIterator for Checks<F, Machine<G>>
         {
             type Item = Result<G::Item, P>;
 
@@ -861,75 +866,70 @@ pub(crate) mod synchronous {
                                 };
                                 let pair = Mutex::new(Some((shrinker, cause)));
                                 let count = AtomicUsize::new(0);
-                                Or3::T2(
-                                    machine
-                                        .shrinks
-                                        .clone()
-                                        .into_par_iter()
-                                        .flat_map(move |_| {
-                                            let index = count.fetch_add(1, Ordering::Relaxed);
-                                            let new_shrinker = {
+                                Or3::T2(machine.shrinks.clone().into_par_iter().flat_map(
+                                    move |_| {
+                                        let index = count.fetch_add(1, Ordering::Relaxed);
+                                        let new_shrinker = {
+                                            let Ok(mut guard) = pair.lock() else {
+                                                return Or2::T0(none());
+                                            };
+                                            let Some((mut old_shrinker, old_cause)) = guard.take()
+                                            else {
+                                                return Or2::T0(none());
+                                            };
+                                            match old_shrinker.shrink() {
+                                                Some(new_shrinker) => {
+                                                    *guard = Some((old_shrinker, old_cause));
+                                                    new_shrinker
+                                                }
+                                                None => {
+                                                    return Or2::T0(some(fail(
+                                                        old_shrinker.item(),
+                                                        index,
+                                                        state.clone(),
+                                                        old_cause,
+                                                    )));
+                                                }
+                                            }
+                                        };
+
+                                        match handle(new_shrinker.item(), &check) {
+                                            Ok(new_proof) => {
+                                                if yields.1 {
+                                                    Or2::T0(some(shrink(
+                                                        new_shrinker.item(),
+                                                        index + 1,
+                                                        state.clone(),
+                                                        new_proof,
+                                                    )))
+                                                } else {
+                                                    Or2::T1(empty())
+                                                }
+                                            }
+                                            Err(new_cause) => {
                                                 let Ok(mut guard) = pair.lock() else {
                                                     return Or2::T0(none());
                                                 };
-                                                let Some((mut old_shrinker, old_cause)) =
-                                                    guard.take()
-                                                else {
+                                                let Some(pair) = guard.as_mut() else {
                                                     return Or2::T0(none());
                                                 };
-                                                match old_shrinker.shrink() {
-                                                    Some(new_shrinker) => {
-                                                        *guard = Some((old_shrinker, old_cause));
-                                                        new_shrinker
-                                                    }
-                                                    None => {
-                                                        return Or2::T0(some(fail(
-                                                            old_shrinker.item(),
-                                                            index,
-                                                            state.clone(),
-                                                            old_cause,
-                                                        )));
-                                                    }
-                                                }
-                                            };
+                                                let (old_shrinker, old_cause) =
+                                                    replace(pair, (new_shrinker, new_cause));
 
-                                            match handle(new_shrinker.item(), &check) {
-                                                Ok(new_proof) => {
-                                                    if yields.1 {
-                                                        Or2::T0(some(shrink(
-                                                            new_shrinker.item(),
-                                                            index + 1,
-                                                            state.clone(),
-                                                            new_proof,
-                                                        )))
-                                                    } else {
-                                                        Or2::T1(empty())
-                                                    }
-                                                }
-                                                Err(new_cause) => {
-                                                    let Ok(mut guard) = pair.lock() else {
-                                                        return Or2::T0(none());
-                                                    };
-                                                    let Some(pair) = guard.as_mut() else {
-                                                        return Or2::T0(none());
-                                                    };
-                                                    let (old_shrinker, old_cause) =
-                                                        replace(pair, (new_shrinker, new_cause));
-
-                                                    if yields.2 {
-                                                        Or2::T0(some(shrunk(
-                                                            old_shrinker.item(),
-                                                            index + 1,
-                                                            state.clone(),
-                                                            old_cause,
-                                                        )))
-                                                    } else {
-                                                        Or2::T1(empty())
-                                                    }
+                                                if yields.2 {
+                                                    Or2::T0(some(shrunk(
+                                                        old_shrinker.item(),
+                                                        index + 1,
+                                                        state.clone(),
+                                                        old_cause,
+                                                    )))
+                                                } else {
+                                                    Or2::T1(empty())
                                                 }
                                             }
-                                        }),
-                                )
+                                        }
+                                    },
+                                ))
                             }
                         }
                     })
@@ -1056,10 +1056,10 @@ pub(crate) mod asynchronous {
         }
 
         impl<
-                G: Generate<Shrink: Unpin> + Unpin,
-                P: Future<Output: Prove<Error: Unpin> + Unpin>,
-                F: FnMut(G::Item) -> P + Unpin,
-            > Stream for Checks<F, Machine<G, P>>
+            G: Generate<Shrink: Unpin> + Unpin,
+            P: Future<Output: Prove<Error: Unpin> + Unpin>,
+            F: FnMut(G::Item) -> P + Unpin,
+        > Stream for Checks<F, Machine<G, P>>
         {
             type Item = Result<G::Item, P::Output>;
 

@@ -1,9 +1,8 @@
-//! A utility for generating random values from a generator without running tests.
 use crate::{
+    SAMPLES,
     generate::Generate,
     shrink::{Shrink, Shrinkers},
     state::{self, Modes, Sizes, State},
-    SAMPLES,
 };
 use core::iter;
 
@@ -15,8 +14,8 @@ use core::iter;
 pub struct Sampler<G: ?Sized> {
     /// The seed for the random number generator.
     ///
-    /// Using the same seed will cause the sampler to produce the same sequence of
-    /// random values. It defaults to a random value.
+    /// Using the same seed will cause the sampler to produce the same sequence
+    /// of random values. It defaults to a random value.
     pub seed: u64,
     /// The range of sizes (`0.0..=1.0`) that will be gradually traversed while
     /// generating values.
@@ -52,8 +51,8 @@ pub trait Sample: Generate {
 
     /// Creates an iterator that generates `count` random values.
     ///
-    /// The generated values will have progressively larger sizes. For more control
-    /// over the sampling process, see [`Sample::sampler`].
+    /// The generated values will have progressively larger sizes. For more
+    /// control over the sampling process, see [`Sample::sampler`].
     fn samples(self, count: usize) -> Samples<Self>
     where
         Self: Sized,

@@ -1,4 +1,5 @@
 use crate::{
+    COLLECTS, RETRIES,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -16,15 +17,11 @@ use crate::{
     size::Size,
     state::{Sizes, State},
     unify::Unify,
-    COLLECTS, RETRIES,
 };
 use core::iter::FromIterator;
 
-/// Provides a default, parameterless generator for a type.
-///
-/// This trait should be implemented for any type that has a single, canonical
-/// way of being generated. It is used by the `_` and `..` placeholders in the
-/// [`macro@crate::check`] macro to infer a generator automatically.
+/// This trait should be implemented for any type that has a canonical way of
+/// being generated.
 ///
 /// For example, `u8` implements `FullGenerate`, and its `generator()` returns a
 /// generator for the full range of `u8` (`0..=255`). `String` also implements
@@ -38,7 +35,9 @@ use core::iter::FromIterator;
 ///
 /// impl FullGenerate for MyType {
 ///     type Item = Self;
+///
 ///     type Generator = impl Generate<Item = Self>;
+///
 ///     fn generator() -> Self::Generator {
 ///         // The generator for `MyType` will produce values with `u8` from 0 to 10.
 ///         (0..=10).map(MyType)
@@ -51,64 +50,60 @@ use core::iter::FromIterator;
 /// }
 /// ```
 pub trait FullGenerate {
-    /// The type of the value that the generator produces.
     type Item;
-    /// The concrete [`Generate`] type returned by `generator()`.
     type Generator: Generate<Item = Self::Item>;
-    /// Creates a default generator for the type.
     fn generator() -> Self::Generator;
 }
 
 /// The core trait for all value generators.
 ///
-/// `Generate` is a highly composable trait, much like [`Iterator`]. It provides a
-/// rich set of methods (often called "combinators") that can be chained to build
-/// complex generators from simpler ones.
+/// `Generate` is a highly composable trait, much like [`Iterator`]. It provides
+/// a set of combinator methods that can be chained to build complex generators
+/// from simpler ones.
 ///
-/// A generator is a type that knows how to produce a random value and a corresponding
-/// [`Shrink`] instance, which can simplify that value if it causes a test to fail.
+/// A generator is a type that knows how to produce a value and a corresponding
+/// [`Shrink`] instance, which can simplify that value if it causes a test to
+/// fail.
 #[must_use = "generators do nothing until used"]
 pub trait Generate {
-    /// The type of the value that this generator produces.
     type Item;
-    /// The [`Shrink`] implementation that corresponds to this generator.
     type Shrink: Shrink<Item = Self::Item>;
 
     /// The static cardinality of the generated values.
     ///
-    /// This value represents the number of unique items a generator's *type* can
-    /// produce across all its possible configurations. For example, `bool` can
-    /// produce 2 unique values, so its `CARDINALITY` is `Some(2)`. For generators
-    /// with an effectively infinite or incalculable number of values (like `String`),
-    /// this is `None`.
+    /// This value represents the number of unique items a generator's *type*
+    /// can produce across all its possible configurations. For example,
+    /// `bool` can produce 2 unique values, so its `CARDINALITY` is
+    /// `Some(2)`. For generators with an effectively infinite (or just larger
+    /// than u128::MAX) values (like `String`), this is `None`.
     ///
-    /// This is used by the [`crate::Check`] engine to determine if a test can be run
-    /// exhaustively.
+    /// This is used by the [`crate::Check`] engine to determine if a test can
+    /// be run exhaustively.
     const CARDINALITY: Option<u128>;
 
     /// Generates a random value and its associated [`Shrink`] instance.
     ///
     /// This is the primary method of the trait. It takes the current generation
     /// [`State`], which contains the random number source and other parameters,
-    /// and produces a [`Shrink`] instance. This shrinker can then be used to get
-    /// the generated value via [`Shrink::item`] and to shrink it via [`Shrink::shrink`].
+    /// and produces a [`Shrink`] instance. This shrinker can then be used to
+    /// get the generated value via [`Shrink::item`] and to shrink it via
+    /// [`Shrink::shrink`].
     fn generate(&self, state: &mut State) -> Self::Shrink;
 
     /// Returns the dynamic cardinality of the generated values.
     ///
-    /// This value represents the number of unique items a *specific instance* of a
-    /// generator can produce. For example, for the range `0..10`, the cardinality
-    /// is `Some(10)`.
-    ///
-    /// If not overridden, this defaults to the static `CARDINALITY`.
+    /// This value represents the number of unique items a *specific instance*
+    /// of a generator can produce. For example, for the range `0..10`, the
+    /// cardinality is `Some(10)` (compared to the type `Range<u8>`, which
+    /// would have a cardinality of `Some(256)`).
     fn cardinality(&self) -> Option<u128> {
         Self::CARDINALITY
     }
 
     /// Wraps `self` in a boxed [`Generate`] to erase its concrete type.
     ///
-    /// This is essential when dealing with recursive generators or when you need to
-    /// return different generator types from the same function.
+    /// This is essential when dealing with recursive generators or when you
+    /// need to return different generator types from the same function.
     ///
     /// # Examples
     ///
@@ -153,9 +148,10 @@ pub trait Generate {
         prelude::boxed(Box::new(self))
     }
 
-    /// Creates a new generator that transforms the output of `self`.
+    /// Creates a new generator that maps the output of `self`.
     ///
-    /// This is one of the most common combinators, analogous to [`Iterator::map`].
+    /// This is one of the most common combinators, analogous to
+    /// [`Iterator::map`].
     ///
     /// # Examples
     /// ```
@@ -171,13 +167,16 @@ pub trait Generate {
         prelude::map(self, map)
     }
 
-    /// Creates a new generator that discards values that don't match a predicate.
+    /// Creates a new generator that discards values that don't match a
+    /// predicate.
     ///
-    /// This is analogous to [`Iterator::filter`]. Because the filter might always
-    /// fail, this generator produces an [`Option<Self::Item>`], where `None` indicates
-    /// that a matching value could not be found within a limited number of retries.
+    /// This is analogous to [`Iterator::filter`]. Because the filter might
+    /// always fail, this generator produces an [`Option<Self::Item>`],
+    /// where `None` indicates that a matching value could not be found
+    /// within a limited number of retries.
     ///
-    /// This is a shorthand for [`Generate::filter_with`] with a default number of retries.
+    /// This is a shorthand for [`Generate::filter_with`] with a default number
+    /// of retries.
     ///
     /// # Examples
     /// ```
@@ -195,8 +194,8 @@ pub trait Generate {
         prelude::filter(self, filter, RETRIES)
     }
 
-    /// Creates a new generator that discards values that don't match a predicate,
-    /// with a configurable number of retries.
+    /// Creates a new generator that discards values that don't match a
+    /// predicate, with a configurable number of retries.
     ///
     /// See [`Generate::filter`] for more details.
     fn filter_with<F: Fn(&Self::Item) -> bool + Clone>(
@@ -210,14 +209,16 @@ pub trait Generate {
         prelude::filter(self, filter, retries)
     }
 
-    /// Creates a new generator that both filters and maps values simultaneously.
+    /// Creates a new generator that both filters and maps values
+    /// simultaneously.
     ///
-    /// This is analogous to [`Iterator::filter_map`]. The provided function returns
-    /// an [`Option`], where `Some(value)` is kept and `None` is discarded. This is
-    /// more efficient than chaining [`Generate::filter`] and [`Generate::map`].
+    /// This is analogous to [`Iterator::filter_map`]. The provided function
+    /// returns an [`Option`], where `Some(value)` is kept and `None` is
+    /// discarded. This is more efficient than chaining [`Generate::filter`]
+    /// and [`Generate::map`].
     ///
-    /// This is a shorthand for [`Generate::filter_map_with`] with a default number
-    /// of retries.
+    /// This is a shorthand for [`Generate::filter_map_with`] with a default
+    /// number of retries.
     ///
     /// # Examples
     /// ```
@@ -225,7 +226,11 @@ pub trait Generate {
     /// // A generator for the square roots of perfect squares.
     /// let roots = (0..100).filter_map(|x| {
     ///     let sqrt = (x as f64).sqrt();
-    ///     if sqrt.fract() == 0.0 { Some(sqrt as i32) } else { None }
+    ///     if sqrt.fract() == 0.0 {
+    ///         Some(sqrt as i32)
+    ///     } else {
+    ///         None
+    ///     }
     /// });
     ///
     /// roots.check(|x: Option<i32>| assert!(x.is_some()));
@@ -237,7 +242,8 @@ pub trait Generate {
         prelude::filter_map(self, filter, RETRIES)
     }
 
-    /// Creates a new generator that filters and maps, with a configurable number of retries.
+    /// Creates a new generator that filters and maps, with a configurable
+    /// number of retries.
     ///
     /// See [`Generate::filter_map`] for more details.
     fn filter_map_with<T, F: Fn(Self::Item) -> Option<T> + Clone>(
@@ -254,8 +260,8 @@ pub trait Generate {
     /// Creates a new generator by applying a function to the output of `self`,
     /// and then flattening the result.
     ///
-    /// This is analogous to [`Iterator::flat_map`]. It's useful for creating a new
-    /// generator that depends on the value of a previous one.
+    /// This is analogous to [`Iterator::flat_map`]. It's useful for creating a
+    /// new generator that depends on the value of a previous one.
     ///
     /// # Examples
     /// ```
@@ -274,12 +280,13 @@ pub trait Generate {
 
     /// Flattens a generator of generators.
     ///
-    /// If you have a generator that produces other generators (`Generate<Item = impl Generate>`),
-    /// this combinator will "unwrap" it, producing values from the inner generator.
+    /// If you have a generator that produces other generators (`Generate<Item:
+    /// Generate>`), this combinator will "unwrap" it, producing values from
+    /// the inner generator.
     ///
-    /// This is particularly important for recursive generation, as it increases the
-    /// `depth` parameter in the [`State`], which is used by [`Generate::dampen`] to
-    /// control the size of recursive structures.
+    /// This is particularly important for recursive generation, as it increases
+    /// the `depth` parameter in the [`State`], which is used by
+    /// [`Generate::dampen`] to control the size of recursive structures.
     fn flatten(self) -> Flatten<Self>
     where
         Self: Sized,
@@ -288,11 +295,13 @@ pub trait Generate {
         prelude::flatten(self)
     }
 
-    /// Creates a new generator that randomly chooses one of a set of generators.
+    /// Creates a new generator that randomly chooses one of a set of
+    /// generators.
     ///
-    /// The `any` combinator can be applied to tuples of generators or slices/vectors
-    /// of generators. The resulting value will be wrapped in an `orn::Or` type to
-    /// represent the choice, which can be simplified using [`Generate::unify`].
+    /// The `any` combinator can be applied to tuples of generators or
+    /// slices/vectors of generators. The resulting value will be wrapped in
+    /// an `orn::Or` type to represent the choice, which can be simplified
+    /// using [`Generate::unify`].
     ///
     /// # Examples
     ///
@@ -302,11 +311,9 @@ pub trait Generate {
     /// let choice = (('a'..'z'), (0..100)).any();
     ///
     /// // The result is `orn::Or<char, i32>`.
-    /// choice.check(|either| {
-    ///     match either {
-    ///         orn::Or::T0(c) => assert!(c.is_alphabetic()),
-    ///         orn::Or::T1(i) => assert!(i < 100),
-    ///     }
+    /// choice.check(|either| match either {
+    ///     orn::Or::T0(c) => assert!(c.is_alphabetic()),
+    ///     orn::Or::T1(i) => assert!(i < 100),
     /// });
     /// ```
     ///
@@ -336,10 +343,11 @@ pub trait Generate {
         prelude::array(self)
     }
 
-    /// Creates a generator that produces a collection of a default size.
+    /// Creates a generator that produces a collection with up to a default
+    /// size.
     ///
-    /// This is a shorthand for [`Generate::collect_with`] with a default size range.
-    /// The resulting collection type is inferred from the context.
+    /// This is a shorthand for [`Generate::collect_with`] with a default size
+    /// range.
     ///
     /// # Examples
     /// ```
@@ -356,10 +364,8 @@ pub trait Generate {
         prelude::collect(self, Constant::VALUE)
     }
 
-    /// Creates a generator that produces a collection of a specified size.
-    ///
-    /// The `count` parameter can be any generator that produces a `usize` or a range,
-    /// which determines the number of items in the final collection.
+    /// Creates a generator that produces a collection of a specified range of
+    /// sizes (as returned by `C::count()`).
     fn collect_with<C: Count, F: FromIterator<Self::Item>>(self, count: C) -> Collect<Self, C, F>
     where
         Self: Sized,
@@ -367,19 +373,19 @@ pub trait Generate {
         prelude::collect(self, count)
     }
 
-    /// Creates a generator that modifies the `size` parameter for subsequent generation.
+    /// Creates a generator that modifies the `size` parameter for subsequent
+    /// generation.
     ///
-    /// The `size` is a value in the range `[0.0..=1.0]` that guides generators to
-    /// produce "smaller" or "larger" values. This combinator allows you to provide a
-    /// function to transform the current `size`.
+    /// The `size` is a value in the range `[0.0..=1.0]` that guides generators
+    /// to produce "smaller" or "larger" values. This combinator allows you
+    /// to provide a function to map the current `size`.
     ///
     /// # Examples
     ///
     /// Forcing a generator to always produce "large" values:
     /// ```
     /// # use checkito::*;
-    /// // This will generate vectors that are likely to be long.
-    /// let long_vecs = (0..100).collect().size(|_, _| 1.0);
+    /// let long_vecs = (0..100).collect().size(|_| 1.0);
     /// ```
     fn size<S: Into<Sizes>, F: Fn(Sizes) -> S>(self, map: F) -> Size<Self, F>
     where
@@ -390,11 +396,12 @@ pub trait Generate {
 
     /// Dampens the `size` of generation, typically for recursive structures.
     ///
-    /// As recursion gets deeper (tracked by [`Generate::flatten`]), this combinator
-    /// reduces the `size`, encouraging base cases to be generated and preventing
-    /// infinite growth.
+    /// As recursion gets deeper (tracked by [`Generate::flatten`]), this
+    /// combinator reduces the `size`, encouraging base cases to be
+    /// generated and preventing exponential growth.
     ///
-    /// This is a shorthand for [`Generate::dampen_with`] with default parameters.
+    /// This is a shorthand for [`Generate::dampen_with`] with default
+    /// parameters.
     fn dampen(self) -> Dampen<Self>
     where
         Self: Sized,
@@ -407,7 +414,8 @@ pub trait Generate {
     /// See [`Generate::dampen`] and [`Generate::size`] for more details.
     /// - `pressure`: How fast the `size` is reduced as `depth` increases.
     /// - `deepest`: The `depth` at which `size` becomes `0`.
-    /// - `limit`: The total number of `depth` increases before `size` becomes `0`.
+    /// - `limit`: The total number of `depth` increases before `size` becomes
+    ///   `0`.
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,
@@ -417,8 +425,9 @@ pub trait Generate {
 
     /// Creates a generator whose values are not shrunk.
     ///
-    /// If a test fails, a value produced by `keep` will remain constant, while other
-    /// inputs are shrunk. This is useful for isolating a failure to a specific input.
+    /// If a test fails, a value produced by `keep` will remain constant, while
+    /// other inputs are shrunk. This is useful for isolating a failure to a
+    /// specific input.
     ///
     /// # Examples
     /// ```
@@ -436,10 +445,11 @@ pub trait Generate {
         prelude::keep(self)
     }
 
-    /// Unifies a generator of a "choice" type (like `orn::Or` or `Result`) into a
-    /// single type.
+    /// Unifies a generator of `orn::Or` type into a single type when the
+    /// conversion is possible.
     ///
-    /// This is often used after [`Generate::any`] to simplify the resulting type.
+    /// This is often used after [`Generate::any`] to simplify the resulting
+    /// type.
     ///
     /// # Examples
     /// ```
@@ -456,10 +466,11 @@ pub trait Generate {
         prelude::unify(self)
     }
 
-    /// Creates a new generator that converts the output of `self` using [`From`].
+    /// Creates a new generator that converts the output of `self` using
+    /// [`From`].
     ///
-    /// This is a convenient way to change a value's type if a `From` implementation
-    /// is available.
+    /// This is a convenient way to change a value's type if a `From`
+    /// implementation is available.
     ///
     /// # Examples
     /// ```

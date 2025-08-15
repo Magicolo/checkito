@@ -1,5 +1,3 @@
-//! A prelude of commonly used items, brought into scope automatically
-//! by `use checkito::*`.
 use crate::{
     any::Any,
     array::Array,
@@ -35,38 +33,34 @@ pub const fn same<T: Clone>(value: T) -> Same<T> {
 
 /// Creates a generator that randomly chooses one of a set of generators.
 ///
-/// See [`any`](crate::any()) for more details.
+/// See [`any`](crate::any()).
 #[inline]
 pub const fn any<G: Generate>(generators: G) -> Any<G> {
     Any(generators)
 }
 
-/// Unifies a generator of a "choice" type into a single type.
+/// Unifies a generator of a `orn::Or` type into a single type.
 ///
-/// See [`unify`](crate::unify()) for more details.
+/// See [`unify`](crate::unify()).
 #[inline]
 pub const fn unify<G: Generate, T>(generator: G) -> Unify<G, T> {
     Unify(PhantomData, generator)
 }
 
-/// Creates a generator that yields the [`crate::shrink::Shrink`] instances of another generator.
+/// Creates a generator that yields the [`Generate::Shrink`] instances instead
+/// of [`Generate::Item`].
 #[inline]
 pub const fn shrinker<G: Generate>(generator: G) -> Shrinker<G> {
     Shrinker(generator)
 }
 
-/// Creates a new generator that transforms the output of another.
-///
-/// See [`Map`] for more details.
+/// See [`Generate::map`].
 #[inline]
 pub const fn map<G: Generate, T, F: Fn(G::Item) -> T + Clone>(generator: G, map: F) -> Map<G, F> {
     Map(map, generator)
 }
 
-/// Creates a new generator by applying a function to the output of another,
-/// and then flattening the result.
-///
-/// See [`Generate::flat_map`] for more details.
+/// See [`Generate::flat_map`].
 #[inline]
 pub const fn flat_map<G: Generate, T: Generate, F: Fn(G::Item) -> T + Clone>(
     generator: G,
@@ -75,9 +69,7 @@ pub const fn flat_map<G: Generate, T: Generate, F: Fn(G::Item) -> T + Clone>(
     flatten(self::map(generator, map))
 }
 
-/// Flattens a generator of generators.
-///
-/// See [`Flatten`] for more details.
+/// See [`Generate::flatten`].
 #[inline]
 pub const fn flatten<G: Generate>(generator: G) -> Flatten<G>
 where
@@ -86,9 +78,7 @@ where
     Flatten(generator)
 }
 
-/// Creates a new generator that discards values that don't match a predicate.
-///
-/// See [`Filter`] for more details.
+/// See [`Generate::filter`].
 #[inline]
 pub const fn filter<G: Generate, F: Fn(&G::Item) -> bool + Clone>(
     generator: G,
@@ -102,9 +92,7 @@ pub const fn filter<G: Generate, F: Fn(&G::Item) -> bool + Clone>(
     }
 }
 
-/// Creates a new generator that both filters and maps values simultaneously.
-///
-/// See [`FilterMap`] for more details.
+/// See [`Generate::filter_map`].
 #[inline]
 pub const fn filter_map<G: Generate, T, F: Fn(G::Item) -> Option<T> + Clone>(
     generator: G,
@@ -118,35 +106,27 @@ pub const fn filter_map<G: Generate, T, F: Fn(G::Item) -> Option<T> + Clone>(
     }
 }
 
-/// Wraps a generator in a [`Boxed`] to erase its concrete type.
-///
-/// See [`Boxed`] for more details.
+/// See [`Generate::boxed`].
 #[rustversion::since(1.75)]
 #[inline]
 pub const fn boxed<G: Generate + 'static>(generator: Box<G>) -> Boxed<G::Item> {
     Boxed::new(generator)
 }
 
-/// Wraps a generator in a [`Boxed`] to erase its concrete type.
-///
-/// See [`Boxed`] for more details.
+/// See [`Generate::boxed`].
 #[rustversion::before(1.75)]
 #[inline]
 pub fn boxed<G: Generate + 'static>(generator: Box<G>) -> Boxed<G::Item> {
     Boxed::new(generator)
 }
 
-/// Creates a generator that produces a fixed-size array.
-///
-/// See [`Array`] for more details.
+/// See [`Generate::array`].
 #[inline]
 pub const fn array<G: Generate, const N: usize>(generator: G) -> Array<G, N> {
     Array(generator)
 }
 
-/// Creates a generator that produces a collection of items.
-///
-/// See [`Collect`] for more details.
+/// See [`Generate::collect`].
 #[inline]
 pub const fn collect<G: Generate, C: Count, F: FromIterator<G::Item>>(
     generator: G,
@@ -159,9 +139,7 @@ pub const fn collect<G: Generate, C: Count, F: FromIterator<G::Item>>(
     }
 }
 
-/// Creates a generator that modifies the `size` parameter for subsequent generation.
-///
-/// See [`Size`] for more details.
+/// See [`Generate::size`].
 #[inline]
 pub const fn size<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S>(
     generator: G,
@@ -170,9 +148,7 @@ pub const fn size<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S>(
     Size(generator, map)
 }
 
-/// Dampens the `size` of generation, typically for recursive structures.
-///
-/// See [`Dampen`] for more details.
+/// See [`Generate::dampen`].
 #[inline]
 pub const fn dampen<G: Generate>(
     generator: G,
@@ -188,33 +164,29 @@ pub const fn dampen<G: Generate>(
     }
 }
 
-/// Creates a generator whose values are not shrunk.
-///
-/// See [`Keep`] for more details.
+/// See [`Generate::keep`].
 #[inline]
 pub const fn keep<G: Generate>(generator: G) -> Keep<G> {
     Keep(generator)
 }
 
-/// Creates a new generator that converts the output of another using [`From`].
-///
-/// See [`Convert`] for more details.
+/// See [`Generate::convert`].
 #[inline]
 pub const fn convert<G: Generate, T: From<G::Item>>(generator: G) -> Convert<G, T> {
     Convert(PhantomData, generator)
 }
 
-#[cfg(feature = "regex")]
-use crate::regex::{Error, Regex};
 /// Creates a generator from a regular expression at runtime.
 ///
-/// This function will parse the regex pattern and return a [`Result`]. If parsing
-/// fails, an [`Error`] is returned. For compile-time checked regexes, see the
-/// [`regex!`](crate::regex!) macro.
+/// If the regular expression parsing fails, an [`Err`] is returned. For
+/// compile-time checked regexes, see the [`regex!`](crate::regex!) macro.
 #[cfg(feature = "regex")]
 #[inline]
-pub fn regex(pattern: &str, repeats: Option<u32>) -> Result<Regex, Error> {
-    Regex::new(pattern, repeats)
+pub fn regex(
+    pattern: &str,
+    repeats: Option<u32>,
+) -> Result<crate::regex::Regex, crate::regex::Error> {
+    crate::regex::Regex::new(pattern, repeats)
 }
 
 /// A generator for the full range of any [`Number`] type.
@@ -225,7 +197,7 @@ pub const fn number<T: Number>() -> impl Generate<Item = T> {
     T::FULL
 }
 
-/// A generator for any non-negative [`Number`] type.
+/// A generator for any non-negative [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `0..=T::MAX`.
 #[inline]
@@ -233,7 +205,7 @@ pub const fn positive<T: Number>() -> impl Generate<Item = T> {
     T::POSITIVE
 }
 
-/// A generator for any non-positive [`Number`] type.
+/// A generator for any non-positive [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `T::MIN..=0`.
 #[inline]
@@ -286,7 +258,8 @@ pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> impl Generate<Item =
 
 /// Defers the construction of a generator until it is used.
 ///
-/// This is essential for creating recursive generators. See [`Lazy`] for details.
+/// This is essential for creating recursive generators. See [`Lazy`] for
+/// details.
 #[inline]
 pub const fn lazy<G: Generate, F: Fn() -> G>(generator: F) -> Lazy<G, F> {
     Lazy::new(generator)

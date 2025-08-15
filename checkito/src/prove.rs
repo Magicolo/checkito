@@ -3,22 +3,24 @@ use core::convert::Infallible;
 /// A trait that represents a property being tested.
 ///
 /// The `Prove` trait is the mechanism by which `checkito` determines whether a
-/// property test has passed or failed. The test function in a [`macro@crate::check`] macro
-/// must return a type that implements this trait.
+/// property test has passed or failed.
 ///
-/// The outcome of the test is determined by the `Result` returned by the [`Prove::prove`]
-/// method. An `Ok` variant signifies a pass, while an `Err` variant signifies a
-/// failure. Any `panic` within the test function is also treated as a failure.
+/// The outcome of the test is determined by the `Result` returned by the
+/// [`Prove::prove`] method. An `Ok` variant signifies a pass, while an `Err`
+/// variant signifies a failure. Any `panic` within the test function is also
+/// treated as a failure.
 ///
 /// # Provided Implementations
 ///
 /// `checkito` provides implementations for common return types:
 ///
-/// - **`()`**: A function that returns unit `()` will always pass (unless it panics).
-///   This is useful for tests that use `assert!` macros for their checks.
-/// - **`bool`**: A function that returns `true` passes, and one that returns `false` fails.
-/// - **`Result<T, E>`**: A function that returns `Ok(T)` passes, and one that returns
-///   `Err(E)` fails. The success and error types can be anything.
+/// - **`()`**: A function that returns unit `()` will always pass (unless it
+///   panics). This is useful for tests that use `assert!` macros for their
+///   checks.
+/// - **`bool`**: A function that returns `true` passes, and one that returns
+///   `false` fails.
+/// - **`Result<T, E>`**: A function that returns `Ok(T)` passes, and one that
+///   returns `Err(E)` fails. The success and error types can be anything.
 ///
 /// # Examples
 ///
