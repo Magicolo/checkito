@@ -12,7 +12,7 @@ jobs:
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
     - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
     - run: cargo hack test --release --doc --verbose --feature-powerset
@@ -24,40 +24,40 @@ jobs:
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo hack clippy --release --all-targets --verbose --feature-powerset -- --deny warnings
   doc:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo hack doc --no-deps --release --verbose --feature-powerset
   semver:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo semver-checks --verbose
   msrv:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo msrv verify --all-features
   audit:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo audit --deny warnings
   coverage:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/magicolo/rust
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: cargo llvm-cov --fail-under-regions 75 --all-features --all-targets --release --verbose
