@@ -477,13 +477,13 @@ pub mod asynchronous {
         >(
             generator: G,
             update: U,
-            check: C,
+            _check: C,
             verbose: bool,
             color: bool,
-            handle: H,
+            _handle: H,
         ) {
             let mut checker = generator.checker().parallel().asynchronous();
-            let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+            let Guard(_colors) = &prepare(&mut checker, update, verbose, color);
             todo!();
             // block_on(
             //     checker

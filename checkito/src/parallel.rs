@@ -1,21 +1,16 @@
 use crate::utility::cast_ref;
 use core::{
-    any::Any,
     iter,
     marker::PhantomData,
-    mem::swap,
     num::NonZeroUsize,
-    ops::{Deref, DerefMut, Range},
+    ops::Range,
     panic::RefUnwindSafe,
-    pin::Pin,
-    ptr::null,
     sync::atomic::{AtomicUsize, Ordering},
 };
 use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use std::{
     panic::{catch_unwind, resume_unwind},
-    rc::Rc,
-    sync::{Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard, TryLockError, Weak},
+    sync::{Arc, OnceLock, RwLock, Weak},
     thread::{available_parallelism, spawn},
 };
 

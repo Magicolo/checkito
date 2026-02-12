@@ -1287,7 +1287,7 @@ pub(crate) mod asynchronous {
 
             pub fn check<P: Future<Output: Prove>, F: Fn(G::Item) -> P>(
                 mut self,
-                check: F,
+                _check: F,
             ) -> Option<Fail<G::Item, <P::Output as Prove>::Error>> {
                 self.generate.items = false;
                 self.shrink.items = false;
