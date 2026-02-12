@@ -606,6 +606,13 @@ impl Modes {
         }
     }
 
+    pub(crate) fn state_unchecked(self, index: usize) -> State {
+        match self {
+            Modes::Random { count, sizes, seed } => State::random(index, count, sizes, seed),
+            Modes::Exhaustive(count) => State::exhaustive(index, count),
+        }
+    }
+
     pub(crate) const fn count(&self) -> usize {
         match *self {
             Modes::Random { count, .. } => count,
@@ -689,11 +696,21 @@ impl FusedIterator for States {}
 mod parallel {
     use super::*;
     use rayon::{
-        iter::{IntoParallelIterator, ParallelIterator},
+        iter::{
+            IndexedParallelIterator, IntoParallelIterator, Map, ParallelIterator,
+            plumbing::{Consumer, ProducerCallback, UnindexedConsumer},
+        },
         range::Iter,
     };
 
     pub struct Iterator(Iter<usize>, Modes);
+
+    impl Iterator {
+        fn states(self) -> Map<Iter<usize>, impl Fn(usize) -> State> {
+            let Self(indices, modes) = self;
+            indices.map(move |index| modes.state_unchecked(index))
+        }
+    }
 
     impl IntoParallelIterator for States {
         type Item = State;
@@ -709,16 +726,27 @@ mod parallel {
 
         fn drive_unindexed<C>(self, consumer: C) -> C::Result
         where
-            C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+            C: UnindexedConsumer<Self::Item>,
         {
-            let Self(indices, modes) = self;
-            indices
-                .filter_map(move |index| modes.state(index))
-                .drive_unindexed(consumer)
+            self.states().drive_unindexed(consumer)
         }
 
         fn opt_len(&self) -> Option<usize> {
             self.0.opt_len()
+        }
+    }
+
+    impl IndexedParallelIterator for Iterator {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
+            self.states().drive(consumer)
+        }
+
+        fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+            self.states().with_producer(callback)
         }
     }
 }
