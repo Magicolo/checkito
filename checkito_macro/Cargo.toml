@@ -19,7 +19,6 @@ default = []
 regex = ["regex-syntax/unicode"]
 check = []
 constant = []
-parallel = []
 asynchronous = []
 
 [dependencies]

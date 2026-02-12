@@ -691,65 +691,6 @@ impl DoubleEndedIterator for States {
 
 impl FusedIterator for States {}
 
-#[cfg(feature = "parallel")]
-mod parallel {
-    use super::*;
-    use rayon::{
-        iter::{
-            plumbing::{Consumer, ProducerCallback, UnindexedConsumer},
-            IndexedParallelIterator, IntoParallelIterator, Map, ParallelIterator,
-        },
-        range::Iter,
-    };
-
-    pub struct Iterator(Iter<usize>, Modes);
-
-    impl Iterator {
-        fn states(self) -> Map<Iter<usize>, impl Fn(usize) -> State> {
-            let Self(indices, modes) = self;
-            indices.map(move |index| modes.state_unchecked(index))
-        }
-    }
-
-    impl IntoParallelIterator for States {
-        type Item = State;
-        type Iter = Iterator;
-
-        fn into_par_iter(self) -> Self::Iter {
-            Iterator(self.indices.into_par_iter(), self.modes)
-        }
-    }
-
-    impl ParallelIterator for Iterator {
-        type Item = State;
-
-        fn drive_unindexed<C>(self, consumer: C) -> C::Result
-        where
-            C: UnindexedConsumer<Self::Item>,
-        {
-            self.states().drive_unindexed(consumer)
-        }
-
-        fn opt_len(&self) -> Option<usize> {
-            self.0.opt_len()
-        }
-    }
-
-    impl IndexedParallelIterator for Iterator {
-        fn len(&self) -> usize {
-            self.0.len()
-        }
-
-        fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
-            self.states().drive(consumer)
-        }
-
-        fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
-            self.states().with_producer(callback)
-        }
-    }
-}
-
 impl Sizes {
     pub(crate) const DEFAULT: Self = Self::new(0.0, 1.0, Self::SCALE);
     pub(crate) const SCALE: f64 = 6.0;

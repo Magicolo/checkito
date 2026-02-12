@@ -2,7 +2,6 @@
 
 pub mod common;
 use common::*;
-use std::collections::HashSet;
 
 #[test]
 fn generate_matches_regex() {
