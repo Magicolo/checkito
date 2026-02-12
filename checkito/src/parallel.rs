@@ -11,7 +11,7 @@ use core::{
     ptr::null,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
+use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use std::{
     panic::{catch_unwind, resume_unwind},
     rc::Rc,

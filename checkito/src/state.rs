@@ -1,10 +1,9 @@
 use crate::{
-    GENERATES, Generate, Shrink,
-    primitive::{Range, u8::U8},
-    utility,
+    primitive::{u8::U8, Range},
+    utility, Generate, Shrink, GENERATES,
 };
 use core::{
-    iter::{FusedIterator, from_fn},
+    iter::{from_fn, FusedIterator},
     mem::{replace, take},
     ops::{self, Bound},
 };
@@ -697,8 +696,8 @@ mod parallel {
     use super::*;
     use rayon::{
         iter::{
-            IndexedParallelIterator, IntoParallelIterator, Map, ParallelIterator,
             plumbing::{Consumer, ProducerCallback, UnindexedConsumer},
+            IndexedParallelIterator, IntoParallelIterator, Map, ParallelIterator,
         },
         range::Iter,
     };

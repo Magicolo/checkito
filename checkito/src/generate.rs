@@ -1,5 +1,4 @@
 use crate::{
-    COLLECTS, RETRIES,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -12,11 +11,12 @@ use crate::{
     keep::Keep,
     map::Map,
     prelude,
-    primitive::{Constant, Range, usize::Usize},
+    primitive::{usize::Usize, Constant, Range},
     shrink::Shrink,
     size::Size,
     state::{Sizes, State},
     unify::Unify,
+    COLLECTS, RETRIES,
 };
 use core::iter::FromIterator;
 

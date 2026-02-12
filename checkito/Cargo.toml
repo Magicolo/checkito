@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
-rust-version = "1.70"
+rust-version = "1.75"
 
 [badges]
 github = { repository = "Magicolo/checkito", workflow = "test" }
@@ -37,9 +37,9 @@ phylactery = { version = "*", default-features = false, features = [
     "shroud",
 ] }
 rayon = { version = "1.11.0", optional = true }
-ref-cast = "1.0.24"
-regex-syntax = { version = "0.8.5", default-features = false, optional = true }
+ref-cast = "1.0.25"
+regex-syntax = { version = "0.8.9", default-features = false, optional = true }
 rustversion = "1.0.22"
 
 [dev-dependencies]
-regex = { version = "1.11.1", default-features = false }
+regex = { version = "1.12.3", default-features = false }

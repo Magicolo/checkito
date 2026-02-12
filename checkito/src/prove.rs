@@ -77,7 +77,11 @@ impl Prove for bool {
     type Proof = ();
 
     fn prove(self) -> Result<Self::Proof, Self::Error> {
-        if self { Ok(()) } else { Err(()) }
+        if self {
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 }
 

@@ -1,9 +1,10 @@
 use crate::{
-    COLLECTS, all, cardinality,
+    all, cardinality,
     generate::{FullGenerate, Generate},
-    primitive::{self, Constant, Direction, Full, Range, usize::Usize},
+    primitive::{self, usize::Usize, Constant, Direction, Full, Range},
     shrink::Shrink,
     state::State,
+    COLLECTS,
 };
 use core::{marker::PhantomData, mem::replace};
 

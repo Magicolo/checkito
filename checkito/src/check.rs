@@ -1,13 +1,12 @@
 use crate::{
-    GENERATES, SHRINKS,
     generate::Generate,
     prove::Prove,
     shrink::Shrink,
     state::{self, Modes, Sizes, State, States},
     utility::cast,
+    GENERATES, SHRINKS,
 };
 use core::{
-    error,
     fmt::{self, Debug},
     future::Future,
     mem::replace,
@@ -16,11 +15,12 @@ use core::{
     pin::Pin,
     result,
     sync::atomic::{AtomicUsize, Ordering},
-    task::{Context, Poll, ready},
+    task::{ready, Context, Poll},
 };
 use orn::Or3;
 use std::{
     borrow::Cow,
+    error,
     panic::catch_unwind,
     sync::{Mutex, RwLock},
 };
@@ -713,7 +713,7 @@ pub(crate) mod synchronous {
         use crate::parallel::iterate;
         use orn::Or2;
         use rayon::iter::{
-            IntoParallelIterator, ParallelIterator, empty, once, plumbing::UnindexedConsumer,
+            empty, once, plumbing::UnindexedConsumer, IntoParallelIterator, ParallelIterator,
         };
 
         pub struct Run;
@@ -812,10 +812,10 @@ pub(crate) mod synchronous {
         }
 
         impl<
-            G: Generate<Item: Send, Shrink: Send> + Send + Sync,
-            P: Prove<Proof: Send, Error: Send>,
-            F: Fn(G::Item) -> P + Send + Sync,
-        > ParallelIterator for Checks<F, Machine<G>>
+                G: Generate<Item: Send, Shrink: Send> + Send + Sync,
+                P: Prove<Proof: Send, Error: Send>,
+                F: Fn(G::Item) -> P + Send + Sync,
+            > ParallelIterator for Checks<F, Machine<G>>
         {
             type Item = Result<G::Item, P>;
 
@@ -1056,10 +1056,10 @@ pub(crate) mod asynchronous {
         }
 
         impl<
-            G: Generate<Shrink: Unpin> + Unpin,
-            P: Future<Output: Prove<Error: Unpin> + Unpin>,
-            F: FnMut(G::Item) -> P + Unpin,
-        > Stream for Checks<F, Machine<G, P>>
+                G: Generate<Shrink: Unpin> + Unpin,
+                P: Future<Output: Prove<Error: Unpin> + Unpin>,
+                F: FnMut(G::Item) -> P + Unpin,
+            > Stream for Checks<F, Machine<G, P>>
         {
             type Item = Result<G::Item, P::Output>;
 

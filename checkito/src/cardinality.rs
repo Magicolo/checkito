@@ -1,4 +1,4 @@
-use crate::{Generate, primitive::Range, state::State};
+use crate::{primitive::Range, state::State, Generate};
 
 #[derive(Debug, Clone)]
 pub struct Cardinality<G, const C: u128>(pub(crate) G);

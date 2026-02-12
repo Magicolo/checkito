@@ -1,14 +1,14 @@
 use core::{fmt, mem::replace, ops::Deref, str::FromStr};
-use quote::{ToTokens, format_ident, quote_spanned};
+use quote::{format_ident, quote_spanned, ToTokens};
 use std::{collections::HashSet, env};
 use syn::{
-    __private::{Span, TokenStream2},
-    Error, Expr, ExprAssign, ExprField, ExprLit, ExprPath, ExprRange, FnArg, Ident, Lit, LitBool,
-    Member, Meta, PatType, Path, PathSegment, RangeLimits, Signature,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
+    Error, Expr, ExprAssign, ExprField, ExprLit, ExprPath, ExprRange, FnArg, Ident, Lit, LitBool,
+    Member, Meta, PatType, Path, PathSegment, RangeLimits, Signature,
+    __private::{Span, TokenStream2},
 };
 
 pub struct Check {

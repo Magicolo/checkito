@@ -1,6 +1,6 @@
 use crate::{
-    Generate, Prove,
     check::{self, Check, Checker, Fail, Pass, Result},
+    Generate, Prove,
 };
 use core::{
     any::type_name,
@@ -333,7 +333,7 @@ pub mod asynchronous {
         use super::*;
         use crate::check;
         use core::future::Future;
-        use futures_lite::{StreamExt, future::block_on};
+        use futures_lite::{future::block_on, StreamExt};
 
         type Run = check::asynchronous::sequential::Run;
 
