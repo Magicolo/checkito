@@ -1,4 +1,4 @@
 [workspace]
+resolver = "2"
 members = ["checkito", "checkito_macro"]
 default-members = ["checkito"]
-resolver = "2"

@@ -1,19 +1,20 @@
 #![cfg(feature = "regex")]
 
 use crate::{
-    REPEATS, all,
+    all,
     any::Any,
     collect::{self},
     generate::Generate,
     prelude::collect,
-    primitive::{Range, char},
+    primitive::{char, Range},
     shrink::Shrink,
     state::State,
+    REPEATS,
 };
 use core::fmt;
 use regex_syntax::{
-    Parser,
     hir::{Capture, Class, ClassBytesRange, ClassUnicodeRange, Hir, HirKind, Repetition},
+    Parser,
 };
 
 #[derive(Debug, Clone)]

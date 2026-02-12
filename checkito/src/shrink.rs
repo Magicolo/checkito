@@ -4,9 +4,33 @@ use crate::{
 };
 use core::iter;
 
+/// A trait for types that can be "shrunk" to a *smaller* value.
+///
+/// When a property test fails, `checkito` uses the `Shrink` implementation of
+/// the failing value's generator to try to find a smaller value that still
+/// causes the failure. This process is key to making property testing
+/// effective, as it isolates the failure and makes it easier to debug.
+///
+/// A shrinker is essentially a lazy iterator over simpler versions of a value.
+/// Each call to [`Shrink::shrink`] should produce a new shrinker that is
+/// "simpler" than the previous one. When `shrink` returns `None`, the value is
+/// considered fully shrunk.
+///
+/// # Implementing `Shrink`
+///
+/// While `checkito` provides shrinkers for all primitive types and standard
+/// collections, you may need to implement it for your own custom types,
+/// especially when using custom [`Generate`] implementations.
+///
+/// The goal is to produce a *smaller* value (for whatever definition of smaller
+/// that makes sense for the item type). For numbers, this means moving
+/// closer to zero. For collections, it means making the collection smaller or
+/// shrinking its elements.
 pub trait Shrink: Clone {
     type Item;
     fn item(&self) -> Self::Item;
+    /// This method should return `Some(shrinker)` if a *smaller* value can be
+    /// produced, or `None` if the value is fully shrunk.
     fn shrink(&mut self) -> Option<Self>;
 }
 

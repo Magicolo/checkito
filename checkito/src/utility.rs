@@ -73,7 +73,7 @@ pub(crate) mod f32 {
         }
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f32.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f32.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_up(value: f32) -> f32 {
         let bits = value.to_bits();
@@ -93,7 +93,7 @@ pub(crate) mod f32 {
         f32::from_bits(next_bits)
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f32.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f32.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_down(value: f32) -> f32 {
         let bits = value.to_bits();
@@ -132,7 +132,11 @@ pub(crate) mod f64 {
 
     #[inline]
     pub const fn max(left: f64, right: f64) -> f64 {
-        if left >= right { left } else { right }
+        if left >= right {
+            left
+        } else {
+            right
+        }
     }
 
     #[inline]
@@ -164,7 +168,7 @@ pub(crate) mod f64 {
         }
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f64.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f64.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_up(value: f64) -> f64 {
         let bits = value.to_bits();
@@ -184,7 +188,7 @@ pub(crate) mod f64 {
         f64::from_bits(next_bits)
     }
 
-    /// Copied from 'https://doc.rust-lang.org/src/core/num/f64.rs.html' to continue supporting lower rust versions.
+    /// Copied from '<https://doc.rust-lang.org/src/core/num/f64.rs.html>' to continue supporting lower rust versions.
     #[inline]
     pub const fn next_down(value: f64) -> f64 {
         let bits = value.to_bits();
@@ -212,15 +216,9 @@ macro_rules! tuples {
         $m!(or2, 2, p0, T0, 0, p1, T1, 1);
         $m!(or3, 3, p0, T0, 0, p1, T1, 1, p2, T2, 2);
         $m!(or4, 4, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3);
-        $m!(
-            or5, 5, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4
-        );
-        $m!(
-            or6, 6, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5
-        );
-        $m!(
-            or7, 7, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6
-        );
+        $m!(or5, 5, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4);
+        $m!(or6, 6, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5);
+        $m!(or7, 7, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6);
         $m!(
             or8, 8, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
             p7, T7, 7
