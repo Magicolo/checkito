@@ -48,8 +48,8 @@ impl Colors {
 fn prepare<G: Generate + ?Sized, R, U: FnOnce(&mut Checker<G, R>)>(
     checker: &mut Checker<G, R>,
     update: U,
-    verbose: bool,
     color: bool,
+    verbose: bool,
 ) -> hook::Guard<Colors> {
     checker.generate.items = verbose;
     checker.shrink.items = verbose;
@@ -230,7 +230,7 @@ pub mod synchronous {
         handle: H,
     ) {
         let mut checker = generator.checker();
-        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+        let Guard(colors) = &prepare(&mut checker, update, color, verbose);
         checker
             .checks(hook::silent(check))
             .for_each(|result| handle(result, colors));
@@ -306,12 +306,13 @@ pub mod asynchronous {
         generator: G,
         update: U,
         check: C,
-        verbose: bool,
         color: bool,
+        verbose: bool,
         handle: H,
     ) {
         let mut checker = generator.checker().asynchronous();
-        let Guard(colors) = &prepare(&mut checker, update, verbose, color);
+        // Keep the canonical run option order as `(color, verbose)`.
+        let Guard(colors) = &prepare(&mut checker, update, color, verbose);
         block_on(
             checker
                 // TODO: Is it possible to use `hook::silent` (adapted for futures) here?
@@ -483,6 +484,33 @@ mod environment {
         match env::var(key) {
             Ok(value) => value.parse().ok(),
             Err(_) => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generate::FullGenerate;
+
+    #[test]
+    fn prepare_applies_color_and_verbose_independently() {
+        let mut checker = bool::generator().checker();
+
+        {
+            let guard = prepare(&mut checker, |_| {}, false, true);
+            assert_eq!(guard.green, "");
+            assert!(checker.generate.items);
+            assert!(checker.shrink.items);
+            assert!(checker.shrink.errors);
+        }
+
+        {
+            let guard = prepare(&mut checker, |_| {}, true, false);
+            assert_eq!(guard.green, "\x1b[32m");
+            assert!(!checker.generate.items);
+            assert!(!checker.shrink.items);
+            assert!(!checker.shrink.errors);
         }
     }
 }
