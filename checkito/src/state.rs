@@ -3,12 +3,11 @@ use crate::{
     utility, Generate, Shrink, GENERATES,
 };
 use core::{
-    iter::{from_fn, FusedIterator},
-    mem::{replace, take},
+    iter::FusedIterator,
+    mem::replace,
     ops::{self, Bound},
 };
 use fastrand::Rng;
-use orn::Or3;
 use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug)]
@@ -119,7 +118,7 @@ impl State {
     ) -> Option<I::Item> {
         for generator in generators.into_iter().cycle() {
             match generator.cardinality() {
-                Some(cardinality) if *index <= cardinality => {
+                Some(cardinality) if *index < cardinality => {
                     return Some(generator);
                 }
                 Some(cardinality) => *index -= cardinality,
@@ -264,24 +263,57 @@ impl State {
         generator: &'b G,
         range: Range<usize>,
     ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
-        match &mut self.mode {
-            Mode::Random(_) => {
-                let count = range.generate(self).item();
-                Or3::T0(Iterator::map(0..count, move |_| generator.generate(self)))
-            }
-            Mode::Exhaustive(0) => Or3::T1([] as [G::Shrink; 0]),
-            Mode::Exhaustive(index @ 1..) => {
-                *index -= 1;
-                let mut first = true;
-                Or3::T2(from_fn(move || match &mut self.mode {
-                    _ if take(&mut first) => Some(generator.generate(self)),
-                    Mode::Exhaustive(1..) => Some(generator.generate(self)),
-                    _ => None,
-                }))
-            }
-        }
-        .into_iter()
-        .map(|or| or.into())
+        let count = match &mut self.mode {
+            Mode::Random(_) => range.generate(self).item(),
+            Mode::Exhaustive(index) => match generator.cardinality() {
+                Some(cardinality) => {
+                    let (start, end) = (range.start(), range.end());
+                    let block = match cardinality {
+                        _ if start == 0 => Some(1),
+                        0 => Some(0),
+                        1 => Some(1),
+                        _ => u32::try_from(start)
+                            .ok()
+                            .and_then(|start| cardinality.checked_pow(start)),
+                    };
+
+                    match (cardinality, block) {
+                        (_, None) => {
+                            *index = 0;
+                            start
+                        }
+                        (0, Some(_)) => {
+                            *index = 0;
+                            start
+                        }
+                        (1, Some(_)) => {
+                            let width = end.saturating_sub(start).saturating_add(1);
+                            if width == 0 {
+                                start
+                            } else {
+                                let offset = usize::try_from(*index)
+                                    .ok()
+                                    .map(|value| value.min(width.saturating_sub(1)))
+                                    .unwrap_or(width.saturating_sub(1));
+                                *index = 0;
+                                start.saturating_add(offset)
+                            }
+                        }
+                        (cardinality, Some(block)) => {
+                            let width = end.saturating_sub(start).saturating_add(1);
+                            let terms = select_geometric_terms(*index, width, cardinality, block);
+                            let terms_before = terms.saturating_sub(1);
+                            let consumed = geometric_sum(cardinality, block, terms_before)
+                                .expect("sum before selected term is always representable");
+                            *index = index.saturating_sub(consumed);
+                            start.saturating_add(terms_before)
+                        }
+                    }
+                }
+                None => range.generate(self).item(),
+            },
+        };
+        Iterator::map(0..count, move |_| generator.generate(self))
     }
 }
 
@@ -289,6 +321,40 @@ const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
     let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
     let index = replace(index, index.saturating_div(range)) % range;
     u128::wrapping_add(start as _, index)
+}
+
+fn geometric_sum(cardinality: u128, block: u128, terms: usize) -> Option<u128> {
+    if terms == 0 {
+        return Some(0);
+    }
+    if cardinality == 1 {
+        return u128::try_from(terms).ok();
+    }
+    let terms = u32::try_from(terms).ok()?;
+    let factor = cardinality.checked_pow(terms)?.checked_sub(1)?;
+    block.checked_mul(factor)?.checked_div(cardinality - 1)
+}
+
+fn select_geometric_terms(index: u128, width: usize, cardinality: u128, block: u128) -> usize {
+    if width <= 1 {
+        return 1;
+    }
+
+    let mut low = 1usize;
+    let mut high = width;
+    while low < high {
+        let mid = low + (high - low) / 2;
+        let enough = match geometric_sum(cardinality, block, mid) {
+            Some(sum) => index < sum,
+            None => true,
+        };
+        if enough {
+            high = mid;
+        } else {
+            low = mid.saturating_add(1);
+        }
+    }
+    low
 }
 
 impl<'a> With<'a> {

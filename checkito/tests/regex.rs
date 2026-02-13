@@ -32,12 +32,17 @@ fn range_shrinks() {
 
 #[test]
 fn generates_exhaustively() {
-    let values = dbg!(regex!("[a-c]{0,2}")
+    let values = regex!("[a-c]{0,2}")
         .checks(Ok::<_, ()>)
         .map(|result| result.item())
-        .collect::<Vec<_>>());
-    // values.contains("");
-    // for letter in 'a'..='z' {
-    //     assert!(values.contains(letter.to_string().as_str()));
-    // }
+        .collect::<Vec<_>>();
+
+    assert_eq!(values.len(), 13);
+    assert!(values.contains(&"".to_owned()));
+    for first in ['a', 'b', 'c'] {
+        assert!(values.contains(&first.to_string()));
+        for second in ['a', 'b', 'c'] {
+            assert!(values.contains(&format!("{first}{second}")));
+        }
+    }
 }
