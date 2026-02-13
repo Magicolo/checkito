@@ -38,7 +38,6 @@ pub enum Key {
     GenerateSeed,
     GenerateSize,
     GenerateItems,
-    GenerateError,
     GenerateExhaustive,
     ShrinkCount,
     ShrinkItems,
@@ -57,7 +56,6 @@ static KEYS: &[Key] = &[
     Key::GenerateSeed,
     Key::GenerateSize,
     Key::GenerateItems,
-    Key::GenerateError,
     Key::GenerateExhaustive,
     Key::ShrinkCount,
     Key::ShrinkItems,
@@ -92,7 +90,6 @@ impl From<Key> for &'static str {
             Key::GenerateSeed => "generate.seed",
             Key::GenerateSize => "generate.sizes",
             Key::GenerateItems => "generate.items",
-            Key::GenerateError => "generate.error",
             Key::GenerateExhaustive => "generate.exhaustive",
             Key::ShrinkCount => "shrink.count",
             Key::ShrinkItems => "shrink.items",
@@ -263,9 +260,6 @@ impl Check {
                 }
                 Key::GenerateItems => {
                     quote_spanned!(left.span() => _checker.generate.items = #right;)
-                }
-                Key::GenerateError => {
-                    quote_spanned!(left.span() => _checker.generate.error = #right;)
                 }
                 Key::GenerateExhaustive => {
                     quote_spanned!(left.span() => _checker.generate.exhaustive = ::core::option::Option::Some(#right);)
@@ -446,5 +440,21 @@ fn parse<T: FromStr>(key: &str) -> Option<T> {
     match env::var(key) {
         Ok(value) => value.parse().ok(),
         Err(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_generate_error_setting() {
+        let message = match syn::parse_str::<Check>("generate.error = false") {
+            Ok(_) => panic!("'generate.error' should be rejected"),
+            Err(error) => error.to_string(),
+        };
+        assert!(message.contains("unrecognized key 'generate . error'"));
+        assert!(message.contains("must be one of ["));
+        assert!(!message.contains("generate.error"));
     }
 }
