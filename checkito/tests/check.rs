@@ -193,9 +193,11 @@ struct B;
 #[check(with(|| A), same(B), debug = false)]
 fn compiles_with_non_debug_parameter(_a: A, _b: B) {}
 
-#[check(Option::<usize>::generator().map(Option::unwrap))]
+#[check(None::<usize>)]
 #[should_panic]
-fn panics_with_option_unwrap(_: usize) {}
+fn panics_with_option_unwrap(value: Option<usize>) {
+    let _ = value.unwrap();
+}
 
 #[cfg(feature = "regex")]
 mod regex {
