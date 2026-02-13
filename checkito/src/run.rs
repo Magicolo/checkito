@@ -384,13 +384,19 @@ mod hook {
     }
 
     pub fn silent<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
+        struct Restore(Option<Handle>);
+
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                HOOK.with(|cell| cell.set(self.0.take()));
+            }
+        }
+
         move |input| {
-            HOOK.with(|cell| {
-                let hook = cell.replace(None);
-                let output = function(input);
-                cell.set(hook);
-                output
-            })
+            let restore = HOOK.with(|cell| Restore(cell.replace(None)));
+            let output = function(input);
+            drop(restore);
+            output
         }
     }
 
@@ -405,6 +411,23 @@ mod hook {
     pub fn panic() -> ! {
         end();
         panic!();
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn silent_restores_hook_after_panicking_closure() {
+            begin();
+            let silent = silent(|_| panic!("boom"));
+
+            let _ = panic::catch_unwind(panic::AssertUnwindSafe(|| silent(())));
+
+            let has_hook = HOOK.with(|cell| cell.replace(None).is_some());
+            assert!(has_hook);
+            end();
+        }
     }
 }
 
