@@ -35,7 +35,7 @@ pub struct Generates {
     /// The maximum number of values to generate and test.
     ///
     /// Setting this to `0` will prevent any tests from running. Defaults to
-    /// `GENERATES`.
+    /// [`GENERATES`].
     pub count: usize,
     /// Whether the [`Checks`] iterator should yield [`Result::Pass`] items.
     ///
@@ -43,7 +43,6 @@ pub struct Generates {
     /// Defaults to `true`.
     pub items: bool,
     /// Overrides the exhaustive check detection.
-    ///
     /// - `Some(true)`: Forces exhaustive checking, ignoring `seed` and `sizes`.
     /// - `Some(false)`: Forces random sampling.
     /// - `None`: Automatically determines whether to be exhaustive based on
