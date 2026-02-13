@@ -3,12 +3,11 @@ use crate::{
     utility, Generate, Shrink, GENERATES,
 };
 use core::{
-    iter::{from_fn, FusedIterator},
-    mem::{replace, take},
+    iter::FusedIterator,
+    mem::replace,
     ops::{self, Bound},
 };
 use fastrand::Rng;
-use orn::Or3;
 use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug)]
@@ -119,7 +118,7 @@ impl State {
     ) -> Option<I::Item> {
         for generator in generators.into_iter().cycle() {
             match generator.cardinality() {
-                Some(cardinality) if *index <= cardinality => {
+                Some(cardinality) if *index < cardinality => {
                     return Some(generator);
                 }
                 Some(cardinality) => *index -= cardinality,
@@ -264,24 +263,96 @@ impl State {
         generator: &'b G,
         range: Range<usize>,
     ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
-        match &mut self.mode {
-            Mode::Random(_) => {
-                let count = range.generate(self).item();
-                Or3::T0(Iterator::map(0..count, move |_| generator.generate(self)))
-            }
-            Mode::Exhaustive(0) => Or3::T1([] as [G::Shrink; 0]),
-            Mode::Exhaustive(index @ 1..) => {
-                *index -= 1;
-                let mut first = true;
-                Or3::T2(from_fn(move || match &mut self.mode {
-                    _ if take(&mut first) => Some(generator.generate(self)),
-                    Mode::Exhaustive(1..) => Some(generator.generate(self)),
-                    _ => None,
-                }))
-            }
-        }
-        .into_iter()
-        .map(|or| or.into())
+        let count = match &mut self.mode {
+            Mode::Random(_) => range.generate(self).item(),
+            Mode::Exhaustive(index) => match generator.cardinality() {
+                Some(cardinality) => {
+                    // Exhaustive `repeat` chooses a *length* first, then generates
+                    // that many items. The selected length must be deterministic for
+                    // a given exhaustive `index`.
+                    //
+                    // For a generator with cardinality `c`:
+                    // - length `L` contributes `c^L` distinct combinations.
+                    // - so lengths form geometric "buckets" of sizes
+                    //   `c^start, c^(start+1), ... c^end`.
+                    //
+                    // This branch maps the current global exhaustive `index` to the
+                    // correct length bucket without scanning linearly.
+                    let (start, end) = (range.start(), range.end());
+                    // `block` is the size of the first bucket (`c^start`).
+                    // We keep it optional: `None` means power overflowed, so we
+                    // gracefully fall back to the minimum length.
+                    let block = match cardinality {
+                        _ if start == 0 => Some(1),
+                        0 => Some(0),
+                        1 => Some(1),
+                        _ => u32::try_from(start)
+                            .ok()
+                            .and_then(|start| cardinality.checked_pow(start)),
+                    };
+
+                    match (cardinality, block) {
+                        // Cannot represent `c^start` => conservative fallback.
+                        (_, None) => {
+                            // Keep the index untouched so sibling generators can
+                            // still consume from it.
+                            start
+                        }
+                        // No values can be produced for positive lengths.
+                        // Keep behavior conservative and deterministic.
+                        (0, Some(_)) => {
+                            // No repeat combinations exist in this range. Keep the
+                            // index untouched so sibling generators still vary.
+                            start
+                        }
+                        // Each length has exactly one combination, so buckets are
+                        // uniform and we can compute the offset directly.
+                        (1, Some(_)) => {
+                            // `Range<usize>` normalizes bounds so `start <= end`.
+                            // Therefore the bucket width is always at least 1.
+                            let width = end.saturating_sub(start).saturating_add(1);
+                            let total = width as u128;
+                            let local = *index % total;
+                            *index /= total;
+                            let offset = usize::try_from(local).unwrap_or(0);
+                            start.saturating_add(offset)
+                        }
+                        // General case (`c >= 2`): use geometric prefix sums +
+                        // binary search to find the selected bucket in O(log width).
+                        // Then consume all previous buckets from the index so nested
+                        // generation uses an index local to the chosen length.
+                        (cardinality, Some(block)) => {
+                            let width = end.saturating_sub(start).saturating_add(1);
+                            let total = geometric_sum(cardinality, block, width);
+                            match total {
+                                Some(total @ 1..) => {
+                                    let local = *index % total;
+                                    let outer = *index / total;
+                                    let terms =
+                                        select_geometric_terms(local, width, cardinality, block);
+                                    let terms_before = terms.saturating_sub(1);
+                                    let consumed = geometric_sum(cardinality, block, terms_before)
+                                        .unwrap_or(local);
+                                    let inner = local.saturating_sub(consumed);
+                                    let place = u32::try_from(terms_before)
+                                        .ok()
+                                        .and_then(|offset| cardinality.checked_pow(offset))
+                                        .unwrap_or(1);
+                                    *index = outer.saturating_mul(place).saturating_add(inner);
+                                    start.saturating_add(terms_before)
+                                }
+                                Some(0) | None => start,
+                            }
+                        }
+                    }
+                }
+                // If cardinality is not known, we cannot compute deterministic
+                // geometric buckets for lengths. Reuse the repeat-range generator
+                // in exhaustive mode, which is deterministic for a given index.
+                None => range.generate(self).item(),
+            },
+        };
+        Iterator::map(0..count, move |_| generator.generate(self))
     }
 }
 
@@ -289,6 +360,55 @@ const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
     let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
     let index = replace(index, index.saturating_div(range)) % range;
     u128::wrapping_add(start as _, index)
+}
+
+/// Computes the number of exhaustive items covered by the first `terms`
+/// length-buckets when bucket sizes grow geometrically.
+///
+/// In plain terms: for repeated generation, each extra length can contribute
+/// many more combinations than the previous one (`cardinality` times more).
+/// This helper answers “how many total combinations are there up to this
+/// length?” using checked arithmetic so overflow is reported as `None`.
+fn geometric_sum(cardinality: u128, block: u128, terms: usize) -> Option<u128> {
+    if terms == 0 {
+        return Some(0);
+    }
+    if cardinality == 1 {
+        return u128::try_from(terms).ok();
+    }
+    let terms = u32::try_from(terms).ok()?;
+    let factor = cardinality.checked_pow(terms)?.checked_sub(1)?;
+    block.checked_mul(factor)?.checked_div(cardinality - 1)
+}
+
+/// Finds how many geometric buckets are needed so their cumulative size is
+/// strictly greater than `index`.
+///
+/// This lets exhaustive `repeat` choose the output length in `O(log width)`
+/// instead of scanning every possible length in `start..=end`.
+///
+/// If cumulative sums overflow, we conservatively treat that as “large enough”,
+/// which keeps the search deterministic and avoids linear work.
+fn select_geometric_terms(index: u128, width: usize, cardinality: u128, block: u128) -> usize {
+    if width <= 1 {
+        return 1;
+    }
+
+    let mut low = 1usize;
+    let mut high = width;
+    while low < high {
+        let mid = low + (high - low) / 2;
+        let enough = match geometric_sum(cardinality, block, mid) {
+            Some(sum) => index < sum,
+            None => true,
+        };
+        if enough {
+            high = mid;
+        } else {
+            low = mid.saturating_add(1);
+        }
+    }
+    low
 }
 
 impl<'a> With<'a> {
