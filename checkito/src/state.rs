@@ -304,12 +304,15 @@ impl State {
                             let terms = select_geometric_terms(*index, width, cardinality, block);
                             let terms_before = terms.saturating_sub(1);
                             let consumed = geometric_sum(cardinality, block, terms_before)
-                                .expect("sum before selected term is always representable");
+                                .unwrap_or(*index);
                             *index = index.saturating_sub(consumed);
                             start.saturating_add(terms_before)
                         }
                     }
                 }
+                // If cardinality is not known, we cannot compute deterministic
+                // geometric buckets for lengths. Reuse the repeat-range generator
+                // in exhaustive mode, which is deterministic for a given index.
                 None => range.generate(self).item(),
             },
         };
@@ -323,6 +326,13 @@ const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
     u128::wrapping_add(start as _, index)
 }
 
+/// Computes the number of exhaustive items covered by the first `terms`
+/// length-buckets when bucket sizes grow geometrically.
+///
+/// In plain terms: for repeated generation, each extra length can contribute
+/// many more combinations than the previous one (`cardinality` times more).
+/// This helper answers “how many total combinations are there up to this
+/// length?” using checked arithmetic so overflow is reported as `None`.
 fn geometric_sum(cardinality: u128, block: u128, terms: usize) -> Option<u128> {
     if terms == 0 {
         return Some(0);
@@ -335,6 +345,14 @@ fn geometric_sum(cardinality: u128, block: u128, terms: usize) -> Option<u128> {
     block.checked_mul(factor)?.checked_div(cardinality - 1)
 }
 
+/// Finds how many geometric buckets are needed so their cumulative size is
+/// strictly greater than `index`.
+///
+/// This lets exhaustive `repeat` choose the output length in `O(log width)`
+/// instead of scanning every possible length in `start..=end`.
+///
+/// If cumulative sums overflow, we conservatively treat that as “large enough”,
+/// which keeps the search deterministic and avoids linear work.
 fn select_geometric_terms(index: u128, width: usize, cardinality: u128, block: u128) -> usize {
     if width <= 1 {
         return 1;
