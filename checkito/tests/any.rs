@@ -33,7 +33,7 @@ fn generates_exhaustively() {
         Some((1u16..=5).len() as u128 + (10u16..=50).len() as u128 + (100u16..=500).len() as u128)
     );
 
-    for i in 0u16..=5 {
+    for i in 1u16..=5 {
         assert!(set.contains(&i));
     }
     for i in 10u16..=50 {
