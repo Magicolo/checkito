@@ -23,10 +23,10 @@ fn weighted_any() {
 #[test]
 fn generates_exhaustively() {
     let generator = &any([1u16..=5, 10u16..=50, 100u16..=500]);
-    let set = dbg!(generator
+    let set = generator
         .checks(|_| true)
         .flat_map(|result| result.item())
-        .collect::<HashSet<_>>());
+        .collect::<HashSet<_>>();
 
     assert_eq!(
         generator.cardinality(),
@@ -42,4 +42,41 @@ fn generates_exhaustively() {
     for i in 100u16..=500 {
         assert!(set.contains(&i));
     }
+}
+
+#[test]
+fn uses_random_sampling_when_cardinality_exceeds_iterations() {
+    let generator = any([1u16..=5, 10u16..=50, 100u16..=500]);
+    let mut checker = generator.clone().checker();
+    checker.generate.count = 8;
+    checker.generate.seed = 0;
+    let values = checker
+        .checks(|_| true)
+        .flat_map(|result| result.item())
+        .collect::<Vec<_>>();
+    let mut exhaustive = generator.checker();
+    exhaustive.generate.count = 8;
+    exhaustive.generate.exhaustive = Some(true);
+    let exhaustive_values = exhaustive
+        .checks(|_| true)
+        .flat_map(|result| result.item())
+        .collect::<Vec<_>>();
+
+    assert_eq!(values.len(), 8);
+    assert_eq!(exhaustive_values, vec![1, 2, 3, 4, 5, 10, 11, 12]);
+    assert_ne!(values, exhaustive_values);
+}
+
+#[test]
+fn forces_exhaustive_generation_when_requested() {
+    let generator = any([1u16..=5, 10u16..=50, 100u16..=500]);
+    let mut checker = generator.checker();
+    checker.generate.count = 8;
+    checker.generate.exhaustive = Some(true);
+    let values = checker
+        .checks(|_| true)
+        .flat_map(|result| result.item())
+        .collect::<Vec<_>>();
+
+    assert_eq!(values, vec![1, 2, 3, 4, 5, 10, 11, 12]);
 }
