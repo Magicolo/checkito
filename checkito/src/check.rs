@@ -146,9 +146,9 @@ pub trait Check: Generate {
     /// # use checkito::*;
     /// let mut checks = (0..10).checks(|x| x < 5);
     ///
-    /// assert!(matches!(checks.next(), Some(Result::Pass(_))));
+    /// assert!(matches!(checks.next(), Some(check::Result::Pass(_))));
     /// // ...
-    /// assert!(matches!(checks.last(), Some(Result::Fail(_))));
+    /// assert!(matches!(checks.last(), Some(check::Result::Fail(_))));
     /// ```
     fn checks<P: Prove, F: FnMut(Self::Item) -> P>(
         self,

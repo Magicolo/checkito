@@ -312,8 +312,8 @@ pub trait Generate {
     ///
     /// // The result is `orn::Or<char, i32>`.
     /// choice.check(|either| match either {
-    ///     orn::Or::T0(c) => assert!(c.is_alphabetic()),
-    ///     orn::Or::T1(i) => assert!(i < 100),
+    ///     orn::Or2::T0(c) => assert!(c.is_alphabetic()),
+    ///     orn::Or2::T1(i) => assert!(i < 100),
     /// });
     /// ```
     ///
@@ -352,8 +352,8 @@ pub trait Generate {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// let string_gen = letter().collect::<String>();
-    /// let vec_gen = (0..10).collect::<Vec<_>>();
+    /// let string = Generate::collect::<String>(letter());
+    /// let vector = Generate::collect::<Vec<_>>(0..10);
     /// ```
     fn collect<F: FromIterator<Self::Item>>(
         self,
