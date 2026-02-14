@@ -132,9 +132,6 @@ const REPEATS: u32 = 1 << 6;
     TODO:
     - Asynchronous checks seem to hang forever. Add tests.
     - Instead of running a fixed number of checks, determine the number of checks based on the runtime of the generation and check.
-    - Support for 'async' checks.
-        - The check attribute can automatically detect this based on the 'async' keyword of the function.
     - Support for 'parallel' checks.
     - Review public api and make things more private to prevent breaking changes; especially modules.
-    - Remove this list from release.
 */
