@@ -1,16 +1,16 @@
 [package]
 name = "checkito"
 version = "3.2.5"
-authors = ["Magicolo <magicololand@gmail.com>"]
-edition = "2021"
-readme = "README.md"
-documentation = "https://docs.rs/checkito/latest/checkito/"
 description = "A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing."
-license = "MIT"
-repository = "https://github.com/Magicolo/checkito"
-keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
-categories = ["development-tools::testing"]
-rust-version = "1.83"
+documentation = "https://docs.rs/checkito/latest/checkito/"
+authors = { workspace = true }
+edition = { workspace = true }
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
 
 [badges]
 github = { repository = "Magicolo/checkito", workflow = "test" }
@@ -31,7 +31,7 @@ orn = { version = "0.8.2", default-features = false, features = [
     "iter",
 ] }
 ref-cast = "1.0.25"
-regex-syntax = { version = "0.8.9", default-features = false, optional = true }
+regex-syntax = { workspace = true, optional = true }
 rustversion = "1.0.22"
 
 [dev-dependencies]
