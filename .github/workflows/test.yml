@@ -44,7 +44,8 @@ jobs:
             image: ghcr.io/magicolo/rust
         steps:
             - uses: actions/checkout@v6
-            - run: cargo msrv verify --all-features
+            - run: cargo msrv verify --manifest-path checkito/Cargo.toml
+            - run: cargo msrv verify --manifest-path checkito_macro/Cargo.toml
     audit:
         runs-on: ubuntu-latest
         container:
