@@ -106,9 +106,11 @@ fn compiles_with_verbose_true() {}
 #[check(verbose = false)]
 fn compiles_with_verbose_false() {}
 
+#[cfg(feature = "constant")]
 #[check(constant = true)]
 fn compiles_with_constant_true() {}
 
+#[cfg(feature = "constant")]
 #[check(constant = false)]
 fn compiles_with_constant_false() {}
 

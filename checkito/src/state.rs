@@ -724,20 +724,6 @@ impl Modes {
             Modes::Random { .. } | Modes::Exhaustive(..) => None,
         }
     }
-
-    pub(crate) fn state_unchecked(self, index: usize) -> State {
-        match self {
-            Modes::Random { count, sizes, seed } => State::random(index, count, sizes, seed),
-            Modes::Exhaustive(count) => State::exhaustive(index, count),
-        }
-    }
-
-    pub(crate) const fn count(&self) -> usize {
-        match *self {
-            Modes::Random { count, .. } => count,
-            Modes::Exhaustive(count) => count,
-        }
-    }
 }
 
 impl Default for Modes {

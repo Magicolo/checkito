@@ -23,22 +23,6 @@ pub(crate) fn cast(
     Err(error)
 }
 
-pub(crate) fn cast_ref<'a>(error: &'a (dyn Any + Send + 'static)) -> Option<&'a str> {
-    if let Some(error) = error.downcast_ref::<&'static str>() {
-        return Some(error);
-    }
-    if let Some(error) = error.downcast_ref::<String>() {
-        return Some(error);
-    }
-    if let Some(error) = error.downcast_ref::<Box<str>>() {
-        return Some(error);
-    }
-    if let Some(error) = error.downcast_ref::<Cow<'static, str>>() {
-        return Some(error);
-    }
-    None
-}
-
 pub(crate) mod f32 {
     const SIGN_MASK: u32 = 0x8000_0000;
     const TINY_BITS: u32 = 0x1;

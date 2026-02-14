@@ -6,10 +6,8 @@ use core::{
     any::type_name,
     cell::Cell,
     fmt::{self, Arguments},
-    ops::{Deref, DerefMut},
     str::FromStr,
 };
-use hook::EndGuard;
 use std::{env, panic};
 
 struct Colors {
