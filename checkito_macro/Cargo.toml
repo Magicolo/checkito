@@ -9,7 +9,7 @@ license = "MIT"
 repository = "https://github.com/Magicolo/checkito"
 keywords = ["property", "testing", "quickcheck", "fuzz", "hypothesis"]
 categories = ["development-tools::testing"]
-rust-version = "1.80"
+rust-version = "1.83"
 
 [lib]
 proc-macro = true
