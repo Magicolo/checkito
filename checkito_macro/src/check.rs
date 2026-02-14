@@ -291,9 +291,11 @@ impl Check {
         }
         #[cfg(not(feature = "asynchronous"))]
         if signature.asyncness.is_some() {
-            return Err(error(signature.asyncness.clone(), |_| {
-                "for `async` or `Future`-returning function support, add the 'asynchronous' feature to the checkito dependency in this project's 'Cargo.toml'".to_string()
-            }));
+            return Err(error(
+                signature.asyncness.to_token_stream(), |_| {
+                    "for `async` or `Future`-returning function support, add the 'asynchronous' feature to the checkito dependency in this project's 'Cargo.toml'".to_string()
+                },
+            ));
         }
 
         let module = Ident::new(module, self.span);
