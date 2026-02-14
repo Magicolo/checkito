@@ -42,3 +42,37 @@ fn shrinked_filter_preserves_inequality() {
     let (left, right) = fail.item.0.clone().unwrap();
     assert_ne!(left, right);
 }
+
+#[test]
+fn filter_map_with_zero_retries_can_return_none() {
+    let values = (0u8..=3)
+        .filter_map_with(0, |value| (value % 2 == 0).then_some(value / 2))
+        .checks(Ok::<_, ()>)
+        .map(|result| result.item())
+        .collect::<Vec<_>>();
+
+    assert_eq!(values, vec![Some(0), None, Some(1), None]);
+}
+
+#[test]
+fn filter_map_with_retries_calls_mapping_for_each_attempt() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let values = {
+        let calls = Arc::clone(&calls);
+        same(1u8)
+            .filter_map_with(4, move |value| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                (value == 2).then_some(value)
+            })
+            .samples(3)
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(values, vec![None, None, None]);
+    assert_eq!(calls.load(Ordering::SeqCst), 15);
+}

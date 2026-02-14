@@ -42,3 +42,140 @@ generators!(u8, 1u8, Or1<u8>, 2u8);
 generators!(i32, 1i32, Or2<i32, i32>, 2i32, 3i32);
 generators!(char, 'a', Or3<char, char, char>, 'b', 'c', 'd');
 generators!(bool, true, Or4<bool, bool, bool, bool>, false, true, false, false);
+
+#[test]
+fn size_can_force_minimal_collections() {
+    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+        .size(|_| 0.0)
+        .samples(64)
+        .collect::<Vec<_>>();
+
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_with_zero_limit_forces_minimal_collections() {
+    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+        .dampen_with(1.0, 8, 0)
+        .samples(64)
+        .collect::<Vec<_>>();
+
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_with_zero_deepest_forces_minimal_collections() {
+    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+        .dampen_with(1.0, 0, usize::MAX)
+        .samples(64)
+        .collect::<Vec<_>>();
+
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_with_limit_applies_after_nested_flatten_depth() {
+    let values = same(same(
+        Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, usize::MAX, 1),
+    ))
+    .flatten()
+    .flatten()
+    .samples(32)
+    .collect::<Vec<_>>();
+
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn lazy_constructs_generator_only_once() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let lazy = {
+        let calls = Arc::clone(&calls);
+        lazy(move || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            0u8..=1
+        })
+    };
+
+    let samples = lazy.samples(128).collect::<Vec<_>>();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(samples.iter().all(|value| *value <= 1));
+}
+
+#[test]
+fn standard_option_generator_covers_some_and_none() {
+    let values = <Option<bool>>::generator().samples(512).collect::<Vec<_>>();
+
+    assert!(values.iter().any(Option::is_none));
+    assert!(values.iter().any(|value| value == &Some(false)));
+    assert!(values.iter().any(|value| value == &Some(true)));
+}
+
+#[test]
+fn standard_result_generator_covers_ok_and_err() {
+    let values = <Result<bool, bool>>::generator()
+        .samples(512)
+        .collect::<Vec<_>>();
+
+    assert!(values.iter().any(|value| value == &Ok(false)));
+    assert!(values.iter().any(|value| value == &Ok(true)));
+    assert!(values.iter().any(|value| value == &Err(false)));
+    assert!(values.iter().any(|value| value == &Err(true)));
+}
+
+#[check(0u8..=u8::MAX)]
+fn converted_values_match_from_implementation(value: u8) {
+    let converted = same(value).convert::<u16>().samples(1).next().unwrap();
+    assert_eq!(converted, u16::from(value));
+}
+
+#[test]
+fn lazy_cell_generator_is_forced_and_reused() {
+    use core::cell::LazyCell;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let generator = {
+        let calls = Arc::clone(&calls);
+        LazyCell::new(move || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            0u8..=2
+        })
+    };
+
+    let values = generator.samples(64).collect::<Vec<_>>();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(values.iter().all(|value| *value <= 2));
+}
+
+#[test]
+fn lazy_lock_generator_is_forced_and_reused() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, LazyLock,
+    };
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let generator = {
+        let calls = Arc::clone(&calls);
+        LazyLock::new(move || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            0u8..=2
+        })
+    };
+
+    let values = generator.samples(64).collect::<Vec<_>>();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(values.iter().all(|value| *value <= 2));
+}

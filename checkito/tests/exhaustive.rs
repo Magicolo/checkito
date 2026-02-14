@@ -1,7 +1,7 @@
 pub mod common;
-use common::*;
 use checkito::state::Weight;
 use checkito::Generate;
+use common::*;
 use std::collections::HashSet;
 
 #[derive(Clone)]
@@ -42,10 +42,7 @@ fn range_can_be_forced_to_random_even_if_finite() {
         .checks(Ok::<_, ()>)
         .map(|result| result.item())
         .collect::<Vec<_>>();
-    let exhaustive_prefix = (0u8..=9)
-        .cycle()
-        .take(25)
-        .collect::<Vec<_>>();
+    let exhaustive_prefix = (0u8..=9).cycle().take(25).collect::<Vec<_>>();
 
     assert_eq!(values.len(), 25);
     assert_ne!(values, exhaustive_prefix);
@@ -179,7 +176,9 @@ fn repeat_with_cardinality_two_uses_geometric_length_buckets() {
 
 #[test]
 fn repeat_with_overflowing_initial_block_falls_back_to_minimum_length() {
-    let mut checker = ('a'..='b').collect_with::<_, String>(130usize..=132).checker();
+    let mut checker = ('a'..='b')
+        .collect_with::<_, String>(130usize..=132)
+        .checker();
     checker.generate.count = 1;
     checker.generate.exhaustive = Some(true);
 
@@ -241,4 +240,15 @@ fn repeat_with_unknown_cardinality_uses_repeat_range_generation_path() {
 
     let lengths = values.iter().map(String::len).collect::<Vec<_>>();
     assert_eq!(lengths, vec![1, 2, 3, 1, 2]);
+}
+
+#[test]
+fn convert_preserves_values_exhaustively() {
+    let values = (0u8..=4)
+        .convert::<u16>()
+        .checks(Ok::<_, ()>)
+        .map(|result| result.item())
+        .collect::<Vec<_>>();
+
+    assert_eq!(values, vec![0, 1, 2, 3, 4]);
 }
