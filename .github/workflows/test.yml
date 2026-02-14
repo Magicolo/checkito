@@ -15,9 +15,8 @@ jobs:
             - uses: actions/checkout@v6
             - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
             - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
-            - run: cargo hack test --release --doc --verbose --feature-powerset
-            - run: cargo hack test --release --examples --verbose
-            - run: cargo hack test --doc --release --verbose --feature-powerset
+            - run: cargo hack test --release --doc --verbose --all-features
+            - run: cargo hack test --release --examples --verbose --all-features
     clippy:
         runs-on: ubuntu-latest
         container:
