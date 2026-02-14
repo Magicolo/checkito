@@ -30,17 +30,17 @@ use core::iter::FromIterator;
 /// # Examples
 ///
 /// ```
-/// # use checkito::{FullGenerate, Generate, check};
+/// # use checkito::{FullGenerate, Generate, check, map};
+/// # use std::ops;
 /// struct MyType(u8);
 ///
 /// impl FullGenerate for MyType {
 ///     type Item = Self;
-///
-///     type Generator = impl Generate<Item = Self>;
+///     type Generator = map::Map<ops::RangeInclusive<u8>, fn(u8) -> Self>;
 ///
 ///     fn generator() -> Self::Generator {
 ///         // The generator for `MyType` will produce values with `u8` from 0 to 10.
-///         (0..=10).map(MyType)
+///         Generate::map(0u8..=10, MyType)
 ///     }
 /// }
 ///
@@ -156,8 +156,7 @@ pub trait Generate {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// let evens = (0..10).map(|x| x * 2);
-    ///
+    /// let evens = Generate::map(0..10, |x| x * 2);
     /// evens.check(|x| assert_eq!(x % 2, 0));
     /// ```
     fn map<T, F: Fn(Self::Item) -> T + Clone>(self, map: F) -> Map<Self, F>
@@ -182,7 +181,7 @@ pub trait Generate {
     /// ```
     /// # use checkito::*;
     /// // A generator for even numbers between 0 and 100.
-    /// let evens = (0..100).filter(|&x| x % 2 == 0);
+    /// let evens = Generate::filter(0..100, |&x| x % 2 == 0);
     ///
     /// // The generated value is an `Option`.
     /// evens.check(|x: Option<i32>| assert!(x.unwrap() % 2 == 0));
@@ -224,15 +223,14 @@ pub trait Generate {
     /// ```
     /// # use checkito::*;
     /// // A generator for the square roots of perfect squares.
-    /// let roots = (0..100).filter_map(|x| {
-    ///     let sqrt = (x as f64).sqrt();
-    ///     if sqrt.fract() == 0.0 {
-    ///         Some(sqrt as i32)
+    /// let roots = Generate::filter_map(0..100, |x| {
+    ///     let root = (x as f64).sqrt();
+    ///     if root.fract() == 0.0 {
+    ///         Some(root as i32)
     ///     } else {
     ///         None
     ///     }
     /// });
-    ///
     /// roots.check(|x: Option<i32>| assert!(x.is_some()));
     /// ```
     fn filter_map<T, F: Fn(Self::Item) -> Option<T> + Clone>(self, filter: F) -> FilterMap<Self, F>
@@ -267,9 +265,8 @@ pub trait Generate {
     /// ```
     /// # use checkito::*;
     /// // A generator that first picks a length, then creates a vector of that length.
-    /// let vec_gen = (0..10).flat_map(|len| (0..100).collect_with(len));
-    ///
-    /// vec_gen.check(|v: Vec<i32>| assert!(v.len() < 10));
+    /// let generator = Generate::flat_map(0usize..10, |count| Generate::collect_with(0..100, count));
+    /// generator.check(|vector: Vec<i32>| assert!(vector.len() < 10));
     /// ```
     fn flat_map<G: Generate, F: Fn(Self::Item) -> G + Clone>(self, map: F) -> Flatten<Map<Self, F>>
     where
@@ -385,7 +382,7 @@ pub trait Generate {
     /// Forcing a generator to always produce "large" values:
     /// ```
     /// # use checkito::*;
-    /// let long_vecs = (0..100).collect().size(|_| 1.0);
+    /// let vectors = Generate::collect::<Vec<_>>(0..100).size(|_| 1.0);
     /// ```
     fn size<S: Into<Sizes>, F: Fn(Sizes) -> S>(self, map: F) -> Size<Self, F>
     where
