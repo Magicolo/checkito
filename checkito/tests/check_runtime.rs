@@ -1,0 +1,72 @@
+pub mod common;
+use common::*;
+
+use checkito::check::Result as CheckResult;
+
+#[test]
+fn result_accessors_cover_pass_and_fail_paths() {
+    let pass = (0u8..=0).checks(Ok::<_, ()>).next().unwrap();
+    assert_eq!(pass.generates(), 1);
+    assert_eq!(pass.shrinks(), 0);
+    assert_eq!(pass.state().index(), 0);
+    let pass_item = pass.clone().pass(false).unwrap();
+    assert_eq!(pass_item.item, 0);
+    assert_eq!(pass_item.proof, 0);
+    assert!(pass.clone().fail(false).is_none());
+    assert!(pass.clone().result().is_ok());
+
+    let fail = (0u8..=0).checks(|_| Err::<(), _>("x")).next().unwrap();
+    assert!(fail.clone().pass(false).is_none());
+    let fail_item = fail.clone().fail(false).unwrap();
+    assert_eq!(fail_item.cause, Cause::Disprove("x"));
+    assert!(fail.clone().result().is_err());
+    assert_eq!(fail.item(), 0);
+}
+
+#[test]
+fn fail_message_reports_disprove_and_panic_causes() {
+    let disprove = (0u8..=0).check(|_| Err::<(), _>("disproved")).unwrap();
+    assert_eq!(disprove.message(), "\"disproved\"");
+
+    let panic = (0u8..=0).check::<(), _>(|_| panic!("boom")).unwrap();
+    assert_eq!(panic.message(), "boom");
+    assert_eq!(panic.cause, Cause::Panic(Some("boom".into())));
+}
+
+#[test]
+fn checks_respect_yield_flags_and_still_report_final_failure() {
+    let mut checker = (0u8..=3).checker();
+    checker.generate.exhaustive = Some(true);
+    checker.generate.count = 4;
+    checker.generate.items = false;
+    checker.shrink.items = false;
+    checker.shrink.errors = false;
+
+    let steps = checker
+        .checks(|value| value < 2)
+        .collect::<Vec<CheckResult<u8, bool>>>();
+
+    assert_eq!(steps.len(), 1);
+    assert!(matches!(steps[0], CheckResult::Fail(_)));
+}
+
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
+
+    #[check(0u8..=u8::MAX)]
+    fn result_item_round_trip_matches_generated_value(value: u8) {
+        let step = same(value).checks(Ok::<_, ()>).next().unwrap();
+        assert_eq!(step.item(), value);
+    }
+
+    #[check(0u8..=u8::MAX)]
+    fn result_accessors_match_generated_value(value: u8) {
+        let step = same(value).checks(Ok::<_, ()>).next().unwrap();
+        assert_eq!(step.generates(), 1);
+        assert_eq!(step.shrinks(), 0);
+        let pass = step.pass(false).unwrap();
+        assert_eq!(pass.item, value);
+        assert_eq!(pass.proof, value);
+    }
+}
