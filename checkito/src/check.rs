@@ -8,13 +8,10 @@ use crate::{
 };
 use core::{
     fmt::{self, Debug},
-    future::Future,
     mem::replace,
     ops::{self, Deref, DerefMut},
     panic::AssertUnwindSafe,
-    pin::Pin,
     result,
-    task::{ready, Context, Poll},
 };
 use std::{borrow::Cow, error, panic::catch_unwind};
 
@@ -699,6 +696,11 @@ pub(crate) mod synchronous {
 #[cfg(feature = "asynchronous")]
 pub(crate) mod asynchronous {
     use super::*;
+    use core::{
+        future::Future,
+        pin::Pin,
+        task::{ready, Context, Poll},
+    };
 
     use futures_lite::{Stream, StreamExt};
 

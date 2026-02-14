@@ -23,14 +23,14 @@ jobs:
             image: ghcr.io/magicolo/rust
         steps:
             - uses: actions/checkout@v6
-            - run: cargo hack clippy --release --all-targets --verbose --feature-powerset -- --deny warnings
+            - run: cargo hack clippy --release --all-targets --verbose --all-features -- --deny warnings --allow clippy::test-attr-in-doctest
     doc:
         runs-on: ubuntu-latest
         container:
             image: ghcr.io/magicolo/rust
         steps:
             - uses: actions/checkout@v6
-            - run: cargo hack doc --no-deps --release --verbose --feature-powerset
+            - run: cargo hack doc --no-deps --release --verbose --all-features
     semver:
         runs-on: ubuntu-latest
         container:
