@@ -9,7 +9,7 @@ use core::{
     ops::{Deref, DerefMut},
     str::FromStr,
 };
-use hook::Guard;
+use hook::EndGuard;
 use std::{env, panic};
 
 struct Colors {
@@ -50,13 +50,13 @@ fn prepare<G: Generate + ?Sized, R, U: FnOnce(&mut Checker<G, R>)>(
     update: U,
     color: bool,
     verbose: bool,
-) -> hook::Guard<Colors> {
+) -> Colors {
     checker.generate.items = verbose;
     checker.shrink.items = verbose;
     checker.shrink.errors = verbose;
     environment::update(checker);
     update(checker);
-    Guard::new(Colors::new(color))
+    Colors::new(color)
 }
 
 fn handle<
@@ -103,7 +103,7 @@ fn handle<
     }
 }
 
-fn handle_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
+fn print_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
     result: Result<T, P>,
     colors: &Colors,
 ) {
@@ -131,7 +131,7 @@ fn handle_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>
     )
 }
 
-fn handle_debug<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
+fn print_debug<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
     result: Result<T, P>,
     colors: &Colors,
 ) {
@@ -143,7 +143,7 @@ fn handle_debug<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
     )
 }
 
-fn handle_minimal<T, P: Prove>(result: Result<T, P>, colors: &Colors) {
+fn print_minimal<T, P: Prove>(result: Result<T, P>, colors: &Colors) {
     handle(
         result,
         colors,
@@ -184,7 +184,7 @@ pub mod synchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, handle_default)
+        with(generator, update, check, color, verbose, print_default)
     }
 
     #[track_caller]
@@ -200,7 +200,7 @@ pub mod synchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, handle_debug);
+        with(generator, update, check, color, verbose, print_debug);
     }
 
     #[track_caller]
@@ -211,7 +211,7 @@ pub mod synchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, handle_minimal);
+        with(generator, update, check, color, verbose, print_minimal);
     }
 
     #[track_caller]
@@ -230,10 +230,17 @@ pub mod synchronous {
         handle: H,
     ) {
         let mut checker = generator.checker();
-        let Guard(colors) = &prepare(&mut checker, update, color, verbose);
+        let colors = prepare(&mut checker, update, color, verbose);
+        let guard = hook::capture();
         checker
-            .checks(hook::silent(check))
-            .for_each(|result| handle(result, colors));
+            .checks(move |input| {
+                let guard = hook::quiet();
+                let output = check(input);
+                drop(guard);
+                output
+            })
+            .for_each(|result| handle(result, &colors));
+        drop(guard);
     }
 }
 
@@ -260,7 +267,7 @@ pub mod asynchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, handle_default)
+        with(generator, update, check, color, verbose, print_default)
     }
 
     #[track_caller]
@@ -276,7 +283,7 @@ pub mod asynchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, handle_debug)
+        with(generator, update, check, color, verbose, print_debug)
     }
 
     #[track_caller]
@@ -292,7 +299,7 @@ pub mod asynchronous {
         color: bool,
         verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, handle_minimal)
+        with(generator, update, check, color, verbose, print_minimal)
     }
 
     #[track_caller]
@@ -312,20 +319,29 @@ pub mod asynchronous {
     ) {
         let mut checker = generator.checker().asynchronous();
         // Keep the canonical run option order as `(color, verbose)`.
-        let Guard(colors) = &prepare(&mut checker, update, color, verbose);
+        let colors = prepare(&mut checker, update, color, verbose);
+        let guard = hook::capture();
+        let check = &check;
         block_on(
             checker
-                // TODO: Is it possible to use `hook::silent` (adapted for futures) here?
-                .checks(check)
-                .for_each(|result| handle(result, colors)),
+                .checks(move |item| async move {
+                    let guard = hook::quiet();
+                    let proof = check(item).await;
+                    drop(guard);
+                    proof
+                })
+                .for_each(|result| handle(result, &colors)),
         );
+        drop(guard);
     }
 }
 
 mod hook {
     use super::*;
 
-    pub struct Guard<T: ?Sized>(pub T);
+    pub(crate) struct EndGuard(());
+
+    pub(crate) struct RestoreGuard(Option<Handle>);
 
     #[rustversion::since(1.81)]
     type Handle = Box<dyn Fn(&panic::PanicHookInfo) + 'static + Sync + Send>;
@@ -333,85 +349,47 @@ mod hook {
     type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
-    impl<T> Guard<T> {
-        pub fn new(state: T) -> Self {
-            begin();
-            Self(state)
-        }
-    }
-
-    impl<T: ?Sized> Deref for Guard<T> {
-        type Target = T;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl<T: ?Sized> DerefMut for Guard<T> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.0
-        }
-    }
-
-    impl<T: ?Sized> AsRef<T> for Guard<T> {
-        fn as_ref(&self) -> &T {
-            &self.0
-        }
-    }
-
-    impl<T: ?Sized> AsMut<T> for Guard<T> {
-        fn as_mut(&mut self) -> &mut T {
-            &mut self.0
-        }
-    }
-
-    impl<T: ?Sized> Drop for Guard<T> {
+    impl Drop for EndGuard {
         fn drop(&mut self) {
             end();
         }
     }
 
-    pub fn begin() {
-        HOOK.with(|cell| cell.set(Some(panic::take_hook())));
-        panic::set_hook(Box::new(|panic| {
-            HOOK.with(|cell| {
-                if let Some(hook) = cell.replace(None) {
-                    hook(panic);
-                    cell.set(Some(hook));
-                }
-            });
-        }));
-    }
-
-    pub fn silent<I, O>(function: impl Fn(I) -> O) -> impl Fn(I) -> O {
-        struct Restore(Option<Handle>);
-
-        impl Drop for Restore {
-            fn drop(&mut self) {
-                HOOK.with(|cell| cell.set(self.0.take()));
-            }
-        }
-
-        move |input| {
-            let restore = HOOK.with(|cell| Restore(cell.replace(None)));
-            let output = function(input);
-            drop(restore);
-            output
+    impl Drop for RestoreGuard {
+        fn drop(&mut self) {
+            HOOK.set(self.0.take());
         }
     }
 
-    pub fn end() {
-        HOOK.with(|cell| {
-            if let Some(hook) = cell.take() {
-                panic::set_hook(hook);
-            }
-        });
+    pub fn capture() -> EndGuard {
+        begin();
+        EndGuard(())
     }
 
     pub fn panic() -> ! {
         end();
         panic!();
+    }
+
+    pub fn quiet() -> RestoreGuard {
+        RestoreGuard(HOOK.take())
+    }
+
+    fn begin() {
+        HOOK.set(Some(panic::take_hook()));
+        panic::set_hook(Box::new(|panic| {
+            let guard = quiet();
+            if let Some(hook) = guard.0.as_ref() {
+                hook(panic);
+            }
+            drop(guard);
+        }));
+    }
+
+    fn end() {
+        if let Some(hook) = HOOK.take() {
+            panic::set_hook(hook);
+        }
     }
 
     #[cfg(test)]
@@ -420,14 +398,12 @@ mod hook {
 
         #[test]
         fn silent_restores_hook_after_panicking_closure() {
-            begin();
-            let silent = silent(|_| panic!("boom"));
-
-            let _ = panic::catch_unwind(panic::AssertUnwindSafe(|| silent(())));
-
-            let has_hook = HOOK.with(|cell| cell.replace(None).is_some());
-            assert!(has_hook);
-            end();
+            let _guard = capture();
+            let _result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                let _guard = hook::quiet();
+                panic!("boom");
+            }));
+            assert!(HOOK.take().is_some());
         }
     }
 }
