@@ -53,7 +53,7 @@ pub struct Generates {
 pub struct Shrinks {
     /// The maximum number of times to shrink a failing value.
     ///
-    /// Setting this to `0` disables shrinking. Defaults to `SHRINKS`.
+    /// Setting this to `0` disables shrinking. Defaults to [`SHRINKS`].
     pub count: usize,
     /// Whether the [`Checks`] iterator should yield [`Result::Shrink`] items.
     ///
