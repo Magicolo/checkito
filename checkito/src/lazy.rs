@@ -1,4 +1,4 @@
-use crate::{state::State, Generate};
+use crate::{Generate, state::State};
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]

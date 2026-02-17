@@ -1,4 +1,5 @@
 use crate::{
+    COLLECTS, RETRIES,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -11,12 +12,11 @@ use crate::{
     keep::Keep,
     map::Map,
     prelude,
-    primitive::{usize::Usize, Constant, Range},
+    primitive::{Constant, Range, usize::Usize},
     shrink::Shrink,
     size::Size,
     state::{Sizes, State},
     unify::Unify,
-    COLLECTS, RETRIES,
 };
 use core::iter::FromIterator;
 
@@ -35,8 +35,8 @@ use core::iter::FromIterator;
 /// struct MyType(u8);
 ///
 /// impl FullGenerate for MyType {
-///     type Item = Self;
 ///     type Generator = map::Map<ops::RangeInclusive<u8>, fn(u8) -> Self>;
+///     type Item = Self;
 ///
 ///     fn generator() -> Self::Generator {
 ///         // The generator for `MyType` will produce values with `u8` from 0 to 10.

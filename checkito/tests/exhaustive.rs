@@ -1,6 +1,5 @@
 pub mod common;
-use checkito::state::Weight;
-use checkito::Generate;
+use checkito::{Generate, state::Weight};
 use common::*;
 use std::collections::HashSet;
 

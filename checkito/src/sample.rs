@@ -1,8 +1,8 @@
 use crate::{
+    SAMPLES,
     generate::Generate,
     shrink::{Shrink, Shrinkers},
     state::{self, Modes, Sizes, State},
-    SAMPLES,
 };
 use core::iter;
 

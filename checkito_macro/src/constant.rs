@@ -1,9 +1,9 @@
 use quote::quote_spanned;
 use syn::{
-    spanned::Spanned,
+    __private::{Span, TokenStream2},
     Block, Expr, ExprBinary, ExprBlock, ExprCast, ExprConst, ExprGroup, ExprLit, ExprRange,
     ExprTuple, ExprUnary, Ident, Lit, RangeLimits, Stmt, Type, TypeGroup, TypeParen, TypePath,
-    __private::{Span, TokenStream2},
+    spanned::Spanned,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

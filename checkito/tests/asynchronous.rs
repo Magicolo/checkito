@@ -2,7 +2,7 @@
 
 pub mod common;
 use common::*;
-use core::future::{ready, Future};
+use core::future::{Future, ready};
 use futures_lite::future::block_on;
 
 #[test]

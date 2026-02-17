@@ -2,8 +2,8 @@
 
 pub mod common;
 use checkito::primitive::{
-    char::Char, i128::I128, i32::I32, i64::I64, isize::Isize, u128::U128, usize::Usize, Constant,
-    Range,
+    Constant, Range, char::Char, i32::I32, i64::I64, i128::I128, isize::Isize, u128::U128,
+    usize::Usize,
 };
 use common::*;
 
@@ -31,36 +31,9 @@ fn constant_expression_is_converted() {
     assert_eq!(constant!(1 + 2usize), Usize::<3>);
     assert_eq!(constant!((1i32,)), (I32::<1>,));
     assert_eq!(constant!({ (1,) }), (I32::<1>,));
-    assert_eq!(
-        constant!({
-            {
-                1 as u128
-            }
-        }),
-        U128::<1>
-    );
-    assert_eq!(
-        constant!({
-            {
-                {
-                    1i128
-                }
-            }
-        }),
-        I128::<1>
-    );
-    assert_eq!(
-        constant!({
-            {
-                {
-                    {
-                        1i64 + 2
-                    }
-                }
-            }
-        }),
-        I64::<3>
-    );
+    assert_eq!(constant!({ { 1 as u128 } }), U128::<1>);
+    assert_eq!(constant!({ { { 1i128 } } }), I128::<1>);
+    assert_eq!(constant!({ { { { 1i64 + 2 } } } }), I64::<3>);
 }
 
 #[test]

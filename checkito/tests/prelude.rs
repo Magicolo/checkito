@@ -89,8 +89,8 @@ fn dampen_with_limit_applies_after_nested_flatten_depth() {
 #[test]
 fn lazy_constructs_generator_only_once() {
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
 
     let calls = Arc::new(AtomicUsize::new(0));
@@ -139,8 +139,8 @@ fn converted_values_match_from_implementation(value: u8) {
 fn lazy_cell_generator_is_forced_and_reused() {
     use core::cell::LazyCell;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
 
     let calls = Arc::new(AtomicUsize::new(0));
@@ -161,8 +161,8 @@ fn lazy_cell_generator_is_forced_and_reused() {
 #[test]
 fn lazy_lock_generator_is_forced_and_reused() {
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, LazyLock,
+        atomic::{AtomicUsize, Ordering},
     };
 
     let calls = Arc::new(AtomicUsize::new(0));

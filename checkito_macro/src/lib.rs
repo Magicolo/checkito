@@ -51,7 +51,7 @@ pub fn check(
 ) -> proc_macro::TokenStream {
     use core::mem::{replace, take};
     use quote::{format_ident, quote};
-    use syn::{parse_macro_input, ItemFn, Visibility};
+    use syn::{ItemFn, Visibility, parse_macro_input};
 
     let check: check::Check = parse_macro_input!(attribute);
     let mut checks = vec![check];

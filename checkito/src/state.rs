@@ -1,6 +1,7 @@
 use crate::{
-    primitive::{u8::U8, Range},
-    utility, Generate, Shrink, GENERATES,
+    GENERATES, Generate, Shrink,
+    primitive::{Range, u8::U8},
+    utility,
 };
 use core::{
     iter::FusedIterator,
@@ -273,8 +274,8 @@ impl State {
                     //
                     // For a generator with cardinality `c`:
                     // - length `L` contributes `c^L` distinct combinations.
-                    // - so lengths form geometric "buckets" of sizes
-                    //   `c^start, c^(start+1), ... c^end`.
+                    // - so lengths form geometric "buckets" of sizes `c^start, c^(start+1), ...
+                    //   c^end`.
                     //
                     // This branch maps the current global exhaustive `index` to the
                     // correct length bucket without scanning linearly.

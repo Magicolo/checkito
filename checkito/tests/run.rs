@@ -1,7 +1,6 @@
 pub mod common;
-use common::*;
-
 use checkito::check::Result as CheckResult;
+use common::*;
 
 #[test]
 fn result_accessors_cover_pass_and_fail_paths() {

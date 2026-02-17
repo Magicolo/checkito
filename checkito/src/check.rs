@@ -1,10 +1,10 @@
 use crate::{
+    GENERATES, SHRINKS,
     generate::Generate,
     prove::Prove,
     shrink::Shrink,
     state::{self, Modes, Sizes, State, States},
     utility::cast,
-    GENERATES, SHRINKS,
 };
 use core::{
     fmt::{self, Debug},
@@ -12,9 +12,10 @@ use core::{
     panic::AssertUnwindSafe,
     result,
 };
-use std::{borrow::Cow, error, panic::catch_unwind};
-use std::{iter, mem::take};
-use std::{num::NonZeroUsize, thread::available_parallelism};
+use std::{
+    borrow::Cow, error, iter, mem::take, num::NonZeroUsize, panic::catch_unwind,
+    thread::available_parallelism,
+};
 
 /// Configures the generation process.
 #[derive(Clone, Debug)]
@@ -535,18 +536,19 @@ pub(crate) mod synchronous {
 
     /// An iterator over the results of a property test.
     ///
-    /// The iterator first enters a generation phase, where it produces values and
-    /// runs the test against them.
+    /// The iterator first enters a generation phase, where it produces values
+    /// and runs the test against them.
     ///
     /// - If a check passes, it yields a [`Result::Pass`].
     /// - If a check fails, it enters the shrinking phase.
     ///
-    /// In the shrinking phase, it repeatedly tries to simplify the failing value.
+    /// In the shrinking phase, it repeatedly tries to simplify the failing
+    /// value.
     ///
     /// - If a shrunk value passes the test, it yields a [`Result::Shrink`],
     ///   indicating that this simpler value did not reproduce the failure.
-    /// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and this
-    ///   new, simpler value becomes the one to be shrunk further.
+    /// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and
+    ///   this new, simpler value becomes the one to be shrunk further.
     ///
     /// Once a value can no longer be shrunk, the iterator yields a final
     /// [`Result::Fail`] and then terminates.
@@ -723,9 +725,9 @@ pub(crate) mod asynchronous {
     use core::{
         future::Future,
         pin::Pin,
-        task::{ready, Context, Poll},
+        task::{Context, Poll, ready},
     };
-    use futures_lite::{stream, StreamExt};
+    use futures_lite::{StreamExt, stream};
     use pin_project_lite::pin_project;
     use std::collections::VecDeque;
 
@@ -893,8 +895,8 @@ pub(crate) mod asynchronous {
                 //             break Poll::Ready(None);
                 //         };
                 //         let shrinker = generator.generate(&mut state);
-                //         match prepare(shrinker.item(), &mut checks.check, &mut pin) {
-                //             Ok(pin) => {
+                //         match prepare(shrinker.item(), &mut checks.check,
+                // &mut pin) {             Ok(pin) => {
                 //                 checks.machine = Machine::Handle1 {
                 //                     generator,
                 //                     states,
@@ -932,8 +934,8 @@ pub(crate) mod asynchronous {
                 //                 pin: Some(pin),
                 //             };
                 //             if checks.yields.0 {
-                //                 break Poll::Ready(Some(pass(shrinker.item(), state, proof)));
-                //             }
+                //                 break Poll::Ready(Some(pass(shrinker.item(),
+                // state, proof)));             }
                 //         }
                 //         Err(cause) => {
                 //             checks.machine = Machine::Shrink {
@@ -978,8 +980,8 @@ pub(crate) mod asynchronous {
                 //                 )));
                 //             }
                 //         };
-                //         match prepare(new_shrinker.item(), &mut checks.check, &mut pin) {
-                //             Ok(pin) => {
+                //         match prepare(new_shrinker.item(), &mut checks.check,
+                // &mut pin) {             Ok(pin) => {
                 //                 checks.machine = Machine::Handle2 {
                 //                     index: next,
                 //                     state,
@@ -1029,8 +1031,8 @@ pub(crate) mod asynchronous {
                 //                 pin: Some(pin),
                 //             };
                 //             if checks.yields.1 {
-                //                 break Poll::Ready(Some(shrink(new.item(), index, state, proof)));
-                //             }
+                //                 break Poll::Ready(Some(shrink(new.item(),
+                // index, state, proof)));             }
                 //         }
                 //         Err(new_cause) => {
                 //             checks.machine = Machine::Shrink {
@@ -1042,8 +1044,8 @@ pub(crate) mod asynchronous {
                 //                 pin: Some(pin),
                 //             };
                 //             if checks.yields.2 {
-                //                 break Poll::Ready(Some(shrunk(old.item(), index, state, cause)));
-                //             }
+                //                 break Poll::Ready(Some(shrunk(old.item(),
+                // index, state, cause)));             }
                 //         }
                 //     },
                 //     Machine::Done => break Poll::Ready(None),
