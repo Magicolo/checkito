@@ -30,6 +30,7 @@ orn = { version = "0.8.2", default-features = false, features = [
     "or16",
     "iter",
 ] }
+pin-project-lite = "0.2.16"
 ref-cast = "1.0.25"
 regex-syntax = { workspace = true, optional = true }
 rustversion = "1.0.22"

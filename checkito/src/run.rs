@@ -254,10 +254,10 @@ pub mod asynchronous {
 
     #[track_caller]
     pub fn default<
-        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
+        G: Generate<Item: fmt::Debug>,
         U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
+        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug>>,
+        C: Fn(G::Item) -> P,
     >(
         generator: G,
         update: U,
@@ -270,10 +270,10 @@ pub mod asynchronous {
 
     #[track_caller]
     pub fn debug<
-        G: Generate<Item: fmt::Debug, Shrink: Unpin> + Unpin,
+        G: Generate<Item: fmt::Debug>,
         U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug + Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
+        P: Future<Output: Prove<Proof: fmt::Debug, Error: fmt::Debug>>,
+        C: Fn(G::Item) -> P,
     >(
         generator: G,
         update: U,
@@ -286,10 +286,10 @@ pub mod asynchronous {
 
     #[track_caller]
     pub fn minimal<
-        G: Generate<Shrink: Unpin> + Unpin,
+        G: Generate,
         U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
+        P: Future<Output: Prove>,
+        C: Fn(G::Item) -> P,
     >(
         generator: G,
         update: U,
@@ -302,10 +302,10 @@ pub mod asynchronous {
 
     #[track_caller]
     fn with<
-        G: Generate<Shrink: Unpin> + Unpin,
+        G: Generate,
         U: FnOnce(&mut Checker<G, Run>),
-        P: Future<Output: Prove<Error: Unpin> + Unpin>,
-        C: Fn(G::Item) -> P + Unpin,
+        P: Future<Output: Prove>,
+        C: Fn(G::Item) -> P,
         H: Fn(Result<G::Item, P::Output>, &Colors),
     >(
         generator: G,
