@@ -34,7 +34,7 @@ fn range_shrinks() {
 fn generates_exhaustively() {
     let values = regex!("[a-c]{0,2}")
         .checks(Ok::<_, ()>)
-        .map(|result| result.item())
+        .map(|result| result.into_item())
         .collect::<Vec<_>>();
 
     assert_eq!(values.len(), 13);

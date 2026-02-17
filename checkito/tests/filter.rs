@@ -48,7 +48,7 @@ fn filter_map_with_zero_retries_can_return_none() {
     let values = (0u8..=3)
         .filter_map_with(0, |value| (value % 2 == 0).then_some(value / 2))
         .checks(Ok::<_, ()>)
-        .map(|result| result.item())
+        .map(|result| result.into_item())
         .collect::<Vec<_>>();
 
     assert_eq!(values, vec![Some(0), None, Some(1), None]);

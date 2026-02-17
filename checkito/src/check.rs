@@ -311,23 +311,39 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
-    pub fn pass(self, shrink: bool) -> Option<Pass<T, P::Proof>> {
+    pub fn pass(&self, shrink: bool) -> Option<&Pass<T, P::Proof>> {
         match self {
             Result::Pass(pass) => Some(pass),
             Result::Shrink(pass) if shrink => Some(pass),
-            Result::Fail(_) | Result::Shrink(_) | Result::Shrunk(_) => None,
+            _ => None,
         }
     }
 
-    pub fn fail(self, shrunk: bool) -> Option<Fail<T, P::Error>> {
+    pub fn into_pass(self, shrink: bool) -> result::Result<Pass<T, P::Proof>, Self> {
+        match self {
+            Result::Pass(pass) => Ok(pass),
+            Result::Shrink(pass) if shrink => Ok(pass),
+            result => Err(result),
+        }
+    }
+
+    pub fn fail(&self, shrunk: bool) -> Option<&Fail<T, P::Error>> {
         match self {
             Result::Fail(fail) => Some(fail),
             Result::Shrunk(fail) if shrunk => Some(fail),
-            Result::Pass(_) | Result::Shrunk(_) | Result::Shrink(_) => None,
+            _ => None,
         }
     }
 
-    pub fn item(self) -> T {
+    pub fn into_fail(self, shrunk: bool) -> result::Result<Fail<T, P::Error>, Self> {
+        match self {
+            Result::Fail(fail) => Ok(fail),
+            Result::Shrunk(fail) if shrunk => Ok(fail),
+            result => Err(result),
+        }
+    }
+
+    pub fn into_item(self) -> T {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.item,
             Result::Fail(fail) | Result::Shrunk(fail) => fail.item,
@@ -335,7 +351,7 @@ impl<T, P: Prove> Result<T, P> {
     }
 
     #[allow(clippy::result_large_err)]
-    pub fn result(self) -> result::Result<Pass<T, P::Proof>, Fail<T, P::Error>> {
+    pub fn into_result(self) -> result::Result<Pass<T, P::Proof>, Fail<T, P::Error>> {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => Ok(pass),
             Result::Fail(fail) | Result::Shrunk(fail) => Err(fail),
@@ -559,7 +575,7 @@ pub(crate) mod synchronous {
             self.generate.items = false;
             self.shrink.items = false;
             self.shrink.errors = false;
-            self.checks(check).last()?.fail(false)
+            self.checks(check).last()?.into_fail(false).ok()
         }
 
         pub fn checks<P: Prove, F: FnMut(G::Item) -> P>(
@@ -756,7 +772,7 @@ pub(crate) mod asynchronous {
             self.generate.items = false;
             self.shrink.items = false;
             self.shrink.errors = false;
-            self.checks(check).last().await?.fail(false)
+            self.checks(check).last().await?.into_fail(false).ok()
         }
 
         pub fn checks<

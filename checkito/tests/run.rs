@@ -9,18 +9,18 @@ fn result_accessors_cover_pass_and_fail_paths() {
     assert_eq!(pass.generates(), 1);
     assert_eq!(pass.shrinks(), 0);
     assert_eq!(pass.state().index(), 0);
-    let pass_item = pass.clone().pass(false).unwrap();
+    let pass_item = pass.clone().into_pass(false).unwrap();
     assert_eq!(pass_item.item, 0);
     assert_eq!(pass_item.proof, 0);
     assert!(pass.clone().fail(false).is_none());
-    assert!(pass.clone().result().is_ok());
+    assert!(pass.clone().into_result().is_ok());
 
     let fail = (0u8..=0).checks(|_| Err::<(), _>("x")).next().unwrap();
     assert!(fail.clone().pass(false).is_none());
-    let fail_item = fail.clone().fail(false).unwrap();
+    let fail_item = fail.clone().into_fail(false).unwrap();
     assert_eq!(fail_item.cause, Cause::Disprove("x"));
-    assert!(fail.clone().result().is_err());
-    assert_eq!(fail.item(), 0);
+    assert!(fail.clone().into_result().is_err());
+    assert_eq!(fail.into_item(), 0);
 }
 
 #[test]
@@ -57,7 +57,7 @@ mod check {
     #[check(0u8..=u8::MAX)]
     fn result_item_round_trip_matches_generated_value(value: u8) {
         let step = same(value).checks(Ok::<_, ()>).next().unwrap();
-        assert_eq!(step.item(), value);
+        assert_eq!(step.into_item(), value);
     }
 
     #[check(0u8..=u8::MAX)]
@@ -65,7 +65,7 @@ mod check {
         let step = same(value).checks(Ok::<_, ()>).next().unwrap();
         assert_eq!(step.generates(), 1);
         assert_eq!(step.shrinks(), 0);
-        let pass = step.pass(false).unwrap();
+        let pass = step.into_pass(false).unwrap();
         assert_eq!(pass.item, value);
         assert_eq!(pass.proof, value);
     }

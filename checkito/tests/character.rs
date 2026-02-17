@@ -50,7 +50,7 @@ fn collects_exhaustively() {
     let set = range
         .clone()
         .checks(Ok::<_, ()>)
-        .map(|result| result.item())
+        .map(|result| result.into_item())
         .collect::<HashSet<_>>();
     for letter in range {
         assert!(set.contains(&letter));

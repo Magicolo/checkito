@@ -11,7 +11,7 @@ fn checks_a_single_item() {
 fn collects_exhaustively() {
     let set = Generate::collect::<String>('a'..='Z')
         .checks(Ok::<_, ()>)
-        .map(|result| result.item())
+        .map(|result| result.into_item())
         .collect::<HashSet<_>>();
     for letter in 'a'..='Z' {
         assert!(set.contains(letter.to_string().as_str()));

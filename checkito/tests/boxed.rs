@@ -9,7 +9,7 @@ fn boxed_generator_supports_sampling_and_cardinality() {
 
     let values = generator
         .checks(Ok::<_, ()>)
-        .map(|result| result.item())
+        .map(|result| result.into_item())
         .collect::<Vec<_>>();
     assert_eq!(values, vec![0, 1, 2]);
 }
