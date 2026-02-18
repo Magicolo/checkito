@@ -10,7 +10,7 @@ fn executes_to_completion() {
     let fail = block_on(
         usize::generator()
             .checker()
-            .asynchronous()
+            .asynchronous(None)
             .check(|value| async move { value < 1_000_000 }),
     );
     assert!(fail.is_some());

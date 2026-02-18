@@ -79,10 +79,7 @@
                 "files.watcherExclude": {
                     "**/target/**": true
                 },
-                "errorLens.enabledDiagnosticLevels": [
-                    "error",
-                    "warning"
-                ],
+                "errorLens.enabledDiagnosticLevels": ["error", "warning"],
                 "todo-tree.regex.regex": "(//|#|<!--|;|/\\*|^|^[ \\t]*(-|\\d+.))\\s*($TAGS)|todo!|unimplemented!",
                 // Rust
                 "rust-analyzer.check.command": "clippy",

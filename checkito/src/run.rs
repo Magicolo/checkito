@@ -314,7 +314,7 @@ pub mod asynchronous {
         verbose: bool,
         handle: H,
     ) {
-        let mut checker = generator.checker().asynchronous();
+        let mut checker = generator.checker().asynchronous(None);
         // Keep the canonical run option order as `(color, verbose)`.
         let colors = prepare(&mut checker, update, color, verbose);
         let guard = hook::capture();
