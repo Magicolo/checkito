@@ -62,7 +62,8 @@ fn unbounded_quantifiers_have_reasonable_limits() {
     // Test a+ (1 or more)
     let generator = regex("a+", None).unwrap();
     for value in generator.samples(50) {
-        assert!(value.len() >= 1 && value.len() <= 64);
+        assert!(!value.is_empty());
+        assert!(value.len() <= 64);
     }
 
     // Test a{1000,} (at least 1000 repetitions)

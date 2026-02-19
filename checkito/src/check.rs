@@ -189,7 +189,7 @@ pub enum Result<T, P: Prove> {
 }
 
 /// Represents a successful test case.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Pass<T, P> {
     /// The value that passed the test.
     pub item: T,
@@ -205,7 +205,7 @@ pub struct Pass<T, P> {
 }
 
 /// Represents a failed test case.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Fail<T, E> {
     /// The value that failed the test.
     pub item: T,
@@ -227,6 +227,18 @@ pub enum Cause<E> {
     Disprove(E),
     /// The test function panicked.
     Panic(Option<Cow<'static, str>>),
+}
+
+impl<T: PartialEq, P: Prove<Proof: PartialEq, Error: PartialEq>> PartialEq for Result<T, P> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Pass(left), Self::Pass(right)) => left == right,
+            (Self::Shrink(left), Self::Shrink(right)) => left == right,
+            (Self::Shrunk(left), Self::Shrunk(right)) => left == right,
+            (Self::Fail(left), Self::Fail(right)) => left == right,
+            _ => false,
+        }
+    }
 }
 
 impl<G: Generate + ?Sized> Check for G {}
@@ -720,6 +732,16 @@ pub(crate) mod synchronous {
 
 #[cfg(feature = "asynchronous")]
 pub(crate) mod asynchronous {
+    //! Asynchronous property testing with concurrent execution.
+    //!
+    //! This module implements an asynchronous version of the property checker
+    //! that can execute multiple test cases concurrently, controlled by the
+    //! `concurrency` parameter.
+    //!
+    //! Up to `concurrency` futures are spawned and polled concurrently. The
+    //! stream maintains strict FIFO ordering of results: even when futures
+    //! complete out of order, results are yielded in the order they were
+    //! generated/shrunk.
     use super::*;
     use core::{
         future::Future,
@@ -734,10 +756,10 @@ pub(crate) mod asynchronous {
     }
 
     pin_project! {
-        /// An iterator over the results of a property test.
+        /// An asynchronous stream over the results of a property test.
         ///
-        /// The iterator first enters a generation phase, where it produces values and
-        /// runs the test against them.
+        /// The stream first enters a generation phase, where it produces values and
+        /// runs the test against them concurrently (up to `concurrency` futures).
         ///
         /// - If a check passes, it yields a [`Result::Pass`].
         /// - If a check fails, it enters the shrinking phase.
@@ -749,8 +771,13 @@ pub(crate) mod asynchronous {
         /// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and this
         ///   new, simpler value becomes the one to be shrunk further.
         ///
-        /// Once a value can no longer be shrunk, the iterator yields a final
+        /// Once a value can no longer be shrunk, the stream yields a final
         /// [`Result::Fail`] and then terminates.
+        ///
+        /// ## Ordering
+        ///
+        /// Results are always yielded in generation order, regardless of which futures
+        /// complete first. This ensures deterministic behavior when using a fixed seed.
         pub struct Stream<G: Generate, P: Future<Output: Prove>, C> {
             yields: Yields,
             check: C,
@@ -1095,7 +1122,7 @@ pub(crate) mod asynchronous {
                 };
                 entry.set(Entry::Vacant);
                 Resolution::Resolved {
-                    index: *head,
+                    index,
                     shrinker,
                     state,
                     result,
