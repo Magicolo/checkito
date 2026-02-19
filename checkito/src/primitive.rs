@@ -654,7 +654,8 @@ macro_rules! integer {
             type Item = $type;
             type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = u128::wrapping_sub($type::MAX as _, $type::MIN as _).checked_add(1);
+            const CARDINALITY: Option<u128> =
+                u128::wrapping_sub($type::MAX as _, $type::MIN as _).checked_add(1);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let value = state.with().size(1.0).u8(..);

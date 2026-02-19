@@ -102,12 +102,21 @@ fn single_value_range_has_cardinality_one() {
 #[test]
 fn full_usize_has_correct_cardinality() {
     let generator = usize::generator();
-    assert_eq!(generator.cardinality(), Some(usize::MAX as u128 + 1));
+    let range = (usize::MAX as u128) - (usize::MIN as u128);
+    let expected = range.checked_add(1);
+    match expected {
+        Some(value) => assert_eq!(generator.cardinality(), Some(value)),
+        None => assert_eq!(generator.cardinality(), None),
+    }
 }
 
 #[test]
 fn full_isize_has_correct_cardinality() {
     let generator = isize::generator();
-    let expected = u128::wrapping_sub(isize::MAX as u128, isize::MIN as u128) + 1;
-    assert_eq!(generator.cardinality(), Some(expected));
+    let range = u128::wrapping_sub(isize::MAX as u128, isize::MIN as u128);
+    let expected = range.checked_add(1);
+    match expected {
+        Some(value) => assert_eq!(generator.cardinality(), Some(value)),
+        None => assert_eq!(generator.cardinality(), None),
+    }
 }
