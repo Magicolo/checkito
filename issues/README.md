@@ -85,7 +85,7 @@ If you rely on the cardinality feature:
 
 ## Running Tests
 
-The original experiments have been cleaned up as requested. To verify the issues:
+The original experiments have been cleaned up as described. To verify the issues:
 1. Review the reproduction code in each issue file
 2. The existing cardinality tests in `checkito/tests/cardinality.rs` may not cover these edge cases
-3. Consider adding regression tests for each issue once fixed
+3: Consider adding regression tests for each issue once fixed
