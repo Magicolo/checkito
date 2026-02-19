@@ -25,26 +25,18 @@ fn executes_to_completion() {
 
 #[test]
 fn handles_async_panics_gracefully() {
-    let result_outer = block_on(
-        (1u8..=255)
-            .checker()
-            .asynchronous(None)
-            .check(|_value| {
-                panic!();
-                #[allow(unreachable_code)]
-                ready(true)
-            }),
-    );
-    let result_inner = block_on(
-        (1u8..=255)
-            .checker()
-            .asynchronous(None)
-            .check(|_value| async move {
-                panic!();
-                #[allow(unreachable_code)]
-                true
-            }),
-    );
+    let result_outer = block_on((1u8..=255).checker().asynchronous(None).check(|_value| {
+        panic!();
+        #[allow(unreachable_code)]
+        ready(true)
+    }));
+    let result_inner = block_on((1u8..=255).checker().asynchronous(None).check(
+        |_value| async move {
+            panic!();
+            #[allow(unreachable_code)]
+            true
+        },
+    ));
     assert!(matches!(
         result_outer,
         Some(Fail {
