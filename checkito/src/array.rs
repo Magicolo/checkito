@@ -1,4 +1,4 @@
-use crate::{all, cardinality, generate::Generate, state::State};
+use crate::{all, cardinality, generate::Generate, primitive::Constant, state::State};
 use core::array;
 
 #[derive(Clone, Debug)]
@@ -20,4 +20,8 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     fn cardinality(&self) -> Option<u128> {
         cardinality::all_repeat_static::<N>(self.0.cardinality())
     }
+}
+
+impl<C: Constant, const N: usize> Constant for Array<C, N> {
+    const VALUE: Self = Self(C::VALUE);
 }

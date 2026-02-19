@@ -1,4 +1,4 @@
-use crate::{generate::Generate, state::State};
+use crate::{generate::Generate, primitive::Constant, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Dampen<G: ?Sized> {

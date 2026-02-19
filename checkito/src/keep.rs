@@ -1,4 +1,4 @@
-use crate::{generate::Generate, shrink::Shrink, state::State};
+use crate::{generate::Generate, primitive::Constant, shrink::Shrink, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Keep<T: ?Sized>(pub(crate) T);
@@ -28,4 +28,8 @@ impl<S: Shrink> Shrink for Keep<S> {
     fn shrink(&mut self) -> Option<Self> {
         None
     }
+}
+
+impl<C: Constant> Constant for Keep<C> {
+    const VALUE: Self = Self(C::VALUE);
 }

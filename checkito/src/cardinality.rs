@@ -1,4 +1,4 @@
-use crate::{Generate, primitive::Range, state::State};
+use crate::{Generate, primitive::{Constant, Range}, state::State};
 
 #[derive(Debug, Clone)]
 pub struct Cardinality<G, const C: u128>(pub(crate) G);
@@ -12,6 +12,10 @@ impl<G: Generate, const C: u128> Generate for Cardinality<G, C> {
     fn generate(&self, state: &mut State) -> Self::Shrink {
         self.0.generate(state)
     }
+}
+
+impl<G: Constant, const C: u128> Constant for Cardinality<G, C> {
+    const VALUE: Self = Self(G::VALUE);
 }
 
 #[inline]
