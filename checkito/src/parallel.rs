@@ -350,9 +350,12 @@ impl<T> iter::Iterator for Iterator<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // Check if any worker thread panicked and propagate the panic
         if let Ok(error) = self.error.try_recv() {
             let error = error.as_ref().map_or("a thread panicked", String::as_str);
-            panic!("{error}");
+            // Re-panic to preserve the original panic behavior.
+            // This is intentional: parallel iterator panics when a worker thread panics.
+            panic!("parallel iterator worker failed: {error}");
         }
 
         match self.item.as_mut()?.recv().ok()? {
