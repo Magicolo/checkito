@@ -1,6 +1,7 @@
 use crate::{
     cardinality,
     generate::Generate,
+    primitive::Constant,
     shrink::Shrink,
     state::{State, Weight},
     utility::tuples,
@@ -68,6 +69,10 @@ impl<S: Shrink> Shrink for Shrinker<S> {
     fn shrink(&mut self) -> Option<Self> {
         Some(Self(self.0.as_mut()?.shrink()))
     }
+}
+
+impl<C: Constant> Constant for Any<C> {
+    const VALUE: Self = Self(C::VALUE);
 }
 
 const fn as_slice<T>(slice: &[T]) -> &[T] {

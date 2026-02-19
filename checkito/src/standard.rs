@@ -1,10 +1,13 @@
 use crate::{
+    any::Any,
     cardinality,
     convert::Convert,
     generate::{FullGenerate, Generate},
     primitive,
+    primitive::{Constant, char::Char},
     shrink::Shrink,
     state::State,
+    unify::Unify,
 };
 use core::{marker::PhantomData, mem::take};
 use std::{rc::Rc, sync::Arc};
@@ -190,212 +193,68 @@ macro_rules! pointer {
     };
 }
 
+macro_rules! generator {
+    ($name: ident $(<)?$($generic: ident $(: $constraint: path)?),*$(>)?, $item: ty, $type: ty) => {
+        generator!($name <$($generic $(: $constraint)?),*>, $item, $type, <$type as Constant>::VALUE);
+    };
+    ($name: ident $(<)?$($generic: ident $(: $constraint: path)?),*$(>)?, $item: ty, $type: ty, $constant: expr) => {
+        #[derive(Clone, Copy, Debug)]
+        pub struct $name<$($generic: $($constraint)?),*>(pub(crate) PhantomData<($($generic,)*)>);
+
+        impl<$($generic: $($constraint)?),*> Constant for $name<$($generic,)*> {
+            const VALUE: Self = Self(PhantomData);
+        }
+
+        impl<$($generic: $($constraint)?),*> Generate for $name<$($generic,)*> {
+            type Item = $item;
+            type Shrink = <$type as Generate>::Shrink;
+
+            const CARDINALITY: Option<u128> = <$type as Generate>::CARDINALITY;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                $constant.generate(state)
+            }
+
+            fn cardinality(&self) -> Option<u128> {
+                $constant.cardinality()
+            }
+        }
+    };
+}
+
 pointer!(boxed, Box);
 pointer!(rc, Rc);
 pointer!(arc, Arc);
 
 pub mod character {
     use super::*;
-    use crate::{any::Any, unify::Unify};
-    use core::ops::RangeInclusive;
 
-    type LetterGenerator = Unify<Any<(RangeInclusive<char>, RangeInclusive<char>)>, char>;
+    generator!(
+        Letter,
+        char,
+        Unify<
+            Any<(
+                primitive::Range<Char<'a'>, Char<'z'>>,
+                primitive::Range<Char<'A'>, Char<'Z'>>,
+            )>,
+            char,
+        >
+    );
 
-    /// A generator for ASCII letters (`a-z`, `A-Z`).
-    #[derive(Clone, Debug)]
-    pub struct Letter(LetterGenerator);
-
-    /// A generator for ASCII digits (`0-9`).
-    #[derive(Clone, Debug)]
-    pub struct Digit(RangeInclusive<char>);
-
-    /// A generator for all ASCII characters (0-127).
-    #[derive(Clone, Debug)]
-    pub struct Ascii(RangeInclusive<char>);
-
-    impl Letter {
-        pub const fn new() -> Self {
-            Self(crate::prelude::unify(crate::prelude::any((
-                'a'..='z',
-                'A'..='Z',
-            ))))
-        }
-    }
-
-    impl Default for Letter {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl Generate for Letter {
-        type Item = char;
-        type Shrink = <LetterGenerator as Generate>::Shrink;
-
-        const CARDINALITY: Option<u128> = <LetterGenerator as Generate>::CARDINALITY;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            self.0.generate(state)
-        }
-
-        fn cardinality(&self) -> Option<u128> {
-            self.0.cardinality()
-        }
-    }
-
-    impl Digit {
-        pub const fn new() -> Self {
-            Self('0'..='9')
-        }
-    }
-
-    impl Default for Digit {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl Generate for Digit {
-        type Item = char;
-        type Shrink = <RangeInclusive<char> as Generate>::Shrink;
-
-        const CARDINALITY: Option<u128> = <RangeInclusive<char> as Generate>::CARDINALITY;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            self.0.generate(state)
-        }
-
-        fn cardinality(&self) -> Option<u128> {
-            self.0.cardinality()
-        }
-    }
-
-    impl Ascii {
-        pub const fn new() -> Self {
-            Self(0 as char..=127 as char)
-        }
-    }
-
-    impl Default for Ascii {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl Generate for Ascii {
-        type Item = char;
-        type Shrink = <RangeInclusive<char> as Generate>::Shrink;
-
-        const CARDINALITY: Option<u128> = <RangeInclusive<char> as Generate>::CARDINALITY;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            self.0.generate(state)
-        }
-
-        fn cardinality(&self) -> Option<u128> {
-            self.0.cardinality()
-        }
-    }
+    generator!(Digit, char, primitive::Range<Char<'0'>, Char<'9'>>);
+    generator!(
+        Ascii,
+        char,
+        primitive::Range<Char<{ 0 as char }>, Char<{ 127 as char }>>
+    );
 }
 
 pub mod number {
     use super::*;
 
-    /// A generator for the full range of any
-    /// [`Number`](crate::primitive::Number) type.
-    #[derive(Clone, Debug)]
-    pub struct Number<T: primitive::Number>(pub(crate) T::Full);
-
-    /// A generator for any non-negative [`Number`](crate::primitive::Number)
-    /// type (includes `0`).
-    #[derive(Clone, Debug)]
-    pub struct Positive<T: primitive::Number>(pub(crate) T::Positive);
-
-    /// A generator for any non-positive [`Number`](crate::primitive::Number)
-    /// type (includes `0`).
-    #[derive(Clone, Debug)]
-    pub struct Negative<T: primitive::Number>(pub(crate) T::Negative);
-
-    impl<T: primitive::Number> Number<T> {
-        pub const fn new() -> Self {
-            Self(T::FULL)
-        }
-    }
-
-    impl<T: primitive::Number> Default for Number<T> {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl<T: primitive::Number> Generate for Number<T> {
-        type Item = T;
-        type Shrink = <T::Full as Generate>::Shrink;
-
-        const CARDINALITY: Option<u128> = <T::Full as Generate>::CARDINALITY;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            self.0.generate(state)
-        }
-
-        fn cardinality(&self) -> Option<u128> {
-            self.0.cardinality()
-        }
-    }
-
-    impl<T: primitive::Number> Positive<T> {
-        pub const fn new() -> Self {
-            Self(T::POSITIVE)
-        }
-    }
-
-    impl<T: primitive::Number> Default for Positive<T> {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl<T: primitive::Number> Generate for Positive<T> {
-        type Item = T;
-        type Shrink = <T::Positive as Generate>::Shrink;
-
-        const CARDINALITY: Option<u128> = <T::Positive as Generate>::CARDINALITY;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            self.0.generate(state)
-        }
-
-        fn cardinality(&self) -> Option<u128> {
-            self.0.cardinality()
-        }
-    }
-
-    impl<T: primitive::Number> Negative<T> {
-        pub const fn new() -> Self {
-            Self(T::NEGATIVE)
-        }
-    }
-
-    impl<T: primitive::Number> Default for Negative<T> {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl<T: primitive::Number> Generate for Negative<T> {
-        type Item = T;
-        type Shrink = <T::Negative as Generate>::Shrink;
-
-        const CARDINALITY: Option<u128> = <T::Negative as Generate>::CARDINALITY;
-
-        fn generate(&self, state: &mut State) -> Self::Shrink {
-            self.0.generate(state)
-        }
-
-        fn cardinality(&self) -> Option<u128> {
-            self.0.cardinality()
-        }
-    }
+    generator!(Number<T: primitive::Number>, T, T::Full, T::FULL);
+    generator!(Positive<T: primitive::Number>, T, T::Positive, T::POSITIVE);
+    generator!(Negative<T: primitive::Number>, T, T::Negative, T::NEGATIVE);
 }
 
 pub mod with {
@@ -403,25 +262,25 @@ pub mod with {
 
     /// A generator created from a closure that produces a value.
     #[derive(Debug, Clone)]
-    pub struct With<T, F: Fn() -> T + Clone>(pub(crate) PhantomData<T>, pub(crate) F);
+    pub struct With<F>(pub(crate) F);
 
-    impl<T, F: Fn() -> T + Clone> With<T, F> {
+    impl<T, F: Fn() -> T + Clone> With<F> {
         pub const fn new(generator: F) -> Self {
-            Self(PhantomData, generator)
+            Self(generator)
         }
     }
 
     #[derive(Debug, Clone)]
     pub struct Shrinker<F>(pub(crate) F);
 
-    impl<T, F: Fn() -> T + Clone> Generate for With<T, F> {
+    impl<T, F: Fn() -> T + Clone> Generate for With<F> {
         type Item = T;
         type Shrink = Shrinker<F>;
 
         const CARDINALITY: Option<u128> = Some(1);
 
         fn generate(&self, _state: &mut State) -> Self::Shrink {
-            Shrinker(self.1.clone())
+            Shrinker(self.0.clone())
         }
 
         fn cardinality(&self) -> Option<u128> {

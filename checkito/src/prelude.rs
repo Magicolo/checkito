@@ -187,7 +187,7 @@ pub fn regex(
 /// This is equivalent to `T::MIN..=T::MAX`.
 #[inline]
 pub const fn number<T: Number>() -> number::Number<T> {
-    number::Number::new()
+    number::Number(PhantomData)
 }
 
 /// A generator for any non-negative [`Number`] type (includes `0`).
@@ -195,7 +195,7 @@ pub const fn number<T: Number>() -> number::Number<T> {
 /// This is equivalent to `0..=T::MAX`.
 #[inline]
 pub const fn positive<T: Number>() -> number::Positive<T> {
-    number::Positive::new()
+    number::Positive(PhantomData)
 }
 
 /// A generator for any non-positive [`Number`] type (includes `0`).
@@ -203,25 +203,25 @@ pub const fn positive<T: Number>() -> number::Positive<T> {
 /// This is equivalent to `T::MIN..=0`.
 #[inline]
 pub const fn negative<T: Number>() -> number::Negative<T> {
-    number::Negative::new()
+    number::Negative(PhantomData)
 }
 
 /// A generator for ASCII letters (`a-z`, `A-Z`).
 #[inline]
 pub const fn letter() -> character::Letter {
-    character::Letter::new()
+    character::Letter(PhantomData)
 }
 
 /// A generator for ASCII digits (`0-9`).
 #[inline]
 pub const fn digit() -> character::Digit {
-    character::Digit::new()
+    character::Digit(PhantomData)
 }
 
 /// A generator for all ASCII characters (0-127).
 #[inline]
 pub const fn ascii() -> character::Ascii {
-    character::Ascii::new()
+    character::Ascii(PhantomData)
 }
 
 /// Creates a generator from a closure that produces a value.
@@ -237,8 +237,8 @@ pub const fn ascii() -> character::Ascii {
 /// let generator = with(|| MyStruct(42));
 /// ```
 #[inline]
-pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> with::With<T, F> {
-    with::With::new(generator)
+pub const fn with<T, F: Fn() -> T + Clone>(generate: F) -> with::With<F> {
+    with::With::new(generate)
 }
 
 /// Defers the construction of a generator until it is used.

@@ -44,6 +44,41 @@ generators!(char, 'a', Or3<char, char, char>, 'b', 'c', 'd');
 generators!(bool, true, Or4<bool, bool, bool, bool>, false, true, false, false);
 
 #[test]
+fn letter_generator_works() {
+    assert!(letter().check(|c| c.is_ascii_alphabetic()).is_none());
+}
+
+#[test]
+fn digit_generator_works() {
+    assert!(digit().check(|c| c.is_ascii_digit()).is_none());
+}
+
+#[test]
+fn ascii_generator_works() {
+    assert!(ascii().check(|c| c.is_ascii()).is_none());
+}
+
+#[test]
+fn number_generator_works() {
+    assert!(number::<i32>().check(|_| true).is_none());
+}
+
+#[test]
+fn positive_generator_works() {
+    assert!(positive::<i32>().check(|n| n >= 0).is_none());
+}
+
+#[test]
+fn negative_generator_works() {
+    assert!(negative::<i32>().check(|n| n <= 0).is_none());
+}
+
+#[test]
+fn with_generator_works() {
+    assert!(with(|| 42).check(|n| n == 42).is_none());
+}
+
+#[test]
 fn size_can_force_minimal_collections() {
     let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
         .size(|_| 0.0)

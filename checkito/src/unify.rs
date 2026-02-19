@@ -1,4 +1,6 @@
-use crate::{generate::Generate, shrink::Shrink, state::State, utility::tuples};
+use crate::{
+    generate::Generate, primitive::Constant, shrink::Shrink, state::State, utility::tuples,
+};
 use core::marker::PhantomData;
 
 #[derive(Debug)]
@@ -26,6 +28,10 @@ where
     fn cardinality(&self) -> Option<u128> {
         self.1.cardinality()
     }
+}
+
+impl<C: Constant, I> Constant for Unify<C, I> {
+    const VALUE: Self = Self(PhantomData, C::VALUE);
 }
 
 macro_rules! tuple {
