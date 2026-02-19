@@ -226,7 +226,9 @@ pub const fn ascii() -> character::Ascii {
 
 /// Creates a generator from a closure that produces a value.
 ///
-/// This is useful for wrapping simple value creation in a generator.
+/// **This generator assumes that the closure always returns the same
+/// value; if this assumption is violated, `check`ing and `shrink`ing may have
+/// unexpected behaviors.**
 ///
 /// # Examples
 /// ```

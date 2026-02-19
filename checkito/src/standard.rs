@@ -296,7 +296,7 @@ pub mod with {
         type Item = T;
         type Shrink = Shrinker<T, F>;
 
-        const CARDINALITY: Option<u128> = None;
+        const CARDINALITY: Option<u128> = Some(1);
 
         fn generate(&self, _state: &mut State) -> Self::Shrink {
             Shrinker {
@@ -306,7 +306,7 @@ pub mod with {
         }
 
         fn cardinality(&self) -> Option<u128> {
-            None
+            Some(1)
         }
     }
 
