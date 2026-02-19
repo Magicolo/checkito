@@ -4,7 +4,7 @@ This directory contains detailed issue reports from a comprehensive investigatio
 
 ## Overview
 
-**16 issues identified** covering:
+**17 issues identified** covering:
 - Code quality and clippy warnings
 - Correctness bugs
 - Missing test coverage
@@ -27,7 +27,7 @@ This directory contains detailed issue reports from a comprehensive investigatio
 ./investigation_issues/create_github_issues.sh
 ```
 
-This will automatically create all 16 issues in the GitHub repository.
+This will automatically create all 17 issues in the GitHub repository.
 
 ### Option 2: Manual Creation
 
@@ -58,10 +58,11 @@ This will automatically create all 16 issues in the GitHub repository.
 | 14 | [14-fuzzing-support-todo.md](14-fuzzing-support-todo.md) | Incomplete TODO: Add Fuzzing Support | Medium |
 | 15 | [15-dampen-edge-cases.md](15-dampen-edge-cases.md) | Dampen Edge Cases: Zero Limits | Medium |
 | 16 | [16-shrink-documentation.md](16-shrink-documentation.md) | Missing Documentation for Shrink Trait | **High** |
+| 17 | [17-lib-todos.md](17-lib-todos.md) | Additional TODOs in lib.rs - Async Hangs & More | **CRITICAL** |
 
 ## Priority Breakdown
 
-- **CRITICAL**: 1 issue (unsafe code without tests)
+- **CRITICAL**: 2 issues (unsafe code without tests, async hangs)
 - **High**: 8 issues (correctness, safety, major documentation gaps)
 - **Medium-High**: 1 issue (standard collections)
 - **Medium**: 6 issues (edge cases, TODOs, enhancements)

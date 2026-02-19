@@ -1,13 +1,13 @@
 # Checkito Investigation Results - Issues Found
 
-This document contains a comprehensive investigation of the checkito library, identifying 16 distinct issues that should be addressed. Each issue has been documented in detail with context, examples, impact analysis, and recommended fixes.
+This document contains a comprehensive investigation of the checkito library, identifying 17 distinct issues that should be addressed. Each issue has been documented in detail with context, examples, impact analysis, and recommended fixes.
 
 ## Investigation Summary
 
-- **Total issues found**: 16
-- **Critical issues**: 3
+- **Total issues found**: 17
+- **Critical issues**: 2
 - **High priority issues**: 8
-- **Medium priority issues**: 5
+- **Medium priority issues**: 7
 
 ## Issue Categories
 
