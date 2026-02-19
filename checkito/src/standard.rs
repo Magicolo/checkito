@@ -2,6 +2,7 @@ use crate::{
     cardinality,
     convert::Convert,
     generate::{FullGenerate, Generate},
+    primitive,
     shrink::Shrink,
     state::State,
 };
@@ -299,33 +300,35 @@ pub mod character {
 
 pub mod number {
     use super::*;
-    use crate::primitive::Number as NumberTrait;
 
-    /// A generator for the full range of any [`Number`](crate::primitive::Number) type.
+    /// A generator for the full range of any
+    /// [`Number`](crate::primitive::Number) type.
     #[derive(Clone, Debug)]
-    pub struct Number<T: NumberTrait>(pub(crate) T::Full);
+    pub struct Number<T: primitive::Number>(pub(crate) T::Full);
 
-    /// A generator for any non-negative [`Number`](crate::primitive::Number) type (includes `0`).
+    /// A generator for any non-negative [`Number`](crate::primitive::Number)
+    /// type (includes `0`).
     #[derive(Clone, Debug)]
-    pub struct Positive<T: NumberTrait>(pub(crate) T::Positive);
+    pub struct Positive<T: primitive::Number>(pub(crate) T::Positive);
 
-    /// A generator for any non-positive [`Number`](crate::primitive::Number) type (includes `0`).
+    /// A generator for any non-positive [`Number`](crate::primitive::Number)
+    /// type (includes `0`).
     #[derive(Clone, Debug)]
-    pub struct Negative<T: NumberTrait>(pub(crate) T::Negative);
+    pub struct Negative<T: primitive::Number>(pub(crate) T::Negative);
 
-    impl<T: NumberTrait> Number<T> {
+    impl<T: primitive::Number> Number<T> {
         pub const fn new() -> Self {
             Self(T::FULL)
         }
     }
 
-    impl<T: NumberTrait> Default for Number<T> {
+    impl<T: primitive::Number> Default for Number<T> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<T: NumberTrait> Generate for Number<T> {
+    impl<T: primitive::Number> Generate for Number<T> {
         type Item = T;
         type Shrink = <T::Full as Generate>::Shrink;
 
@@ -340,19 +343,19 @@ pub mod number {
         }
     }
 
-    impl<T: NumberTrait> Positive<T> {
+    impl<T: primitive::Number> Positive<T> {
         pub const fn new() -> Self {
             Self(T::POSITIVE)
         }
     }
 
-    impl<T: NumberTrait> Default for Positive<T> {
+    impl<T: primitive::Number> Default for Positive<T> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<T: NumberTrait> Generate for Positive<T> {
+    impl<T: primitive::Number> Generate for Positive<T> {
         type Item = T;
         type Shrink = <T::Positive as Generate>::Shrink;
 
@@ -367,19 +370,19 @@ pub mod number {
         }
     }
 
-    impl<T: NumberTrait> Negative<T> {
+    impl<T: primitive::Number> Negative<T> {
         pub const fn new() -> Self {
             Self(T::NEGATIVE)
         }
     }
 
-    impl<T: NumberTrait> Default for Negative<T> {
+    impl<T: primitive::Number> Default for Negative<T> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl<T: NumberTrait> Generate for Negative<T> {
+    impl<T: primitive::Number> Generate for Negative<T> {
         type Item = T;
         type Shrink = <T::Negative as Generate>::Shrink;
 

@@ -17,6 +17,7 @@ use crate::{
     same::Same,
     shrink::Shrinker,
     size::Size,
+    standard::{character, number, with},
     state::Sizes,
     unify::Unify,
 };
@@ -185,42 +186,42 @@ pub fn regex(
 ///
 /// This is equivalent to `T::MIN..=T::MAX`.
 #[inline]
-pub const fn number<T: Number>() -> crate::standard::number::Number<T> {
-    crate::standard::number::Number::new()
+pub const fn number<T: Number>() -> number::Number<T> {
+    number::Number::new()
 }
 
 /// A generator for any non-negative [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `0..=T::MAX`.
 #[inline]
-pub const fn positive<T: Number>() -> crate::standard::number::Positive<T> {
-    crate::standard::number::Positive::new()
+pub const fn positive<T: Number>() -> number::Positive<T> {
+    number::Positive::new()
 }
 
 /// A generator for any non-positive [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `T::MIN..=0`.
 #[inline]
-pub const fn negative<T: Number>() -> crate::standard::number::Negative<T> {
-    crate::standard::number::Negative::new()
+pub const fn negative<T: Number>() -> number::Negative<T> {
+    number::Negative::new()
 }
 
 /// A generator for ASCII letters (`a-z`, `A-Z`).
 #[inline]
-pub const fn letter() -> crate::standard::character::Letter {
-    crate::standard::character::Letter::new()
+pub const fn letter() -> character::Letter {
+    character::Letter::new()
 }
 
 /// A generator for ASCII digits (`0-9`).
 #[inline]
-pub const fn digit() -> crate::standard::character::Digit {
-    crate::standard::character::Digit::new()
+pub const fn digit() -> character::Digit {
+    character::Digit::new()
 }
 
 /// A generator for all ASCII characters (0-127).
 #[inline]
-pub const fn ascii() -> crate::standard::character::Ascii {
-    crate::standard::character::Ascii::new()
+pub const fn ascii() -> character::Ascii {
+    character::Ascii::new()
 }
 
 /// Creates a generator from a closure that produces a value.
@@ -236,8 +237,8 @@ pub const fn ascii() -> crate::standard::character::Ascii {
 /// let generator = with(|| MyStruct(42));
 /// ```
 #[inline]
-pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> crate::standard::with::With<T, F> {
-    crate::standard::with::With::new(generator)
+pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> with::With<T, F> {
+    with::With::new(generator)
 }
 
 /// Defers the construction of a generator until it is used.
