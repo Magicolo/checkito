@@ -120,3 +120,21 @@ fn full_isize_has_correct_cardinality() {
         None => assert_eq!(generator.cardinality(), None),
     }
 }
+
+#[test]
+fn lazy_delegates_cardinality_to_inner_range() {
+    let generator = lazy(|| 0u8..=10);
+    assert_eq!(generator.cardinality(), Some(11));
+}
+
+#[test]
+fn lazy_delegates_cardinality_to_inner_bool() {
+    let generator = lazy(|| bool::generator());
+    assert_eq!(generator.cardinality(), Some(2));
+}
+
+#[test]
+fn lazy_delegates_cardinality_to_inner_unbounded() {
+    let generator = lazy(|| u128::generator());
+    assert_eq!(generator.cardinality(), None);
+}
