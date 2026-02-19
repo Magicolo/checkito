@@ -33,7 +33,6 @@ orn = { version = "0.8.2", default-features = false, features = [
 pin-project-lite = "0.2.16"
 ref-cast = "1.0.25"
 regex-syntax = { workspace = true, optional = true }
-rustversion = "1.0.22"
 
 [dev-dependencies]
 regex = { version = "1.12.3", default-features = false }

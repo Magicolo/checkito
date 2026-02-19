@@ -107,16 +107,8 @@ pub const fn filter_map<G: Generate, T, F: Fn(G::Item) -> Option<T> + Clone>(
 }
 
 /// See [`Generate::boxed`].
-#[rustversion::since(1.75)]
 #[inline]
 pub const fn boxed<G: Generate + 'static>(generator: Box<G>) -> Boxed<G::Item> {
-    Boxed::new(generator)
-}
-
-/// See [`Generate::boxed`].
-#[rustversion::before(1.75)]
-#[inline]
-pub fn boxed<G: Generate + 'static>(generator: Box<G>) -> Boxed<G::Item> {
     Boxed::new(generator)
 }
 

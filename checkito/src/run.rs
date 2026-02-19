@@ -340,10 +340,7 @@ mod hook {
 
     pub(crate) struct RestoreGuard(Option<Handle>);
 
-    #[rustversion::since(1.81)]
     type Handle = Box<dyn Fn(&panic::PanicHookInfo) + 'static + Sync + Send>;
-    #[rustversion::before(1.81)]
-    type Handle = Box<dyn Fn(&panic::PanicInfo) + 'static + Sync + Send>;
     thread_local! { static HOOK: Cell<Option<Handle>> = const { Cell::new(None) }; }
 
     impl Drop for EndGuard {

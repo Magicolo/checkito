@@ -25,8 +25,6 @@ impl<G: Generate, F: Fn() -> G> Generate for Lazy<G, F> {
     }
 }
 
-#[rustversion::since(1.80)]
-#[allow(clippy::incompatible_msrv)]
 impl<G: Generate, F: FnOnce() -> G> Generate for core::cell::LazyCell<G, F> {
     type Item = G::Item;
     type Shrink = G::Shrink;
@@ -42,8 +40,6 @@ impl<G: Generate, F: FnOnce() -> G> Generate for core::cell::LazyCell<G, F> {
     }
 }
 
-#[rustversion::since(1.80)]
-#[allow(clippy::incompatible_msrv)]
 impl<G: Generate, F: FnOnce() -> G> Generate for std::sync::LazyLock<G, F> {
     type Item = G::Item;
     type Shrink = G::Shrink;

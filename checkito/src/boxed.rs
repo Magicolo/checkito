@@ -42,7 +42,6 @@ impl<I> Generate for Boxed<I> {
 }
 
 impl<I> Boxed<I> {
-    #[rustversion::since(1.75)]
     pub(crate) const fn new<G: Generate<Item = I> + 'static>(generator: Box<G>) -> Self
     where
         G::Shrink: 'static,
@@ -51,18 +50,6 @@ impl<I> Boxed<I> {
             generator,
             generate: generate::<G>,
             cardinality: cardinality::<G>,
-        }
-    }
-
-    #[rustversion::before(1.75)]
-    pub(crate) fn new<G: Generate<Item = I> + 'static>(generator: Box<G>) -> Self
-    where
-        G::Shrink: 'static,
-    {
-        Self {
-            generator,
-            generate: generate::<G>,
-            constant: constant::<G>,
         }
     }
 
