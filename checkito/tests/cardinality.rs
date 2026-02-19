@@ -114,6 +114,22 @@ fn f64_full_range_has_correct_cardinality() {
 }
 
 #[test]
+fn f32_full_cardinality_equals_finite_plus_infinities_plus_nan() {
+    // The full f32 cardinality is: all finite values (MIN..=MAX) + NEG_INFINITY + INFINITY + NaN.
+    // The generator covers all three: finite via range branches, ±INF and NaN via the Special branch.
+    let finite = (f32::MIN..=f32::MAX).cardinality().unwrap();
+    assert_eq!(f32::generator().cardinality(), Some(finite + 3));
+}
+
+#[test]
+fn f64_full_cardinality_equals_finite_plus_infinities_plus_nan() {
+    // The full f64 cardinality is: all finite values (MIN..=MAX) + NEG_INFINITY + INFINITY + NaN.
+    // The generator covers all three: finite via range branches, ±INF and NaN via the Special branch.
+    let finite = (f64::MIN..=f64::MAX).cardinality().unwrap();
+    assert_eq!(f64::generator().cardinality(), Some(finite + 3));
+}
+
+#[test]
 fn full_usize_has_correct_cardinality() {
     let generator = usize::generator();
     let range = (usize::MAX as u128) - (usize::MIN as u128);
