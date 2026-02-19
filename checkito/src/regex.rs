@@ -65,9 +65,6 @@ impl From<&ClassUnicodeRange> for Regex {
 
 impl From<&ClassBytesRange> for Regex {
     fn from(value: &ClassBytesRange) -> Self {
-        // Safe conversion: u8 values 128-255 are not valid Unicode scalar values when
-        // cast directly to char. Use char::from_u32 with REPLACEMENT_CHARACTER
-        // fallback for invalid values.
         let start = char::from_u32(value.start() as u32).unwrap_or(char::REPLACEMENT_CHARACTER);
         let end = char::from_u32(value.end() as u32).unwrap_or(char::REPLACEMENT_CHARACTER);
         Regex::Range(Range(start, end))
