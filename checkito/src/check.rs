@@ -1,3 +1,81 @@
+//! Property testing with the [`Check`] trait.
+//!
+//! This module provides the core functionality for running property tests and
+//! processing their results. Property tests generate random values and verify
+//! that a given property holds for all generated inputs.
+//!
+//! # Working with Check Results
+//!
+//! The [`Result`] enum represents the outcome of a property test step. It has four variants:
+//!
+//! - [`Result::Pass`] - A generated value passed the test
+//! - [`Result::Shrink`] - A shrunk value passed the test (did not reproduce the failure)
+//! - [`Result::Shrunk`] - A shrunk value failed the test (new minimal failing case)
+//! - [`Result::Fail`] - The final minimal failing value after shrinking
+//!
+//! ## Examples
+//!
+//! ### Basic Usage
+//!
+//! ```
+//! # use checkito::*;
+//! // Simple property test that succeeds
+//! let success = (0..100).check(|x| x < 100);
+//! assert!(success.is_none());
+//!
+//! // Property test that fails
+//! let failure = (0..100).check(|x| x < 50);
+//! assert!(failure.is_some());
+//! let fail = failure.unwrap();
+//! assert_eq!(fail.item, 50); // Shrinker finds minimal failing value
+//! ```
+//!
+//! ### Processing All Results
+//!
+//! ```
+//! # use checkito::*;
+//! for result in (0..100).checks(|x| x < 50) {
+//!     match result {
+//!         check::Result::Pass(pass) => {
+//!             // Generated value passed
+//!             assert!(pass.item < 50);
+//!         }
+//!         check::Result::Shrink(pass) => {
+//!             // Shrunk value passed (did not reproduce failure)
+//!             assert!(pass.item < 50);
+//!         }
+//!         check::Result::Shrunk(fail) => {
+//!             // Shrunk value failed (intermediate step)
+//!             assert!(fail.item >= 50);
+//!         }
+//!         check::Result::Fail(fail) => {
+//!             // Final minimal failing value
+//!             assert_eq!(fail.item, 50);
+//!             break;
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! ### Using Accessor Methods
+//!
+//! ```
+//! # use checkito::*;
+//! let result = (0..100).checks(|x| x < 50).last().unwrap();
+//!
+//! // Check if it's a failure (final or shrunk)
+//! if let Some(fail) = result.fail(true) {
+//!     println!("Failed with value: {}", fail.item);
+//!     println!("Error: {}", fail.message());
+//! }
+//!
+//! // Convert to standard Result type
+//! match result.into_result() {
+//!     Ok(pass) => println!("Passed: {}", pass.item),
+//!     Err(fail) => println!("Failed: {}", fail.item),
+//! }
+//! ```
+
 use crate::{
     GENERATES, SHRINKS,
     generate::Generate,
@@ -299,6 +377,33 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns a reference to the passing result if this is a `Pass` or optionally `Shrink` variant.
+    ///
+    /// # Arguments
+    /// * `shrink` - If `true`, includes `Shrink` variant. If `false`, only matches `Pass`.
+    ///
+    /// # Returns
+    /// * `Some(&Pass)` if this is a `Pass` variant (or `Shrink` when `shrink` is `true`)
+    /// * `None` for `Fail` and `Shrunk` variants (or `Shrink` when `shrink` is `false`)
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// // Successful test - returns Pass variant
+    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
+    /// if let Some(pass) = result.pass(false) {
+    ///     assert!(pass.item < 100);
+    /// }
+    ///
+    /// // Include shrunk passing values
+    /// let checks: Vec<_> = (0..10).checks(|x| x < 5).collect();
+    /// for result in &checks {
+    ///     if let Some(pass) = result.pass(true) {
+    ///         // Includes both Pass and Shrink variants
+    ///         assert!(pass.item < 5);
+    ///     }
+    /// }
+    /// ```
     pub fn pass(&self, shrink: bool) -> Option<&Pass<T, P::Proof>> {
         match self {
             Result::Pass(pass) => Some(pass),
@@ -307,6 +412,33 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Consumes the result and returns the passing value if this is a `Pass` or optionally `Shrink` variant.
+    ///
+    /// # Arguments
+    /// * `shrink` - If `true`, includes `Shrink` variant. If `false`, only matches `Pass`.
+    ///
+    /// # Returns
+    /// * `Ok(Pass)` if this is a `Pass` variant (or `Shrink` when `shrink` is `true`)
+    /// * `Err(Self)` if this is a `Fail` or `Shrunk` variant (or `Shrink` when `shrink` is `false`)
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
+    /// match result.into_pass(false) {
+    ///     Ok(pass) => assert!(pass.item < 100),
+    ///     Err(_) => panic!("Expected pass"),
+    /// }
+    ///
+    /// // Extract shrunk passing values
+    /// let checks: Vec<_> = (0..10).checks(|x| x < 5).collect();
+    /// for result in checks {
+    ///     if let Ok(pass) = result.into_pass(true) {
+    ///         // Includes both Pass and Shrink variants
+    ///         assert!(pass.item < 5);
+    ///     }
+    /// }
+    /// ```
     #[allow(clippy::result_large_err)]
     pub fn into_pass(self, shrink: bool) -> result::Result<Pass<T, P::Proof>, Self> {
         match self {
@@ -316,6 +448,35 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns a reference to the failing result if this is a `Fail` or optionally `Shrunk` variant.
+    ///
+    /// # Arguments
+    /// * `shrunk` - If `true`, includes `Shrunk` variant. If `false`, only matches `Fail`.
+    ///
+    /// # Returns
+    /// * `Some(&Fail)` if this is a `Fail` variant (or `Shrunk` when `shrunk` is `true`)
+    /// * `None` for `Pass` and `Shrink` variants (or `Shrunk` when `shrunk` is `false`)
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// // Test that will fail
+    /// let failure = (0..100).check(|x| x < 50);
+    /// if let Some(fail_result) = failure {
+    ///     // Get the final minimal failing value
+    ///     if let Some(fail) = check::Result::Fail(fail_result).fail(false) {
+    ///         assert_eq!(fail.item, 50);
+    ///     }
+    /// }
+    ///
+    /// // Include shrunk failing values  
+    /// for result in (0..100).checks(|x| x < 50) {
+    ///     if let Some(fail) = result.fail(true) {
+    ///         // Includes both Fail and Shrunk variants
+    ///         assert!(fail.item >= 50);
+    ///     }
+    /// }
+    /// ```
     pub fn fail(&self, shrunk: bool) -> Option<&Fail<T, P::Error>> {
         match self {
             Result::Fail(fail) => Some(fail),
@@ -324,6 +485,34 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Consumes the result and returns the failing value if this is a `Fail` or optionally `Shrunk` variant.
+    ///
+    /// # Arguments
+    /// * `shrunk` - If `true`, includes `Shrunk` variant. If `false`, only matches `Fail`.
+    ///
+    /// # Returns
+    /// * `Ok(Fail)` if this is a `Fail` variant (or `Shrunk` when `shrunk` is `true`)
+    /// * `Err(Self)` if this is a `Pass` or `Shrink` variant (or `Shrunk` when `shrunk` is `false`)
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// let failure = (0..100).check(|x| x < 50);
+    /// if let Some(fail_result) = failure {
+    ///     match check::Result::Fail(fail_result).into_fail(false) {
+    ///         Ok(fail) => assert_eq!(fail.item, 50),
+    ///         Err(_) => panic!("Expected fail"),
+    ///     }
+    /// }
+    ///
+    /// // Extract shrunk failing values
+    /// for result in (0..100).checks(|x| x < 50) {
+    ///     if let Ok(fail) = result.into_fail(true) {
+    ///         // Includes both Fail and Shrunk variants
+    ///         assert!(fail.item >= 50);
+    ///     }
+    /// }
+    /// ```
     #[allow(clippy::result_large_err)]
     pub fn into_fail(self, shrunk: bool) -> result::Result<Fail<T, P::Error>, Self> {
         match self {
@@ -333,6 +522,27 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Consumes the result and extracts the generated item, regardless of whether it passed or failed.
+    ///
+    /// This is useful when you want to inspect the value that was generated, independent of the
+    /// test outcome. Both passing and failing results contain an item.
+    ///
+    /// # Returns
+    /// The generated item of type `T` from any variant.
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// // Extract item from passing result
+    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
+    /// let item = result.into_item();
+    /// assert!(item < 10);
+    ///
+    /// // Extract item from failing result
+    /// let failure = (0..100).check(|x| x < 50).unwrap();
+    /// let item = check::Result::Fail(failure).into_item();
+    /// assert_eq!(item, 50);
+    /// ```
     pub fn into_item(self) -> T {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.item,
@@ -340,6 +550,35 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Converts the `check::Result` into a standard `Result<Pass, Fail>`.
+    ///
+    /// This method maps the four-variant check result into a two-variant standard `Result`:
+    /// - `Pass` and `Shrink` variants become `Ok(Pass)`
+    /// - `Fail` and `Shrunk` variants become `Err(Fail)`
+    ///
+    /// This is useful for integrating with code that expects standard Rust `Result` types.
+    ///
+    /// # Returns
+    /// * `Ok(Pass)` if the property held (including shrunk passing values)
+    /// * `Err(Fail)` if the property failed (including shrunk failing values)
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// // Convert passing result to standard Result
+    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
+    /// match result.into_result() {
+    ///     Ok(pass) => assert!(pass.item < 100),
+    ///     Err(_) => panic!("Expected success"),
+    /// }
+    ///
+    /// // Convert failing result to standard Result
+    /// let failure = (0..100).check(|x| x < 50).unwrap();
+    /// match check::Result::Fail(failure).into_result() {
+    ///     Ok(_) => panic!("Expected failure"),
+    ///     Err(fail) => assert_eq!(fail.item, 50),
+    /// }
+    /// ```
     #[allow(clippy::result_large_err)]
     pub fn into_result(self) -> result::Result<Pass<T, P::Proof>, Fail<T, P::Error>> {
         match self {
@@ -368,6 +607,32 @@ impl<T, P> Fail<T, P> {
         self.state.size()
     }
 
+    /// Returns a human-readable error message describing why the property failed.
+    ///
+    /// The message depends on the cause of the failure:
+    /// - For panics with a message: Returns the panic message
+    /// - For panics without a message: Returns `"panicked"`
+    /// - For disproven properties: Returns the debug representation of the error proof
+    ///
+    /// # Examples
+    /// ```
+    /// # use checkito::*;
+    /// // Test that fails by returning false
+    /// let failure = (0..100).check(|x| x < 50).unwrap();
+    /// let message = failure.message();
+    /// assert_eq!(message, "false");
+    ///
+    /// // Test that fails with Result::Err
+    /// let failure = (0..100).check(|x: u32| -> Result<(), String> {
+    ///     if x >= 50 {
+    ///         Err(format!("Value {} is too large", x))
+    ///     } else {
+    ///         Ok(())
+    ///     }
+    /// }).unwrap();
+    /// let message = failure.message();
+    /// assert!(message.contains("too large"));
+    /// ```
     pub fn message(&self) -> Cow<'static, str>
     where
         P: Debug,
