@@ -26,12 +26,3 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
         self.generator.cardinality()
     }
 }
-
-impl<C: Constant> Constant for Dampen<C> {
-    const VALUE: Self = Self {
-        pressure: 0.0,
-        deepest: 0,
-        limit: 0,
-        generator: C::VALUE,
-    };
-}
