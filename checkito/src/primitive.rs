@@ -589,7 +589,8 @@ pub mod char {
         type Item = char;
         type Shrink = Shrinker;
 
-        const CARDINALITY: Option<u128> = u128::wrapping_sub(char::MAX as _, 0 as char as _).checked_add(1);
+        const CARDINALITY: Option<u128> =
+            u128::wrapping_sub(char::MAX as _, 0 as char as _).checked_add(1);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
