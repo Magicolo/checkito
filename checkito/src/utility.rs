@@ -23,170 +23,126 @@ pub(crate) fn cast(
     Err(error)
 }
 
+/// Macro to implement floating-point bit manipulation utilities for f32 and
+/// f64.
+///
+/// This eliminates code duplication between the f32 and f64 modules by
+/// generating the same set of functions with different type parameters and bit
+/// sizes.
+macro_rules! float {
+    ($type:ty, $bits:ty, $mask:expr) => {
+        const SIGN_MASK: $bits = $mask;
+        const TINY_BITS: $bits = 0x1;
+        const NEG_TINY_BITS: $bits = TINY_BITS | SIGN_MASK;
+
+        /// Converts a float to bits in a total-order representation.
+        ///
+        /// This transformation ensures that bit-level comparison matches
+        /// numerical comparison, handling negative numbers and NaN correctly.
+        #[inline]
+        pub const fn to_bits(value: $type) -> $bits {
+            let bits = <$type>::to_bits(value);
+            if bits & SIGN_MASK != 0 {
+                !bits
+            } else {
+                bits | SIGN_MASK
+            }
+        }
+
+        /// Converts bits in total-order representation back to a float.
+        #[inline]
+        pub const fn from_bits(bits: $bits) -> $type {
+            let bits = if bits & SIGN_MASK != 0 {
+                bits & !SIGN_MASK
+            } else {
+                !bits
+            };
+            <$type>::from_bits(bits)
+        }
+
+        /// Calculates the cardinality (number of distinct values) in a float range.
+        ///
+        /// Returns `Some(1)` for NaN values, otherwise computes the difference
+        /// in bit representations plus one.
+        #[inline]
+        pub const fn cardinality(start: $type, end: $type) -> Option<u128> {
+            if start.is_nan() || end.is_nan() {
+                Some(1)
+            } else {
+                u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).checked_add(1)
+            }
+        }
+
+        /// Returns the next representable value above the given float.
+        ///
+        /// Copied from Rust's stdlib to support older Rust versions.
+        #[inline]
+        pub const fn next_up(value: $type) -> $type {
+            let bits = value.to_bits();
+            if value.is_nan() || bits == <$type>::INFINITY.to_bits() {
+                return value;
+            }
+
+            let abs = bits & !SIGN_MASK;
+            let next_bits = if abs == 0 {
+                TINY_BITS
+            } else if bits == abs {
+                bits + 1
+            } else {
+                bits - 1
+            };
+
+            <$type>::from_bits(next_bits)
+        }
+
+        /// Returns the next representable value below the given float.
+        ///
+        /// Copied from Rust's stdlib to support older Rust versions.
+        #[inline]
+        pub const fn next_down(value: $type) -> $type {
+            let bits = value.to_bits();
+            if value.is_nan() || bits == <$type>::NEG_INFINITY.to_bits() {
+                return value;
+            }
+
+            let abs = bits & !SIGN_MASK;
+            let next_bits = if abs == 0 {
+                NEG_TINY_BITS
+            } else if bits == abs {
+                bits - 1
+            } else {
+                bits + 1
+            };
+
+            <$type>::from_bits(next_bits)
+        }
+
+        #[inline]
+        #[allow(dead_code)]
+        pub const fn clamp(value: $type, low: $type, high: $type) -> $type {
+            if value < low {
+                low
+            } else if value > high {
+                high
+            } else {
+                value
+            }
+        }
+
+        #[inline]
+        #[allow(dead_code)]
+        pub const fn max(left: $type, right: $type) -> $type {
+            if left >= right { left } else { right }
+        }
+    };
+}
+
 pub(crate) mod f32 {
-    const SIGN_MASK: u32 = 0x8000_0000;
-    const TINY_BITS: u32 = 0x1;
-    const NEG_TINY_BITS: u32 = TINY_BITS | SIGN_MASK;
-
-    #[inline]
-    pub const fn to_bits(value: f32) -> u32 {
-        let bits = f32::to_bits(value);
-        if bits & SIGN_MASK != 0 {
-            !bits
-        } else {
-            bits | SIGN_MASK
-        }
-    }
-
-    #[inline]
-    pub const fn from_bits(bits: u32) -> f32 {
-        let bits = if bits & SIGN_MASK != 0 {
-            bits & !SIGN_MASK
-        } else {
-            !bits
-        };
-        f32::from_bits(bits)
-    }
-
-    #[inline]
-    pub const fn cardinality(start: f32, end: f32) -> Option<u128> {
-        if start.is_nan() || end.is_nan() {
-            Some(1)
-        } else {
-            u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).checked_add(1)
-        }
-    }
-
-    /// Copied from '<https://doc.rust-lang.org/src/core/num/f32.rs.html>' to continue supporting lower rust versions.
-    #[inline]
-    pub const fn next_up(value: f32) -> f32 {
-        let bits = value.to_bits();
-        if value.is_nan() || bits == f32::INFINITY.to_bits() {
-            return value;
-        }
-
-        let abs = bits & !SIGN_MASK;
-        let next_bits = if abs == 0 {
-            TINY_BITS
-        } else if bits == abs {
-            bits + 1
-        } else {
-            bits - 1
-        };
-
-        f32::from_bits(next_bits)
-    }
-
-    /// Copied from '<https://doc.rust-lang.org/src/core/num/f32.rs.html>' to continue supporting lower rust versions.
-    #[inline]
-    pub const fn next_down(value: f32) -> f32 {
-        let bits = value.to_bits();
-        if value.is_nan() || bits == f32::NEG_INFINITY.to_bits() {
-            return value;
-        }
-
-        let abs = bits & !SIGN_MASK;
-        let next_bits = if abs == 0 {
-            NEG_TINY_BITS
-        } else if bits == abs {
-            bits - 1
-        } else {
-            bits + 1
-        };
-
-        f32::from_bits(next_bits)
-    }
+    float!(f32, u32, 0x8000_0000);
 }
 
 pub(crate) mod f64 {
-    const SIGN_MASK: u64 = 0x8000_0000_0000_0000;
-    const TINY_BITS: u64 = 0x1;
-    const NEG_TINY_BITS: u64 = TINY_BITS | SIGN_MASK;
-
-    #[inline]
-    pub const fn clamp(value: f64, low: f64, high: f64) -> f64 {
-        if value < low {
-            low
-        } else if value > high {
-            high
-        } else {
-            value
-        }
-    }
-
-    #[inline]
-    pub const fn max(left: f64, right: f64) -> f64 {
-        if left >= right { left } else { right }
-    }
-
-    #[inline]
-    pub const fn to_bits(value: f64) -> u64 {
-        let bits = f64::to_bits(value);
-        if bits & SIGN_MASK != 0 {
-            !bits
-        } else {
-            bits | SIGN_MASK
-        }
-    }
-
-    #[inline]
-    pub const fn from_bits(bits: u64) -> f64 {
-        let bits = if bits & SIGN_MASK != 0 {
-            bits & !SIGN_MASK
-        } else {
-            !bits
-        };
-        f64::from_bits(bits)
-    }
-
-    #[inline]
-    pub const fn cardinality(start: f64, end: f64) -> Option<u128> {
-        if start.is_nan() || end.is_nan() {
-            Some(1)
-        } else {
-            u128::wrapping_sub(to_bits(end) as _, to_bits(start) as _).checked_add(1)
-        }
-    }
-
-    /// Copied from '<https://doc.rust-lang.org/src/core/num/f64.rs.html>' to continue supporting lower rust versions.
-    #[inline]
-    pub const fn next_up(value: f64) -> f64 {
-        let bits = value.to_bits();
-        if value.is_nan() || bits == f64::INFINITY.to_bits() {
-            return value;
-        }
-
-        let abs = bits & !SIGN_MASK;
-        let next_bits = if abs == 0 {
-            TINY_BITS
-        } else if bits == abs {
-            bits + 1
-        } else {
-            bits - 1
-        };
-
-        f64::from_bits(next_bits)
-    }
-
-    /// Copied from '<https://doc.rust-lang.org/src/core/num/f64.rs.html>' to continue supporting lower rust versions.
-    #[inline]
-    pub const fn next_down(value: f64) -> f64 {
-        let bits = value.to_bits();
-        if value.is_nan() || bits == f64::NEG_INFINITY.to_bits() {
-            return value;
-        }
-
-        let abs = bits & !SIGN_MASK;
-        let next_bits = if abs == 0 {
-            NEG_TINY_BITS
-        } else if bits == abs {
-            bits - 1
-        } else {
-            bits + 1
-        };
-
-        f64::from_bits(next_bits)
-    }
+    float!(f64, u64, 0x8000_0000_0000_0000);
 }
 
 macro_rules! tuples {

@@ -23,41 +23,32 @@ impl<T: ?Sized, U: AsRef<T> + ?Sized> AsRef<T> for Any<U> {
     }
 }
 
-impl<G: ?Sized> Generate for Any<&G>
-where
-    Any<G>: Generate,
-{
-    type Item = <Any<G> as Generate>::Item;
-    type Shrink = <Any<G> as Generate>::Shrink;
+/// Implement Generate for reference types (&G, &mut G) that delegate to Any<G>
+macro_rules! reference {
+    ($($type:ty),*) => {
+        $(
+            impl<G: ?Sized> Generate for Any<$type>
+            where
+                Any<G>: Generate,
+            {
+                type Item = <Any<G> as Generate>::Item;
+                type Shrink = <Any<G> as Generate>::Shrink;
 
-    const CARDINALITY: Option<u128> = Any::<G>::CARDINALITY;
+                const CARDINALITY: Option<u128> = Any::<G>::CARDINALITY;
 
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Any::ref_cast(self.0).generate(state)
-    }
+                fn generate(&self, state: &mut State) -> Self::Shrink {
+                    Any::ref_cast(self.0).generate(state)
+                }
 
-    fn cardinality(&self) -> Option<u128> {
-        Any::ref_cast(self.0).cardinality()
-    }
+                fn cardinality(&self) -> Option<u128> {
+                    Any::ref_cast(self.0).cardinality()
+                }
+            }
+        )*
+    };
 }
 
-impl<G: ?Sized> Generate for Any<&mut G>
-where
-    Any<G>: Generate,
-{
-    type Item = <Any<G> as Generate>::Item;
-    type Shrink = <Any<G> as Generate>::Shrink;
-
-    const CARDINALITY: Option<u128> = Any::<G>::CARDINALITY;
-
-    fn generate(&self, state: &mut State) -> Self::Shrink {
-        Any::ref_cast(self.0).generate(state)
-    }
-
-    fn cardinality(&self) -> Option<u128> {
-        Any::ref_cast(self.0).cardinality()
-    }
-}
+reference!(&G, &mut G);
 
 impl<S: Shrink> Shrink for Shrinker<S> {
     type Item = Option<S::Item>;

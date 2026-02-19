@@ -270,6 +270,14 @@ pub mod with {
         }
     }
 
+    /// Shrinker that caches the generated value to ensure consistent `item()` calls.
+    ///
+    /// The `RefCell<Option<T>>` is used to cache the generated value on first access.
+    /// This ensures that multiple calls to `item()` return the same value, which is
+    /// required by the `Shrink` trait contract.
+    ///
+    /// The cached value is `None` initially and populated on the first `item()` call,
+    /// then consumed (taken) and returned. Subsequent calls will regenerate the value.
     pub struct Shrinker<T, F> {
         generator: F,
         cached: RefCell<Option<T>>,
@@ -318,8 +326,10 @@ pub mod with {
             if cached.is_none() {
                 *cached = Some((self.generator)());
             }
-            // Take the value out
-            cached.take().unwrap()
+            // Safety: The value is guaranteed to be Some after the check above.
+            // We take it to transfer ownership to the caller, which is required
+            // since item() returns T by value, not &T.
+            cached.take().expect("cached value must be Some after initialization")
         }
 
         fn shrink(&mut self) -> Option<Self> {

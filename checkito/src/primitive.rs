@@ -13,6 +13,12 @@ use core::{
     ops::{self, Add, Div, Mul, Sub},
 };
 
+/// Direction for shrinking numeric values.
+///
+/// When shrinking a numeric value, we try to move it towards a simpler value:
+/// - `None`: The value is already at a boundary and cannot shrink further
+/// - `Low`: Shrink by moving towards the lower bound (start of range)
+/// - `High`: Shrink by moving towards the upper bound (end of range)
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Direction {
     None,
