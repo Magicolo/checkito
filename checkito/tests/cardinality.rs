@@ -67,9 +67,17 @@ fn i128_full_range_has_correct_cardinality() {
 #[test]
 fn char_full_range_has_correct_cardinality() {
     let generator = char::generator();
-    // char has valid Unicode code points from 0 to char::MAX
-    let expected = u128::wrapping_sub(char::MAX as u128, 0).wrapping_add(1);
-    assert_eq!(generator.cardinality(), Some(expected));
+    // char excludes surrogate code points U+D800..=U+DFFF (2,048 values)
+    // 1,114,112 total - 2,048 surrogates = 1,112,064
+    assert_eq!(generator.cardinality(), Some(1_112_064));
+}
+
+#[test]
+fn char_surrogate_spanning_range_has_correct_cardinality() {
+    // Range spanning the surrogate gap: U+D7FF and U+E000 are valid, surrogates are not
+    let generator = '\u{D7FF}'..='\u{E000}';
+    // 0xE000 - 0xD7FF + 1 = 2050 total code points, minus 2048 surrogates = 2
+    assert_eq!(generator.cardinality(), Some(2));
 }
 
 #[test]

@@ -388,7 +388,22 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                u128::wrapping_sub(self.end() as _, self.start() as _).checked_add(1)
+                // Subtract surrogate code points (U+D800..=U+DFFF) that fall
+                // within [start, end], as they map to REPLACEMENT_CHARACTER.
+                const SURROGATE_START: u32 = 0xD800;
+                const SURROGATE_END: u32 = 0xDFFF;
+                let start = self.start() as u32;
+                let end = self.end() as u32;
+                let overlap_start = start.max(SURROGATE_START);
+                let overlap_end = end.min(SURROGATE_END);
+                let surrogates = if overlap_start <= overlap_end {
+                    (overlap_end - overlap_start + 1) as u128
+                } else {
+                    0
+                };
+                u128::wrapping_sub(end as _, start as _)
+                    .checked_add(1)?
+                    .checked_sub(surrogates)
             }
         }
     };
@@ -595,8 +610,9 @@ pub mod char {
         type Item = char;
         type Shrink = Shrinker;
 
-        const CARDINALITY: Option<u128> =
-            u128::wrapping_sub(char::MAX as _, 0 as char as _).checked_add(1);
+        // Excludes the surrogate code point range U+D800..=U+DFFF (2,048 values),
+        // which are not valid `char` values and are mapped to REPLACEMENT_CHARACTER.
+        const CARDINALITY: Option<u128> = Some(0xD800u128 + (0x10FFFF - 0xE000 + 1));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
