@@ -1,8 +1,4 @@
 pub mod common;
-use checkito::{
-    primitive::Constant,
-    standard::{character, number, with},
-};
 use common::*;
 use orn::{Or1, Or2, Or3, Or4};
 
