@@ -129,12 +129,6 @@ fn standard_result_generator_covers_ok_and_err() {
     assert!(values.iter().any(|value| value == &Err(true)));
 }
 
-#[check(0u8..=u8::MAX)]
-fn converted_values_match_from_implementation(value: u8) {
-    let converted = same(value).convert::<u16>().samples(1).next().unwrap();
-    assert_eq!(converted, u16::from(value));
-}
-
 #[test]
 fn lazy_cell_generator_is_forced_and_reused() {
     use core::cell::LazyCell;
@@ -178,4 +172,15 @@ fn lazy_lock_generator_is_forced_and_reused() {
 
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert!(values.iter().all(|value| *value <= 2));
+}
+
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
+
+    #[check(0u8..=u8::MAX)]
+    fn converted_values_match_from_implementation(value: u8) {
+        let converted = same(value).convert::<u16>().samples(1).next().unwrap();
+        assert_eq!(converted, u16::from(value));
+    }
 }
