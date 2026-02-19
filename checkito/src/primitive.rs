@@ -735,7 +735,12 @@ macro_rules! floating {
             type Item = $type;
             type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = utility::$type::cardinality($type::MIN, $type::MAX);
+            // All non-NaN values (finite + both infinities) plus 1 for NaN
+            // (all NaN bit patterns are considered the same value).
+            const CARDINALITY: Option<u128> = match utility::$type::cardinality($type::NEG_INFINITY, $type::INFINITY) {
+                Some(c) => c.checked_add(1),
+                None => None,
+            };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let value = state.with().size(1.0).u8(..);

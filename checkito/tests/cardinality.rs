@@ -100,6 +100,20 @@ fn single_value_range_has_cardinality_one() {
 }
 
 #[test]
+fn f32_full_range_has_correct_cardinality() {
+    let generator = f32::generator();
+    // All non-NaN values (finite + both infinities) + 1 for NaN (all NaN patterns treated as one).
+    assert_eq!(generator.cardinality(), Some(4278190083));
+}
+
+#[test]
+fn f64_full_range_has_correct_cardinality() {
+    let generator = f64::generator();
+    // All non-NaN values (finite + both infinities) + 1 for NaN (all NaN patterns treated as one).
+    assert_eq!(generator.cardinality(), Some(18437736874454810627));
+}
+
+#[test]
 fn full_usize_has_correct_cardinality() {
     let generator = usize::generator();
     let range = (usize::MAX as u128) - (usize::MIN as u128);
