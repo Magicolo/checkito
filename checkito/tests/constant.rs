@@ -3,6 +3,7 @@
 pub mod common;
 use checkito::{
     array::Array,
+    cardinality::Cardinality,
     collect::Collect,
     convert::Convert,
     dampen::Dampen,
@@ -123,4 +124,7 @@ fn wrapping_generators_implement_constant() {
     
     // Collect
     let _collect = Collect::<I32<1>, Range<Usize<0>, Usize<10>>, Vec<i32>>::VALUE;
+    
+    // Cardinality
+    let _cardinality = Cardinality::<I32<99>, 42>::VALUE;
 }
