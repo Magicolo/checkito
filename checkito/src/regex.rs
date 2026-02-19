@@ -65,7 +65,9 @@ impl From<&ClassUnicodeRange> for Regex {
 
 impl From<&ClassBytesRange> for Regex {
     fn from(value: &ClassBytesRange) -> Self {
-        Regex::Range(Range(value.start() as char, value.end() as char))
+        let start = char::from_u32(value.start() as u32).unwrap_or(char::REPLACEMENT_CHARACTER);
+        let end = char::from_u32(value.end() as u32).unwrap_or(char::REPLACEMENT_CHARACTER);
+        Regex::Range(Range(start, end))
     }
 }
 

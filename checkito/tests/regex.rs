@@ -50,3 +50,41 @@ fn generates_exhaustively() {
         }
     }
 }
+
+#[test]
+fn unbounded_quantifiers_have_reasonable_limits() {
+    // Test a* (0 or more)
+    let generator = regex("a*", None).unwrap();
+    for value in generator.samples(50) {
+        assert!(value.len() <= 64); // Default REPEATS limit
+    }
+
+    // Test a+ (1 or more)
+    let generator = regex("a+", None).unwrap();
+    for value in generator.samples(50) {
+        assert!(value.len() >= 1 && value.len() <= 64);
+    }
+
+    // Test a{1000,} (at least 1000 repetitions)
+    let generator = regex("a{1000,}", None).unwrap();
+    let value = generator.sample(0.5);
+    assert_eq!(value.len(), 1000); // Should be exactly 1000 since high = max(64, 1000) = 1000
+}
+
+#[test]
+fn nested_quantifiers_dont_become_zero() {
+    // Deeply nested quantifiers like ((a*)*)* should still generate strings
+    let generator = regex("((a*)*)*", None).unwrap();
+    for value in generator.samples(20) {
+        // Should generate valid strings (may be empty, but should not panic)
+        assert!(value.chars().all(|c| c == 'a'));
+    }
+
+    // Test with multiple levels of nesting
+    let generator = regex("(((a+)+)+)", None).unwrap();
+    for value in generator.samples(20) {
+        // Should generate non-empty strings with 'a' characters
+        assert!(!value.is_empty());
+        assert!(value.chars().all(|c| c == 'a'));
+    }
+}
