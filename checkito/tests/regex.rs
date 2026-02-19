@@ -51,7 +51,6 @@ fn generates_exhaustively() {
     }
 }
 
-// Test for Fix #2: Unbounded quantifiers should have reasonable limits
 #[test]
 fn unbounded_quantifiers_have_reasonable_limits() {
     // Test a* (0 or more)
@@ -72,7 +71,6 @@ fn unbounded_quantifiers_have_reasonable_limits() {
     assert_eq!(value.len(), 1000); // Should be exactly 1000 since high = max(64, 1000) = 1000
 }
 
-// Test for Fix #3: Deeply nested quantifiers should not become zero
 #[test]
 fn nested_quantifiers_dont_become_zero() {
     // Deeply nested quantifiers like ((a*)*)* should still generate strings
