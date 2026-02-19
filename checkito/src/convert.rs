@@ -1,4 +1,4 @@
-use crate::{generate::Generate, shrink::Shrink, state::State};
+use crate::{generate::Generate, primitive::Constant, shrink::Shrink, state::State};
 use core::marker::PhantomData;
 
 #[derive(Debug)]
@@ -35,4 +35,8 @@ impl<S: Shrink, I: From<S::Item>> Shrink for Convert<S, I> {
     fn shrink(&mut self) -> Option<Self> {
         Some(Self(PhantomData, self.1.shrink()?))
     }
+}
+
+impl<C: Constant, I> Constant for Convert<C, I> {
+    const VALUE: Self = Self(PhantomData, C::VALUE);
 }

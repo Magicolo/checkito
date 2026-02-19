@@ -1,4 +1,4 @@
-use crate::{generate::Generate, state::State};
+use crate::{generate::Generate, primitive::Constant, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Dampen<G: ?Sized> {
@@ -25,4 +25,13 @@ impl<G: Generate + ?Sized> Generate for Dampen<G> {
     fn cardinality(&self) -> Option<u128> {
         self.generator.cardinality()
     }
+}
+
+impl<C: Constant> Constant for Dampen<C> {
+    const VALUE: Self = Self {
+        pressure: 1.0,
+        deepest: 0,
+        limit: 0,
+        generator: C::VALUE,
+    };
 }

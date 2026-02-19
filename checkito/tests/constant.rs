@@ -1,9 +1,17 @@
 #![cfg(feature = "constant")]
 
 pub mod common;
-use checkito::primitive::{
-    Constant, Range, char::Char, i32::I32, i64::I64, i128::I128, isize::Isize, u128::U128,
-    usize::Usize,
+use checkito::{
+    array::Array,
+    collect::Collect,
+    convert::Convert,
+    dampen::Dampen,
+    flatten::Flatten,
+    keep::Keep,
+    primitive::{
+        Constant, Range, char::Char, i32::I32, i64::I64, i128::I128, isize::Isize, u128::U128,
+        usize::Usize,
+    },
 };
 use common::*;
 
@@ -94,4 +102,25 @@ fn constant_range_is_converted() {
         constant!(..='0'),
         Range::<Char::<{ char::MIN }>, Char::<'0'>>::VALUE
     );
+}
+
+#[test]
+fn wrapping_generators_implement_constant() {
+    // Keep
+    let _keep = Keep::<I32<42>>::VALUE;
+    
+    // Dampen
+    let _dampen = Dampen::<I32<100>>::VALUE;
+    
+    // Flatten
+    let _flatten = Flatten::<I32<7>>::VALUE;
+    
+    // Array
+    let _array = Array::<I32<5>, 3>::VALUE;
+    
+    // Convert
+    let _convert = Convert::<I32<10>, i64>::VALUE;
+    
+    // Collect
+    let _collect = Collect::<I32<1>, Range<Usize<0>, Usize<10>>, Vec<i32>>::VALUE;
 }

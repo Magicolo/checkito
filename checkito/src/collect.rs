@@ -198,3 +198,11 @@ impl<C: Count + ?Sized> Count for &mut C {
         C::count(self)
     }
 }
+
+impl<I: Constant, C: Constant, F> Constant for Collect<I, C, F> {
+    const VALUE: Self = Self {
+        _marker: PhantomData,
+        count: C::VALUE,
+        generator: I::VALUE,
+    };
+}

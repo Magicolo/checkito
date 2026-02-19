@@ -1,4 +1,4 @@
-use crate::{cardinality, generate::Generate, shrink::Shrink, state::State};
+use crate::{cardinality, generate::Generate, primitive::Constant, shrink::Shrink, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Flatten<G: ?Sized>(pub(crate) G);
@@ -61,4 +61,8 @@ impl<I: Generate, O: Shrink<Item = I>> Shrink for Shrinker<I::Shrink, O> {
 
         None
     }
+}
+
+impl<C: Constant> Constant for Flatten<C> {
+    const VALUE: Self = Self(C::VALUE);
 }
