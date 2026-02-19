@@ -198,9 +198,11 @@ pub mod character {
     use crate::{any::Any, unify::Unify};
     use core::ops::RangeInclusive;
 
+    type LetterGenerator = Unify<Any<(RangeInclusive<char>, RangeInclusive<char>)>, char>;
+
     /// A generator for ASCII letters (`a-z`, `A-Z`).
     #[derive(Clone, Debug)]
-    pub struct Letter(Unify<Any<(RangeInclusive<char>, RangeInclusive<char>)>, char>);
+    pub struct Letter(LetterGenerator);
 
     /// A generator for ASCII digits (`0-9`).
     #[derive(Clone, Debug)]
@@ -227,9 +229,9 @@ pub mod character {
 
     impl Generate for Letter {
         type Item = char;
-        type Shrink = <Unify<Any<(RangeInclusive<char>, RangeInclusive<char>)>, char> as Generate>::Shrink;
+        type Shrink = <LetterGenerator as Generate>::Shrink;
 
-        const CARDINALITY: Option<u128> = <Unify<Any<(RangeInclusive<char>, RangeInclusive<char>)>, char> as Generate>::CARDINALITY;
+        const CARDINALITY: Option<u128> = <LetterGenerator as Generate>::CARDINALITY;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             self.0.generate(state)
