@@ -96,7 +96,8 @@ impl<G: Generate + ?Sized, C: Count, F: FromIterator<G::Item>> Generate for Coll
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let range = self.count.count();
-        let shrinkers = state.repeat(&self.generator, range).collect();
+        let mut shrinkers = Vec::with_capacity(range.end());
+        shrinkers.extend(state.repeat(&self.generator, range));
         Shrinker::new(shrinkers, range.start())
     }
 
@@ -118,8 +119,8 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                 // Try to truncate irrelevant generators aggressively.
                 Machine::Truncate(mut outer) => match outer.shrink() {
                     Some(inner) => {
-                        let mut shrinkers = self.shrinkers.clone();
-                        shrinkers.truncate(inner.item());
+                        let target_len = inner.item();
+                        let shrinkers = self.shrinkers[..target_len].to_vec();
                         self.machine = Machine::Truncate(outer);
                         break Some(Self {
                             shrinkers,
@@ -133,8 +134,9 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
                 // Try to remove irrelevant generators one by one.
                 Machine::Remove(index) => {
                     if index < self.shrinkers.len() && self.minimum < self.shrinkers.len() {
-                        let mut shrinkers = self.shrinkers.clone();
-                        shrinkers.remove(index);
+                        let mut shrinkers = Vec::with_capacity(self.shrinkers.len() - 1);
+                        shrinkers.extend_from_slice(&self.shrinkers[..index]);
+                        shrinkers.extend_from_slice(&self.shrinkers[index + 1..]);
                         self.machine = Machine::Remove(index + 1);
                         break Some(Self {
                             shrinkers,
