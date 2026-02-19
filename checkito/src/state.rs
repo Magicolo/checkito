@@ -11,13 +11,13 @@ use core::{
 use fastrand::Rng;
 use std::ops::RangeBounds;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sizes {
     range: Range<f64>,
     scale: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct State {
     mode: Mode,
     sizes: Sizes,
@@ -80,7 +80,7 @@ pub struct With<'a> {
     depth: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Mode {
     // TODO: Can I use this for fuzzing? Add a `Fuzz(Box<dyn Iterator<Item = byte>>)`? Or
     // maybe fuzz through the `Random` object?

@@ -189,7 +189,7 @@ pub enum Result<T, P: Prove> {
 }
 
 /// Represents a successful test case.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Pass<T, P> {
     /// The value that passed the test.
     pub item: T,
@@ -205,7 +205,7 @@ pub struct Pass<T, P> {
 }
 
 /// Represents a failed test case.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Fail<T, E> {
     /// The value that failed the test.
     pub item: T,
@@ -227,6 +227,18 @@ pub enum Cause<E> {
     Disprove(E),
     /// The test function panicked.
     Panic(Option<Cow<'static, str>>),
+}
+
+impl<T: PartialEq, P: Prove<Proof: PartialEq, Error: PartialEq>> PartialEq for Result<T, P> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Pass(l0), Self::Pass(r0)) => l0 == r0,
+            (Self::Shrink(l0), Self::Shrink(r0)) => l0 == r0,
+            (Self::Shrunk(l0), Self::Shrunk(r0)) => l0 == r0,
+            (Self::Fail(l0), Self::Fail(r0)) => l0 == r0,
+            _ => false,
+        }
+    }
 }
 
 impl<G: Generate + ?Sized> Check for G {}
@@ -722,24 +734,16 @@ pub(crate) mod synchronous {
 pub(crate) mod asynchronous {
     //! Asynchronous property testing with concurrent execution.
     //!
-    //! This module implements an asynchronous version of the property checker that can
-    //! execute multiple test cases concurrently, controlled by the `concurrency` parameter.
+    //! This module implements an asynchronous version of the property checker
+    //! that can execute multiple test cases concurrently, controlled by the
+    //! `concurrency` parameter.
     //!
     //! ## Concurrency Semantics
     //!
-    //! - **Generation Phase**: Up to `concurrency` futures are spawned and polled concurrently.
-    //!   Results are consumed in FIFO order (oldest first), maintaining deterministic ordering.
-    //!
-    //! - **Shrinking Phase**: When `concurrency == 1`, behavior matches the synchronous checker
-    //!   exactly. When `concurrency > 1`, an optimization skips in-flight shrink attempts when
-    //!   a better (smaller) failure is found. This trades strict determinism for performance,
-    //!   but both approaches find valid minimal counterexamples.
-    //!
-    //! ## Ordering Guarantees
-    //!
-    //! The stream maintains strict FIFO ordering of results: even when futures complete out
-    //! of order, results are yielded in the order they were generated. This is enforced by
-    //! the `head` pointer, which only advances when the oldest in-flight future resolves.
+    //! Up to `concurrency` futures are spawned and polled concurrently. The
+    //! stream maintains strict FIFO ordering of results: even when futures
+    //! complete out of order, results are yielded in the order they were
+    //! generated/shrunk.
     use super::*;
     use core::{
         future::Future,
@@ -984,14 +988,6 @@ pub(crate) mod asynchronous {
                                     }
                                 }
                                 Err(new_cause) => {
-                                    // When we find a better (smaller) failing value during shrinking,
-                                    // we reset the buffer head to tail, effectively discarding any
-                                    // in-flight shrink attempts. This is an optimization that trades
-                                    // strict determinism for efficiency when concurrency > 1.
-                                    //
-                                    // With concurrency=1, behavior matches synchronous exactly.
-                                    // With concurrency>1, we may skip some shrink attempts, potentially
-                                    // arriving at a different (but still valid) minimal counterexample.
                                     *this.head = *this.tail;
                                     *this.machine = Machine::Shrink {
                                         state: state.clone(),
