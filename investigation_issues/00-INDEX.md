@@ -100,6 +100,11 @@ This document contains a comprehensive investigation of the checkito library, id
     - Effort: Low-Medium
     - Affects: Generation quality
 
+17. **[lib.rs TODOs](17-lib-todos.md)** - 4 TODOs including async hangs, adaptive count, parallel checks, API review
+    - Priority: CRITICAL (async), Medium (others)
+    - Effort: Medium-Large
+    - Affects: Async functionality, performance, API design
+
 ## Issue Files
 
 All issues are documented in individual markdown files with the following structure:
