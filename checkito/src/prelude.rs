@@ -185,48 +185,42 @@ pub fn regex(
 ///
 /// This is equivalent to `T::MIN..=T::MAX`.
 #[inline]
-pub const fn number<T: Number>() -> impl Generate<Item = T> {
-    T::FULL
+pub const fn number<T: Number>() -> crate::standard::number::Number<T> {
+    crate::standard::number::Number::new()
 }
 
 /// A generator for any non-negative [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `0..=T::MAX`.
 #[inline]
-pub const fn positive<T: Number>() -> impl Generate<Item = T> {
-    T::POSITIVE
+pub const fn positive<T: Number>() -> crate::standard::number::Positive<T> {
+    crate::standard::number::Positive::new()
 }
 
 /// A generator for any non-positive [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `T::MIN..=0`.
 #[inline]
-pub const fn negative<T: Number>() -> impl Generate<Item = T> {
-    T::NEGATIVE
+pub const fn negative<T: Number>() -> crate::standard::number::Negative<T> {
+    crate::standard::number::Negative::new()
 }
 
 /// A generator for ASCII letters (`a-z`, `A-Z`).
 #[inline]
-pub const fn letter() -> impl Generate<Item = char> {
-    let generator = unify(any(('a'..='z', 'A'..='Z')));
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn letter() -> crate::standard::character::Letter {
+    crate::standard::character::Letter::new()
 }
 
 /// A generator for ASCII digits (`0-9`).
 #[inline]
-pub const fn digit() -> impl Generate<Item = char> {
-    let generator = '0'..='9';
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn digit() -> crate::standard::character::Digit {
+    crate::standard::character::Digit::new()
 }
 
 /// A generator for all ASCII characters (0-127).
 #[inline]
-pub const fn ascii() -> impl Generate<Item = char> {
-    let generator = 0 as char..=127 as char;
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn ascii() -> crate::standard::character::Ascii {
+    crate::standard::character::Ascii::new()
 }
 
 /// Creates a generator from a closure that produces a value.
@@ -242,10 +236,8 @@ pub const fn ascii() -> impl Generate<Item = char> {
 /// let generator = with(|| MyStruct(42));
 /// ```
 #[inline]
-pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> impl Generate<Item = T> {
-    let generator = map((), move |_| generator());
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> crate::standard::with::With<T, F> {
+    crate::standard::with::With::new(generator)
 }
 
 /// Defers the construction of a generator until it is used.
