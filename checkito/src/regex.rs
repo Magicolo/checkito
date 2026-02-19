@@ -65,7 +65,11 @@ impl From<&ClassUnicodeRange> for Regex {
 
 impl From<&ClassBytesRange> for Regex {
     fn from(value: &ClassBytesRange) -> Self {
-        Regex::Range(Range(value.start() as char, value.end() as char))
+        // Safe conversion: u8 values 128-255 are not valid Unicode scalar values when cast directly to char.
+        // Use char::from_u32 with REPLACEMENT_CHARACTER fallback for invalid values.
+        let start = char::from_u32(value.start() as u32).unwrap_or(char::REPLACEMENT_CHARACTER);
+        let end = char::from_u32(value.end() as u32).unwrap_or(char::REPLACEMENT_CHARACTER);
+        Regex::Range(Range(start, end))
     }
 }
 
@@ -98,17 +102,23 @@ impl Regex {
     fn from_hir(hir: Hir, repeats: u32) -> Self {
         match hir.into_kind() {
             HirKind::Empty | HirKind::Look(_) => Self::Empty,
-            HirKind::Literal(literal) => {
-                String::from_utf8(literal.0.to_vec()).map_or(Self::Empty, Self::Text)
-            }
+            HirKind::Literal(literal) => Self::Text(
+                String::from_utf8(literal.0.to_vec()).unwrap_or_else(|e| {
+                    eprintln!("Warning: Invalid UTF-8 in regex literal: {:?}", e);
+                    String::new()
+                })
+            ),
             HirKind::Capture(Capture { sub, .. }) => Self::from_hir(*sub, repeats),
             HirKind::Repetition(Repetition { min, max, sub, .. }) => {
-                let tree = Self::from_hir(*sub, repeats / 2);
+                // Prevent repeats from becoming 0 in deeply nested quantifiers
+                let tree = Self::from_hir(*sub, repeats.saturating_div(2).max(1));
                 if tree.is_empty() {
                     return Self::Empty;
                 }
                 let low = min;
                 let high = max.unwrap_or(repeats.max(low));
+                // Validate that the repetition range is valid
+                debug_assert!(low <= high, "Invalid repetition range: {}..{}", low, high);
                 if low == 1 && high == 1 {
                     return tree;
                 }
