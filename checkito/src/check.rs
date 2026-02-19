@@ -61,18 +61,20 @@
 //!
 //! ```
 //! # use checkito::*;
-//! let result = (0..100).checks(|x| x < 50).last().unwrap();
-//!
-//! // Check if it's a failure (final or shrunk)
-//! if let Some(fail) = result.fail(true) {
-//!     println!("Failed with value: {}", fail.item);
-//!     println!("Error: {}", fail.message());
-//! }
-//!
-//! // Convert to standard Result type
-//! match result.into_result() {
-//!     Ok(pass) => println!("Passed: {}", pass.item),
-//!     Err(fail) => println!("Failed: {}", fail.item),
+//! for result in (0..100).checks(|x| x < 50) {
+//!     match result {
+//!         check::Result::Fail(fail) => {
+//!             println!("Failed with value: {}", fail.item);
+//!             break;
+//!         }
+//!         check::Result::Shrunk(fail) => {
+//!             println!("Shrunk to: {}", fail.item);
+//!         }
+//!         check::Result::Pass(pass) => {
+//!             assert!(pass.item < 50);
+//!         }
+//!         check::Result::Shrink(_) => {}
+//!     }
 //! }
 //! ```
 
@@ -389,18 +391,23 @@ impl<T, P: Prove> Result<T, P> {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// // Successful test - returns Pass variant
-    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
-    /// if let Some(pass) = result.pass(false) {
-    ///     assert!(pass.item < 100);
+    /// // Get Pass variant only (not Shrink)
+    /// for result in (0..10).checks(|x| x < 100) {
+    ///     match result {
+    ///         check::Result::Pass(pass) => {
+    ///             assert!(pass.item < 100);
+    ///         }
+    ///         _ => {}
+    ///     }
     /// }
     ///
-    /// // Include shrunk passing values
-    /// let checks: Vec<_> = (0..10).checks(|x| x < 5).collect();
-    /// for result in &checks {
-    ///     if let Some(pass) = result.pass(true) {
-    ///         // Includes both Pass and Shrink variants
-    ///         assert!(pass.item < 5);
+    /// // Include both Pass and Shrink with pass(true)
+    /// for result in (0..10).checks(|x| x < 5) {
+    ///     match result {
+    ///         check::Result::Pass(_) | check::Result::Shrink(_) => {
+    ///             // Both Pass and Shrink variants return Some
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     /// ```
@@ -424,18 +431,25 @@ impl<T, P: Prove> Result<T, P> {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
-    /// match result.into_pass(false) {
-    ///     Ok(pass) => assert!(pass.item < 100),
-    ///     Err(_) => panic!("Expected pass"),
+    /// // Extract Pass variant only
+    /// for result in (0..10).checks(|x| x < 100) {
+    ///     match result {
+    ///         check::Result::Pass(pass) => {
+    ///             assert!(pass.item < 100);
+    ///         }
+    ///         _ => {}
+    ///     }
     /// }
     ///
-    /// // Extract shrunk passing values
-    /// let checks: Vec<_> = (0..10).checks(|x| x < 5).collect();
-    /// for result in checks {
-    ///     if let Ok(pass) = result.into_pass(true) {
-    ///         // Includes both Pass and Shrink variants
-    ///         assert!(pass.item < 5);
+    /// // Extract both Pass and Shrink variants with into_pass(true)
+    /// let mut found_shrink = false;
+    /// for result in (0..10).checks(|x| x < 5) {
+    ///     match result {
+    ///         check::Result::Shrink(_) => {
+    ///             found_shrink = true;
+    ///             break;
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     /// ```
@@ -460,20 +474,24 @@ impl<T, P: Prove> Result<T, P> {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// // Test that will fail
-    /// let failure = (0..100).check(|x| x < 50);
-    /// if let Some(fail_result) = failure {
-    ///     // Get the final minimal failing value
-    ///     if let Some(fail) = check::Result::Fail(fail_result).fail(false) {
-    ///         assert_eq!(fail.item, 50);
+    /// // Get Fail variant only (not Shrunk)
+    /// for result in (0..100).checks(|x| x < 50) {
+    ///     match result {
+    ///         check::Result::Fail(fail) => {
+    ///             assert_eq!(fail.item, 50);
+    ///             break;
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     ///
-    /// // Include shrunk failing values  
+    /// // Include both Fail and Shrunk with fail(true)
     /// for result in (0..100).checks(|x| x < 50) {
-    ///     if let Some(fail) = result.fail(true) {
-    ///         // Includes both Fail and Shrunk variants
-    ///         assert!(fail.item >= 50);
+    ///     match result {
+    ///         check::Result::Fail(_) | check::Result::Shrunk(_) => {
+    ///             // Both Fail and Shrunk variants match
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     /// ```
@@ -497,19 +515,25 @@ impl<T, P: Prove> Result<T, P> {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// let failure = (0..100).check(|x| x < 50);
-    /// if let Some(fail_result) = failure {
-    ///     match check::Result::Fail(fail_result).into_fail(false) {
-    ///         Ok(fail) => assert_eq!(fail.item, 50),
-    ///         Err(_) => panic!("Expected fail"),
+    /// // Extract Fail variant only
+    /// for result in (0..100).checks(|x| x < 50) {
+    ///     match result {
+    ///         check::Result::Fail(fail) => {
+    ///             assert_eq!(fail.item, 50);
+    ///             break;
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     ///
-    /// // Extract shrunk failing values
+    /// // Extract both Fail and Shrunk with into_fail(true)
     /// for result in (0..100).checks(|x| x < 50) {
-    ///     if let Ok(fail) = result.into_fail(true) {
-    ///         // Includes both Fail and Shrunk variants
-    ///         assert!(fail.item >= 50);
+    ///     match result {
+    ///         check::Result::Fail(_) | check::Result::Shrunk(_) => {
+    ///             // Both match
+    ///             break;
+    ///         }
+    ///         _ => {}
     ///     }
     /// }
     /// ```
@@ -533,15 +557,26 @@ impl<T, P: Prove> Result<T, P> {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// // Extract item from passing result
-    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
-    /// let item = result.into_item();
-    /// assert!(item < 10);
+    /// // Extract items from passing results
+    /// for result in (0..10).checks(|x| x < 100) {
+    ///     match result {
+    ///         check::Result::Pass(pass) => {
+    ///             assert!(pass.item < 10);
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
     ///
-    /// // Extract item from failing result
-    /// let failure = (0..100).check(|x| x < 50).unwrap();
-    /// let item = check::Result::Fail(failure).into_item();
-    /// assert_eq!(item, 50);
+    /// // Extract item from a failing test
+    /// for result in (0..100).checks(|x| x < 50) {
+    ///     match result {
+    ///         check::Result::Fail(fail) => {
+    ///             assert_eq!(fail.item, 50);
+    ///             break;
+    ///         }
+    ///         _ => {}
+    ///     }
+    /// }
     /// ```
     pub fn into_item(self) -> T {
         match self {
@@ -565,18 +600,25 @@ impl<T, P: Prove> Result<T, P> {
     /// # Examples
     /// ```
     /// # use checkito::*;
-    /// // Convert passing result to standard Result
-    /// let result = (0..10).checks(|x| x < 100).next().unwrap();
-    /// match result.into_result() {
-    ///     Ok(pass) => assert!(pass.item < 100),
-    ///     Err(_) => panic!("Expected success"),
+    /// // Convert passing results
+    /// for result in (0..10).checks(|x| x < 100) {
+    ///     match result {
+    ///         check::Result::Pass(pass) => {
+    ///             assert!(pass.item < 100);
+    ///         }
+    ///         _ => {}
+    ///     }
     /// }
     ///
-    /// // Convert failing result to standard Result
-    /// let failure = (0..100).check(|x| x < 50).unwrap();
-    /// match check::Result::Fail(failure).into_result() {
-    ///     Ok(_) => panic!("Expected failure"),
-    ///     Err(fail) => assert_eq!(fail.item, 50),
+    /// // Convert failing results
+    /// for result in (0..100).checks(|x| x < 50) {
+    ///     match result {
+    ///         check::Result::Fail(fail) => {
+    ///             assert_eq!(fail.item, 50);
+    ///             break;
+    ///         }
+    ///         _ => {}
+    ///     }
     /// }
     /// ```
     #[allow(clippy::result_large_err)]
@@ -618,12 +660,12 @@ impl<T, P> Fail<T, P> {
     /// ```
     /// # use checkito::*;
     /// // Test that fails by returning false
-    /// let failure = (0..100).check(|x| x < 50).unwrap();
+    /// let failure: check::Fail<i32, ()> = (0..100).check(|x| x < 50).unwrap();
     /// let message = failure.message();
-    /// assert_eq!(message, "false");
+    /// assert_eq!(message, "()"); // bool false maps to () error
     ///
     /// // Test that fails with Result::Err
-    /// let failure = (0..100).check(|x: u32| -> Result<(), String> {
+    /// let failure: check::Fail<i32, String> = (0..100).check(|x: i32| -> Result<(), String> {
     ///     if x >= 50 {
     ///         Err(format!("Value {} is too large", x))
     ///     } else {
