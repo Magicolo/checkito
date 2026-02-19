@@ -6,7 +6,6 @@ use checkito::{
     cardinality::Cardinality,
     collect::Collect,
     convert::Convert,
-    dampen::Dampen,
     flatten::Flatten,
     keep::Keep,
     primitive::{
