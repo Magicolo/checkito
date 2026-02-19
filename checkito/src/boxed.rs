@@ -1,14 +1,6 @@
 use crate::{generate::Generate, shrink::Shrink, state::State};
 use core::{any::Any, fmt};
 
-/// Type-erased generator that boxes a concrete generator implementation.
-///
-/// # Safety Invariants
-///
-/// The `generate`, `cardinality`, `clone`, `item`, and `shrink` function pointers
-/// must match the concrete type stored in the boxed `Any` trait object.
-/// This invariant is maintained by the `new` constructor and validated at runtime
-/// with `expect()` calls to provide clear error messages if violated.
 pub struct Boxed<I> {
     generator: Box<dyn Any>,
     generate: fn(&dyn Any, &mut State) -> Shrinker<I>,
@@ -129,41 +121,22 @@ where
     G::Shrink: 'static,
 {
     Shrinker::new(Box::new(
-        generator
-            .downcast_ref::<G>()
-            .expect("boxed generator type mismatch - internal invariant violation")
-            .generate(state),
+        generator.downcast_ref::<G>().unwrap().generate(state),
     ))
 }
 
 fn cardinality<G: Generate + 'static>(generator: &dyn Any) -> Option<u128> {
-    generator
-        .downcast_ref::<G>()
-        .expect("boxed generator type mismatch - internal invariant violation")
-        .cardinality()
+    generator.downcast_ref::<G>().unwrap().cardinality()
 }
 
 fn clone<S: Shrink + 'static>(shrinker: &dyn Any) -> Box<dyn Any> {
-    Box::new(
-        shrinker
-            .downcast_ref::<S>()
-            .expect("boxed shrinker type mismatch - internal invariant violation")
-            .clone(),
-    )
+    Box::new(shrinker.downcast_ref::<S>().unwrap().clone())
 }
 
 fn item<S: Shrink + 'static>(shrinker: &dyn Any) -> S::Item {
-    shrinker
-        .downcast_ref::<S>()
-        .expect("boxed shrinker type mismatch - internal invariant violation")
-        .item()
+    shrinker.downcast_ref::<S>().unwrap().item()
 }
 
 fn shrink<S: Shrink + 'static>(shrinker: &mut dyn Any) -> Option<Box<dyn Any>> {
-    Some(Box::new(
-        shrinker
-            .downcast_mut::<S>()
-            .expect("boxed shrinker type mismatch - internal invariant violation")
-            .shrink()?,
-    ))
+    Some(Box::new(shrinker.downcast_mut::<S>().unwrap().shrink()?))
 }

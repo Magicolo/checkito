@@ -19,9 +19,6 @@ use core::{
 /// - `None`: The value is already at a boundary and cannot shrink further
 /// - `Low`: Shrink by moving towards the lower bound (start of range)
 /// - `High`: Shrink by moving towards the upper bound (end of range)
-///
-/// The shrinking strategy aims to find the simplest failing case by
-/// progressively reducing the value toward the nearest boundary.
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Direction {
     None,

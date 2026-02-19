@@ -1,8 +1,7 @@
 use crate::{
-    filter::retry_generate,
     generate::Generate,
     shrink::Shrink,
-    state::State,
+    state::{Sizes, State},
 };
 
 #[derive(Debug, Clone)]
@@ -25,12 +24,18 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let filter = &self.filter;
-        let shrinker = retry_generate(&self.generator, self.retries, state, |s| {
-            filter(s.item()).is_some()
-        });
+        let mut outer = None;
+        for i in 0..=self.retries {
+            let sizes = Sizes::from_ratio(i, self.retries, state.sizes());
+            let inner = self.generator.generate(state.with().sizes(sizes).as_mut());
+            let item = inner.item();
+            if (self.filter)(item).is_some() {
+                outer = Some(inner);
+                break;
+            }
+        }
         Shrinker {
-            shrinker,
+            shrinker: outer,
             map: self.filter.clone(),
         }
     }

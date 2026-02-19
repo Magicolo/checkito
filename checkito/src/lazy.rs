@@ -1,5 +1,6 @@
 use crate::{Generate, state::State};
-use std::sync::OnceLock;
+use core::cell::LazyCell;
+use std::sync::{LazyLock, OnceLock};
 
 #[derive(Debug, Clone)]
 pub struct Lazy<T, F>(OnceLock<T>, F);
@@ -25,25 +26,26 @@ impl<G: Generate, F: Fn() -> G> Generate for Lazy<G, F> {
     }
 }
 
-/// Implement Generate for lazy initialization types that share the same behavior
-macro_rules! impl_lazy_generate {
-    ($lazy_type:ty, $force_method:path) => {
-        impl<G: Generate, F: FnOnce() -> G> Generate for $lazy_type {
+/// Implement Generate for lazy initialization types that share the same
+/// behavior
+macro_rules! lazy {
+    ($type:ty) => {
+        impl<G: Generate, F: FnOnce() -> G> Generate for $type {
             type Item = G::Item;
             type Shrink = G::Shrink;
 
             const CARDINALITY: Option<u128> = G::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                $force_method(self).generate(state)
+                Self::force(self).generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
-                $force_method(self).cardinality()
+                Self::force(self).cardinality()
             }
         }
     };
 }
 
-impl_lazy_generate!(core::cell::LazyCell<G, F>, core::cell::LazyCell::force);
-impl_lazy_generate!(std::sync::LazyLock<G, F>, std::sync::LazyLock::force);
+lazy!(LazyCell<G, F>);
+lazy!(LazyLock<G, F>);

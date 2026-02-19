@@ -10,14 +10,6 @@ use core::f64;
 use ref_cast::RefCast;
 use std::{rc::Rc, sync::Arc};
 
-/// A transparent wrapper for selecting one generator from multiple options.
-///
-/// The `#[repr(transparent)]` and `RefCast` derive enable zero-cost conversions
-/// between `&G` and `&Any<G>`, which is used to delegate Generate implementations
-/// for reference types (&G, &mut G, Box<G>, etc.) without runtime overhead.
-///
-/// RefCast is preferred over `From`/`Into` here because it provides compile-time
-/// guarantees about the representation and allows safe reference casting.
 #[repr(transparent)]
 #[derive(Clone, Debug, RefCast)]
 pub struct Any<G: ?Sized>(pub(crate) G);
@@ -32,10 +24,10 @@ impl<T: ?Sized, U: AsRef<T> + ?Sized> AsRef<T> for Any<U> {
 }
 
 /// Implement Generate for reference types (&G, &mut G) that delegate to Any<G>
-macro_rules! impl_ref_generate {
-    ($($ref_type:ty),*) => {
+macro_rules! reference {
+    ($($type:ty),*) => {
         $(
-            impl<G: ?Sized> Generate for Any<$ref_type>
+            impl<G: ?Sized> Generate for Any<$type>
             where
                 Any<G>: Generate,
             {
@@ -56,7 +48,7 @@ macro_rules! impl_ref_generate {
     };
 }
 
-impl_ref_generate!(&G, &mut G);
+reference!(&G, &mut G);
 
 impl<S: Shrink> Shrink for Shrinker<S> {
     type Item = Option<S::Item>;

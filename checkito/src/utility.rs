@@ -23,23 +23,25 @@ pub(crate) fn cast(
     Err(error)
 }
 
-/// Macro to implement floating-point bit manipulation utilities for f32 and f64.
+/// Macro to implement floating-point bit manipulation utilities for f32 and
+/// f64.
 ///
-/// This eliminates code duplication between the f32 and f64 modules by generating
-/// the same set of functions with different type parameters and bit sizes.
-macro_rules! impl_float_bits {
-    ($float_type:ty, $bits_type:ty, $sign_mask:expr) => {
-        const SIGN_MASK: $bits_type = $sign_mask;
-        const TINY_BITS: $bits_type = 0x1;
-        const NEG_TINY_BITS: $bits_type = TINY_BITS | SIGN_MASK;
+/// This eliminates code duplication between the f32 and f64 modules by
+/// generating the same set of functions with different type parameters and bit
+/// sizes.
+macro_rules! float {
+    ($type:ty, $bits:ty, $mask:expr) => {
+        const SIGN_MASK: $bits = $mask;
+        const TINY_BITS: $bits = 0x1;
+        const NEG_TINY_BITS: $bits = TINY_BITS | SIGN_MASK;
 
         /// Converts a float to bits in a total-order representation.
         ///
         /// This transformation ensures that bit-level comparison matches
         /// numerical comparison, handling negative numbers and NaN correctly.
         #[inline]
-        pub const fn to_bits(value: $float_type) -> $bits_type {
-            let bits = <$float_type>::to_bits(value);
+        pub const fn to_bits(value: $type) -> $bits {
+            let bits = <$type>::to_bits(value);
             if bits & SIGN_MASK != 0 {
                 !bits
             } else {
@@ -49,13 +51,13 @@ macro_rules! impl_float_bits {
 
         /// Converts bits in total-order representation back to a float.
         #[inline]
-        pub const fn from_bits(bits: $bits_type) -> $float_type {
+        pub const fn from_bits(bits: $bits) -> $type {
             let bits = if bits & SIGN_MASK != 0 {
                 bits & !SIGN_MASK
             } else {
                 !bits
             };
-            <$float_type>::from_bits(bits)
+            <$type>::from_bits(bits)
         }
 
         /// Calculates the cardinality (number of distinct values) in a float range.
@@ -63,7 +65,7 @@ macro_rules! impl_float_bits {
         /// Returns `Some(1)` for NaN values, otherwise computes the difference
         /// in bit representations plus one.
         #[inline]
-        pub const fn cardinality(start: $float_type, end: $float_type) -> Option<u128> {
+        pub const fn cardinality(start: $type, end: $type) -> Option<u128> {
             if start.is_nan() || end.is_nan() {
                 Some(1)
             } else {
@@ -75,9 +77,9 @@ macro_rules! impl_float_bits {
         ///
         /// Copied from Rust's stdlib to support older Rust versions.
         #[inline]
-        pub const fn next_up(value: $float_type) -> $float_type {
+        pub const fn next_up(value: $type) -> $type {
             let bits = value.to_bits();
-            if value.is_nan() || bits == <$float_type>::INFINITY.to_bits() {
+            if value.is_nan() || bits == <$type>::INFINITY.to_bits() {
                 return value;
             }
 
@@ -90,16 +92,16 @@ macro_rules! impl_float_bits {
                 bits - 1
             };
 
-            <$float_type>::from_bits(next_bits)
+            <$type>::from_bits(next_bits)
         }
 
         /// Returns the next representable value below the given float.
         ///
         /// Copied from Rust's stdlib to support older Rust versions.
         #[inline]
-        pub const fn next_down(value: $float_type) -> $float_type {
+        pub const fn next_down(value: $type) -> $type {
             let bits = value.to_bits();
-            if value.is_nan() || bits == <$float_type>::NEG_INFINITY.to_bits() {
+            if value.is_nan() || bits == <$type>::NEG_INFINITY.to_bits() {
                 return value;
             }
 
@@ -112,35 +114,35 @@ macro_rules! impl_float_bits {
                 bits + 1
             };
 
-            <$float_type>::from_bits(next_bits)
+            <$type>::from_bits(next_bits)
+        }
+
+        #[inline]
+        #[allow(dead_code)]
+        pub const fn clamp(value: $type, low: $type, high: $type) -> $type {
+            if value < low {
+                low
+            } else if value > high {
+                high
+            } else {
+                value
+            }
+        }
+
+        #[inline]
+        #[allow(dead_code)]
+        pub const fn max(left: $type, right: $type) -> $type {
+            if left >= right { left } else { right }
         }
     };
 }
 
 pub(crate) mod f32 {
-    impl_float_bits!(f32, u32, 0x8000_0000);
+    float!(f32, u32, 0x8000_0000);
 }
 
 pub(crate) mod f64 {
-    impl_float_bits!(f64, u64, 0x8000_0000_0000_0000);
-
-    /// Clamps a value between a minimum and maximum.
-    #[inline]
-    pub const fn clamp(value: f64, low: f64, high: f64) -> f64 {
-        if value < low {
-            low
-        } else if value > high {
-            high
-        } else {
-            value
-        }
-    }
-
-    /// Returns the maximum of two f64 values.
-    #[inline]
-    pub const fn max(left: f64, right: f64) -> f64 {
-        if left >= right { left } else { right }
-    }
+    float!(f64, u64, 0x8000_0000_0000_0000);
 }
 
 macro_rules! tuples {

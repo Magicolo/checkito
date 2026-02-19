@@ -12,22 +12,6 @@ pub struct Shrinker<S: ?Sized> {
     pub(crate) shrinkers: S,
 }
 
-/// Sequential shrinking helper for homogeneous collections.
-///
-/// This function implements the common "try each element until one shrinks" pattern
-/// used across arrays, slices, and vectors. It iterates through elements, attempting
-/// to shrink each one. When an element successfully shrinks, it returns a clone of
-/// the collection with that element replaced.
-///
-/// If an element cannot shrink further, the index advances to try the next element.
-/// This continues until either a shrinkable element is found or we run out of elements.
-///
-/// # Arguments
-/// * `shrinkers` - A mutable reference to a collection of shrinkers
-/// * `index` - A mutable index tracking which element to try shrinking next
-///
-/// # Returns
-/// `Some(collection)` with one element shrunk, or `None` if no elements can shrink.
 pub(crate) fn shrink<S: Shrink, I: AsMut<[S]> + Clone>(
     shrinkers: &mut I,
     index: &mut usize,
