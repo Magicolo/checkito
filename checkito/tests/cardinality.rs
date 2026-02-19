@@ -115,3 +115,30 @@ fn full_isize_has_correct_cardinality() {
     let expected = u128::wrapping_sub(isize::MAX as u128, isize::MIN as u128).wrapping_add(1);
     assert_eq!(generator.cardinality(), Some(expected));
 }
+#[test]
+fn demonstrate_fix() {
+    // Before the fix:
+    // u8::wrapping_sub(255, 0) = 255 (WRONG - off by 1)
+    
+    // After the fix:
+    // u8::wrapping_sub(255, 0).wrapping_add(1) = 256 (CORRECT)
+    
+    let before = u128::wrapping_sub(u8::MAX as u128, u8::MIN as u128);
+    let after = u128::wrapping_sub(u8::MAX as u128, u8::MIN as u128).wrapping_add(1);
+    
+    println!("Before fix: {}", before); // 255
+    println!("After fix: {}", after);   // 256
+    
+    assert_eq!(before, 255);
+    assert_eq!(after, 256);
+    
+    // For signed types like i8:
+    let i8_before = u128::wrapping_sub(i8::MAX as u128, i8::MIN as u128);
+    let i8_after = u128::wrapping_sub(i8::MAX as u128, i8::MIN as u128).wrapping_add(1);
+    
+    println!("i8 Before fix: {}", i8_before); // 255
+    println!("i8 After fix: {}", i8_after);   // 256
+    
+    assert_eq!(i8_before, 255);
+    assert_eq!(i8_after, 256);
+}
