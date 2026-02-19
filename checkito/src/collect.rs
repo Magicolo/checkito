@@ -27,6 +27,16 @@ pub trait Count {
     fn count(&self) -> Range<usize>;
 }
 
+/// State machine for multi-phase collection shrinking.
+///
+/// Collection shrinking proceeds in phases to find the simplest failing case:
+/// 1. `Truncate`: Reduce the collection size by removing elements from the end
+/// 2. `Remove`: Try removing individual elements one at a time
+/// 3. `Shrink`: Shrink individual elements in place
+/// 4. `Done`: No more shrinking possible
+///
+/// This phased approach helps find minimal test cases by first trying structural
+/// simplifications (fewer elements) before content simplifications (simpler elements).
 #[derive(Debug, Clone)]
 pub(crate) enum Machine {
     Truncate(primitive::Shrinker<usize>),

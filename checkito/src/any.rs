@@ -10,6 +10,14 @@ use core::f64;
 use ref_cast::RefCast;
 use std::{rc::Rc, sync::Arc};
 
+/// A transparent wrapper for selecting one generator from multiple options.
+///
+/// The `#[repr(transparent)]` and `RefCast` derive enable zero-cost conversions
+/// between `&G` and `&Any<G>`, which is used to delegate Generate implementations
+/// for reference types (&G, &mut G, Box<G>, etc.) without runtime overhead.
+///
+/// RefCast is preferred over `From`/`Into` here because it provides compile-time
+/// guarantees about the representation and allows safe reference casting.
 #[repr(transparent)]
 #[derive(Clone, Debug, RefCast)]
 pub struct Any<G: ?Sized>(pub(crate) G);

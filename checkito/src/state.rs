@@ -816,6 +816,20 @@ impl Sizes {
         }
     }
 
+    /// Creates a `Sizes` value by interpolating across a range based on index/count ratio.
+    ///
+    /// This function is used to progressively increase the size parameter across multiple
+    /// test samples. It implements a size progression algorithm where:
+    /// - Early samples (low index) get smaller sizes (closer to `start`)
+    /// - Later samples (high index) get larger sizes (up to `end`)
+    /// - The ratio is scaled by 1.25 to ensure that 25% of samples use the full size (`end`)
+    ///
+    /// This distribution helps tests explore both simple (small) and complex (large) cases.
+    ///
+    /// # Arguments
+    /// * `index` - Current sample index (0-based)
+    /// * `count` - Total number of samples
+    /// * `size` - The size range to interpolate across
     #[inline]
     pub(crate) const fn from_ratio(index: usize, count: usize, size: Self) -> Self {
         let (start, end) = (size.start(), size.end());
