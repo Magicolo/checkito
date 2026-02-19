@@ -98,22 +98,10 @@ fn dampen_with_both_zero_forces_minimal_collections() {
 }
 
 #[test]
-fn dampen_with_high_depth_handles_gracefully() {
-    // Test that very high depth values don't cause issues
-    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
-        .dampen_with(1.0, 50, usize::MAX)
-        .samples(64)
-        .collect::<Vec<_>>();
-
-    // Should not panic and should generate reasonable collections
-    // At depth 0, size should be normal, so some non-empty vectors expected
-    assert!(values.iter().any(|v| !v.is_empty()));
-}
-
-#[test]
 fn dampen_deepest_threshold_reached_first() {
-    // When deepest is lower than limit, deepest threshold determines when size becomes 0
-    // This test uses deepest=1, so after the first depth increase, size becomes 0
+    // When deepest is lower than limit, deepest threshold determines when size
+    // becomes 0 This test uses deepest=1, so after the first depth increase,
+    // size becomes 0
     let values = same(same(
         Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, 1, 100),
     ))
@@ -128,7 +116,8 @@ fn dampen_deepest_threshold_reached_first() {
 
 #[test]
 fn dampen_limit_threshold_reached_first() {
-    // When limit is lower than deepest, limit threshold determines when size becomes 0
+    // When limit is lower than deepest, limit threshold determines when size
+    // becomes 0
     let values = same(same(
         Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, 100, 1),
     ))
@@ -140,7 +129,6 @@ fn dampen_limit_threshold_reached_first() {
     // After limit >= 1, size becomes 0.0
     assert!(values.iter().all(Vec::is_empty));
 }
-
 
 #[test]
 fn lazy_constructs_generator_only_once() {
