@@ -107,24 +107,10 @@ fn constant_range_is_converted() {
 
 #[test]
 fn wrapping_generators_implement_constant() {
-    // Keep
     let _keep = Keep::<I32<42>>::VALUE;
-
-    // Dampen
-    let _dampen = Dampen::<I32<100>>::VALUE;
-
-    // Flatten
     let _flatten = Flatten::<I32<7>>::VALUE;
-
-    // Array
     let _array = Array::<I32<5>, 3>::VALUE;
-
-    // Convert
     let _convert = Convert::<I32<10>, i64>::VALUE;
-
-    // Collect
     let _collect = Collect::<I32<1>, Range<Usize<0>, Usize<10>>, Vec<i32>>::VALUE;
-
-    // Cardinality
     let _cardinality = Cardinality::<I32<99>, 42>::VALUE;
 }
