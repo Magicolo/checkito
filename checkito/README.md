@@ -1,7 +1,7 @@
 <div align="center"> <h1> checkito 3.2.5 </h1> </div>
 
 <p align="center">
-    <em> 
+    <em>
 A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing.
     </em>
 </p>
@@ -14,9 +14,9 @@ A safe, efficient and simple QuickCheck-inspired library to generate shrinkable 
 ---
 ### In Brief
 
-The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests. 
+The purpose of the library is to test general properties of a program rather than very specific examples as you would with unit tests.
 
-- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.). 
+- When writing a `checkito` test (called a `check`), you first construct a generator by specifying the bounds that make sense for the inputs (ex: a number in the range `10..100`, an alpha-numeric string, a vector of `f64`, etc.).
 - Generators can produce arbitrary complex values with their combinators, in a similar way that `Iterator`s can.
 - Given a proper generator, `checkito` will sample the input space to find a failing case for your test.
 - Once a failing case is found, `checkito` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process easier.
@@ -32,8 +32,6 @@ The library is built around a few core traits:
 -   [`Shrink`](src/shrink.rs): tries to reduce a generated sample to a 'smaller' version of it while maintaining its constraints (ex: a sample `usize` in the range `10..100` will never be shrunk below `10`). For numbers, it means bringing the sample closer to 0, for vectors, it means removing irrelevant items and shrinking the remaining ones, and so on.
 -   [`Prove`](src/prove.rs): represents a desirable property of a program under test. It is used mainly in the context of the [`Check::check`](src/check.rs) or [`Checker::check`](src/check.rs) methods and it is the failure of a proof that triggers the shrinking process. It is implemented for a couple of standard types such as `()`, `bool` and `Result`. A `panic!()` is also considered as a failing property, thus standard `assert!()` macros (or any other panicking assertions) can be used to check the property.
 -   [`Check`](src/check.rs): A trait (implemented for all `Generate` types) that provides the main entry points for running property tests: `check` and `checks`.
-   
-*To ensure safety, this library has `#![forbid(unsafe_code)]`.*
 
 ---
 ### Environment Variables
@@ -231,3 +229,4 @@ _See the [examples](examples/) and [tests](tests/) folder for more detailed exam
 - [quickcheck](https://crates.io/crates/quickcheck)
 - [arbitrary](https://crates.io/crates/arbitrary)
 - [monkey_test](https://crates.io/crates/monkey_test)
+

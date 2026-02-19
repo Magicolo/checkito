@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use quote::ToTokens;
 
 #[cfg(feature = "check")]
