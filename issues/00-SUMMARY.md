@@ -206,7 +206,7 @@ let gen = 10u8..=0;
 
 ## Test Coverage
 
-All experiments are preserved in `checkito/examples/` with detailed comments and assertions. They can be run individually:
+All experiments were originally implemented in `checkito/examples/` with detailed comments and assertions. The following commands were used to run them during development:
 
 ```bash
 cargo run --example cardinality_experiments
