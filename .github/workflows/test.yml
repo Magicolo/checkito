@@ -20,7 +20,7 @@ jobs:
                     - cargo hack test --release --examples --verbose --all-features
         steps:
             - uses: actions/checkout@v6
-              run: ${{ matrix.command }}
+            - run: ${{ matrix.command }}
     clippy:
         runs-on: ubuntu-latest
         container:
