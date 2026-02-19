@@ -11,12 +11,16 @@ jobs:
         runs-on: ubuntu-latest
         container:
             image: ghcr.io/magicolo/rust
+        strategy:
+            matrix:
+                command:
+                    - cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
+                    - cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
+                    - cargo hack test --release --doc --verbose --all-features
+                    - cargo hack test --release --examples --verbose --all-features
         steps:
             - uses: actions/checkout@v6
-            - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
-            - run: cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
-            - run: cargo hack test --release --doc --verbose --all-features
-            - run: cargo hack test --release --examples --verbose --all-features
+              run: ${{ matrix.command }}
     clippy:
         runs-on: ubuntu-latest
         container:
