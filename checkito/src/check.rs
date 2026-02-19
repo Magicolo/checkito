@@ -232,10 +232,10 @@ pub enum Cause<E> {
 impl<T: PartialEq, P: Prove<Proof: PartialEq, Error: PartialEq>> PartialEq for Result<T, P> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Pass(l0), Self::Pass(r0)) => l0 == r0,
-            (Self::Shrink(l0), Self::Shrink(r0)) => l0 == r0,
-            (Self::Shrunk(l0), Self::Shrunk(r0)) => l0 == r0,
-            (Self::Fail(l0), Self::Fail(r0)) => l0 == r0,
+            (Self::Pass(left), Self::Pass(right)) => left == right,
+            (Self::Shrink(left), Self::Shrink(right)) => left == right,
+            (Self::Shrunk(left), Self::Shrunk(right)) => left == right,
+            (Self::Fail(left), Self::Fail(right)) => left == right,
             _ => false,
         }
     }
