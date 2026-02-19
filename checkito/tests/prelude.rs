@@ -87,6 +87,64 @@ fn dampen_with_limit_applies_after_nested_flatten_depth() {
 }
 
 #[test]
+fn dampen_with_both_zero_forces_minimal_collections() {
+    // When both deepest and limit are 0, size is always 0.0
+    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+        .dampen_with(1.0, 0, 0)
+        .samples(64)
+        .collect::<Vec<_>>();
+
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_with_high_depth_handles_gracefully() {
+    // Test that very high depth values don't cause issues
+    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+        .dampen_with(1.0, 50, usize::MAX)
+        .samples(64)
+        .collect::<Vec<_>>();
+
+    // Should not panic and should generate reasonable collections
+    // At depth 0, size should be normal, so some non-empty vectors expected
+    assert!(values.iter().any(|v| !v.is_empty()));
+}
+
+#[test]
+fn dampen_deepest_threshold_reached_first() {
+    // When deepest is lower than limit, deepest threshold is reached first
+    // This demonstrates the OR relationship: depth >= deepest OR limit >= limit
+    let values = same(same(same(same(
+        Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, 2, 100),
+    ))))
+    .flatten()
+    .flatten()
+    .flatten()
+    .flatten()
+    .samples(32)
+    .collect::<Vec<_>>();
+
+    // At depth 2+, size becomes 0.0, so all should be empty
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_limit_threshold_reached_first() {
+    // When limit is lower than deepest, limit threshold is reached first
+    let values = same(same(
+        Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, 100, 1),
+    ))
+    .flatten()
+    .flatten()
+    .samples(32)
+    .collect::<Vec<_>>();
+
+    // After 1 depth increase (at limit 1), size becomes 0.0
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+
+#[test]
 fn lazy_constructs_generator_only_once() {
     use std::sync::{
         Arc,

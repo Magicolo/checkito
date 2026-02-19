@@ -413,6 +413,21 @@ pub trait Generate {
     /// - `deepest`: The `depth` at which `size` becomes `0`.
     /// - `limit`: The total number of `depth` increases before `size` becomes
     ///   `0`.
+    ///
+    /// # Edge Cases
+    ///
+    /// - **`deepest = 0`**: Size immediately becomes `0.0` at any depth,
+    ///   causing all nested structures to be minimal (typically empty).
+    /// - **`limit = 0`**: Size immediately becomes `0.0` when any depth
+    ///   increase occurs, causing all collections to be minimal.
+    /// - **Both `deepest = 0` and `limit = 0`**: Size is always `0.0`,
+    ///   resulting in minimal generation.
+    /// - **At threshold**: When `depth >= deepest` or `limit >= limit` is
+    ///   reached, size becomes exactly `0.0` with no gradual tapering. This
+    ///   creates an abrupt transition from normal-sized to minimal structures.
+    ///
+    /// These behaviors are intentional to prevent infinite recursion and keep
+    /// generated data manageable, but may cause discontinuous size changes.
     fn dampen_with(self, pressure: f64, deepest: usize, limit: usize) -> Dampen<Self>
     where
         Self: Sized,

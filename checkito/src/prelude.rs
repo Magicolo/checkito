@@ -140,7 +140,18 @@ pub const fn size<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S>(
     Size(generator, map)
 }
 
-/// See [`Generate::dampen`].
+/// See [`Generate::dampen`] and [`Generate::dampen_with`].
+///
+/// Creates a generator that dampens size based on recursion depth and element
+/// count.
+///
+/// # Parameters
+/// - `pressure`: How fast the size is reduced as depth increases.
+/// - `deepest`: The depth at which size becomes `0.0`.
+/// - `limit`: The total number of depth increases before size becomes `0.0`.
+///
+/// # Edge Cases
+/// See [`Generate::dampen_with`] for detailed edge case documentation.
 #[inline]
 pub const fn dampen<G: Generate>(
     generator: G,

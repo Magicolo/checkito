@@ -186,6 +186,9 @@ impl State {
     pub const fn dampen(&mut self, deepest: usize, limit: usize, pressure: f64) -> With<'_> {
         let with = self.with();
         let old = with.state.sizes();
+        // When depth >= deepest OR limit >= limit, size becomes 0.0 immediately.
+        // This creates an abrupt transition but prevents infinite recursion.
+        // Edge cases: deepest=0 or limit=0 will cause size to always be 0.0.
         let new = if with.state.depth >= deepest || with.state.limit >= limit {
             0.0
         } else {
