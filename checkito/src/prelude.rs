@@ -141,7 +141,7 @@ pub const fn size<G: Generate, S: Into<Sizes>, F: Fn(Sizes) -> S>(
     Size(generator, map)
 }
 
-/// See [`Generate::dampen`].
+/// See [`Generate::dampen`] and [`Generate::dampen_with`].
 #[inline]
 pub const fn dampen<G: Generate>(
     generator: G,

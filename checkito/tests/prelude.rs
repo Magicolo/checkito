@@ -122,6 +122,50 @@ fn dampen_with_limit_applies_after_nested_flatten_depth() {
 }
 
 #[test]
+fn dampen_with_both_zero_forces_minimal_collections() {
+    // When both deepest and limit are 0, size is always 0.0
+    let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+        .dampen_with(1.0, 0, 0)
+        .samples(64)
+        .collect::<Vec<_>>();
+
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_deepest_threshold_reached_first() {
+    // When deepest is lower than limit, deepest threshold determines when size
+    // becomes 0 This test uses deepest=1, so after the first depth increase,
+    // size becomes 0
+    let values = same(same(
+        Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, 1, 100),
+    ))
+    .flatten()
+    .flatten()
+    .samples(32)
+    .collect::<Vec<_>>();
+
+    // After reaching depth >= 1, size becomes 0.0, so all should be empty
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
+fn dampen_limit_threshold_reached_first() {
+    // When limit is lower than deepest, limit threshold determines when size
+    // becomes 0
+    let values = same(same(
+        Generate::collect::<Vec<_>>(0u8..=u8::MAX).dampen_with(1.0, 100, 1),
+    ))
+    .flatten()
+    .flatten()
+    .samples(32)
+    .collect::<Vec<_>>();
+
+    // After limit >= 1, size becomes 0.0
+    assert!(values.iter().all(Vec::is_empty));
+}
+
+#[test]
 fn lazy_constructs_generator_only_once() {
     use std::sync::{
         Arc,
