@@ -720,6 +720,26 @@ pub(crate) mod synchronous {
 
 #[cfg(feature = "asynchronous")]
 pub(crate) mod asynchronous {
+    //! Asynchronous property testing with concurrent execution.
+    //!
+    //! This module implements an asynchronous version of the property checker that can
+    //! execute multiple test cases concurrently, controlled by the `concurrency` parameter.
+    //!
+    //! ## Concurrency Semantics
+    //!
+    //! - **Generation Phase**: Up to `concurrency` futures are spawned and polled concurrently.
+    //!   Results are consumed in FIFO order (oldest first), maintaining deterministic ordering.
+    //!
+    //! - **Shrinking Phase**: When `concurrency == 1`, behavior matches the synchronous checker
+    //!   exactly. When `concurrency > 1`, an optimization skips in-flight shrink attempts when
+    //!   a better (smaller) failure is found. This trades strict determinism for performance,
+    //!   but both approaches find valid minimal counterexamples.
+    //!
+    //! ## Ordering Guarantees
+    //!
+    //! The stream maintains strict FIFO ordering of results: even when futures complete out
+    //! of order, results are yielded in the order they were generated. This is enforced by
+    //! the `head` pointer, which only advances when the oldest in-flight future resolves.
     use super::*;
     use core::{
         future::Future,
@@ -734,10 +754,10 @@ pub(crate) mod asynchronous {
     }
 
     pin_project! {
-        /// An iterator over the results of a property test.
+        /// An asynchronous stream over the results of a property test.
         ///
-        /// The iterator first enters a generation phase, where it produces values and
-        /// runs the test against them.
+        /// The stream first enters a generation phase, where it produces values and
+        /// runs the test against them concurrently (up to `concurrency` futures).
         ///
         /// - If a check passes, it yields a [`Result::Pass`].
         /// - If a check fails, it enters the shrinking phase.
@@ -749,8 +769,13 @@ pub(crate) mod asynchronous {
         /// - If a shrunk value fails the test, it yields a [`Result::Shrunk`], and this
         ///   new, simpler value becomes the one to be shrunk further.
         ///
-        /// Once a value can no longer be shrunk, the iterator yields a final
+        /// Once a value can no longer be shrunk, the stream yields a final
         /// [`Result::Fail`] and then terminates.
+        ///
+        /// ## Ordering
+        ///
+        /// Results are always yielded in generation order, regardless of which futures
+        /// complete first. This ensures deterministic behavior when using a fixed seed.
         pub struct Stream<G: Generate, P: Future<Output: Prove>, C> {
             yields: Yields,
             check: C,
