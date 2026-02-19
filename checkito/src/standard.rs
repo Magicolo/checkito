@@ -260,7 +260,6 @@ pub mod number {
 pub mod with {
     use super::*;
 
-    /// A generator created from a closure that produces a value.
     #[derive(Debug, Clone)]
     pub struct With<F>(pub(crate) F);
 
@@ -292,7 +291,7 @@ pub mod with {
         type Item = T;
 
         fn item(&self) -> Self::Item {
-            (self.0)()
+            self.0()
         }
 
         fn shrink(&mut self) -> Option<Self> {
