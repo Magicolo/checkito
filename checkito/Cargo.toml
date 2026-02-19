@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "3.2.5"
+version = "4.0.0"
 description = "A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing."
 documentation = "https://docs.rs/checkito/latest/checkito/"
 authors = { workspace = true }

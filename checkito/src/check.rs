@@ -307,6 +307,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn into_pass(self, shrink: bool) -> result::Result<Pass<T, P::Proof>, Self> {
         match self {
             Result::Pass(pass) => Ok(pass),
@@ -323,6 +324,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn into_fail(self, shrunk: bool) -> result::Result<Fail<T, P::Error>, Self> {
         match self {
             Result::Fail(fail) => Ok(fail),
@@ -527,7 +529,7 @@ const fn shrunk<T, P: Prove>(
 }
 
 fn catch<T, E, F: FnOnce() -> T>(run: F) -> result::Result<T, Cause<E>> {
-    catch_unwind(AssertUnwindSafe(move || run())).map_err(|error| Cause::Panic(cast(error).ok()))
+    catch_unwind(AssertUnwindSafe(run)).map_err(|error| Cause::Panic(cast(error).ok()))
 }
 
 pub(crate) mod synchronous {
@@ -559,6 +561,7 @@ pub(crate) mod synchronous {
         machine: Machine<G, P>,
     }
 
+    #[derive(Default)]
     enum Machine<G: Generate, P: Prove> {
         Generate {
             generator: G,
@@ -571,13 +574,8 @@ pub(crate) mod synchronous {
             shrinker: G::Shrink,
             cause: Cause<P::Error>,
         },
+        #[default]
         Done,
-    }
-
-    impl<G: Generate, P: Prove> Default for Machine<G, P> {
-        fn default() -> Self {
-            Self::Done
-        }
     }
 
     impl<G: Generate> Checker<G, Run> {
@@ -767,7 +765,9 @@ pub(crate) mod asynchronous {
 
     pin_project! {
         #[project = EntryProjection]
+        #[derive(Default)]
         enum Entry<S: Shrink, P: Future<Output: Prove>> {
+            #[default]
             Vacant,
             Proving {
                 state: Option<State>,
@@ -796,12 +796,7 @@ pub(crate) mod asynchronous {
         },
     }
 
-    impl<S: Shrink, P: Future<Output: Prove>> Default for Entry<S, P> {
-        fn default() -> Self {
-            Self::Vacant
-        }
-    }
-
+    #[derive(Default)]
     enum Machine<G: Generate, P: Prove> {
         Generate {
             generator: G,
@@ -812,13 +807,8 @@ pub(crate) mod asynchronous {
             shrinker: G::Shrink,
             cause: Cause<P::Error>,
         },
+        #[default]
         Done,
-    }
-
-    impl<G: Generate, P: Prove> Default for Machine<G, P> {
-        fn default() -> Self {
-            Self::Done
-        }
     }
 
     impl<G: Generate> Checker<G, Run> {
@@ -1009,10 +999,10 @@ pub(crate) mod asynchronous {
         }
     }
 
-    fn get<'a, S: Shrink, P: Future<Output: Prove>>(
-        entries: Pin<&'a mut Box<[Entry<S, P>]>>,
+    fn get<S: Shrink, P: Future<Output: Prove>>(
+        entries: Pin<&mut Box<[Entry<S, P>]>>,
         index: usize,
-    ) -> Pin<&'a mut Entry<S, P>> {
+    ) -> Pin<&mut Entry<S, P>> {
         let count = entries.len();
         unsafe { entries.map_unchecked_mut(|entries| &mut entries[index % count]) }
     }
