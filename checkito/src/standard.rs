@@ -259,6 +259,7 @@ pub mod number {
 
 pub mod with {
     use super::*;
+    use core::cell::RefCell;
 
     #[derive(Debug, Clone)]
     pub struct With<F>(pub(crate) F);
@@ -269,17 +270,39 @@ pub mod with {
         }
     }
 
-    #[derive(Debug, Clone)]
-    pub struct Shrinker<F>(pub(crate) F);
+    pub struct Shrinker<T, F> {
+        generator: F,
+        cached: RefCell<Option<T>>,
+    }
+
+    impl<T, F: core::fmt::Debug> core::fmt::Debug for Shrinker<T, F> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("Shrinker")
+                .field("generator", &self.generator)
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl<T, F: Clone> Clone for Shrinker<T, F> {
+        fn clone(&self) -> Self {
+            Self {
+                generator: self.generator.clone(),
+                cached: RefCell::new(None),
+            }
+        }
+    }
 
     impl<T, F: Fn() -> T + Clone> Generate for With<F> {
         type Item = T;
-        type Shrink = Shrinker<F>;
+        type Shrink = Shrinker<T, F>;
 
         const CARDINALITY: Option<u128> = None;
 
         fn generate(&self, _state: &mut State) -> Self::Shrink {
-            Shrinker(self.0.clone())
+            Shrinker {
+                generator: self.0.clone(),
+                cached: RefCell::new(None),
+            }
         }
 
         fn cardinality(&self) -> Option<u128> {
@@ -287,11 +310,16 @@ pub mod with {
         }
     }
 
-    impl<T, F: Fn() -> T + Clone> Shrink for Shrinker<F> {
+    impl<T, F: Fn() -> T + Clone> Shrink for Shrinker<T, F> {
         type Item = T;
 
         fn item(&self) -> Self::Item {
-            self.0()
+            let mut cached = self.cached.borrow_mut();
+            if cached.is_none() {
+                *cached = Some((self.generator)());
+            }
+            // Take the value out
+            cached.take().unwrap()
         }
 
         fn shrink(&mut self) -> Option<Self> {
