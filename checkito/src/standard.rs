@@ -276,14 +276,14 @@ pub mod with {
         type Item = T;
         type Shrink = Shrinker<F>;
 
-        const CARDINALITY: Option<u128> = Some(1);
+        const CARDINALITY: Option<u128> = None;
 
         fn generate(&self, _state: &mut State) -> Self::Shrink {
             Shrinker(self.0.clone())
         }
 
         fn cardinality(&self) -> Option<u128> {
-            Some(1)
+            None
         }
     }
 
