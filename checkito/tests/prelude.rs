@@ -1,4 +1,8 @@
 pub mod common;
+use checkito::{
+    primitive::Constant,
+    standard::{character, number, with},
+};
 use common::*;
 use orn::{Or1, Or2, Or3, Or4};
 
@@ -42,6 +46,41 @@ generators!(u8, 1u8, Or1<u8>, 2u8);
 generators!(i32, 1i32, Or2<i32, i32>, 2i32, 3i32);
 generators!(char, 'a', Or3<char, char, char>, 'b', 'c', 'd');
 generators!(bool, true, Or4<bool, bool, bool, bool>, false, true, false, false);
+
+#[test]
+fn letter_generator_works() {
+    assert!(letter().check(|c| c.is_ascii_alphabetic()).is_none());
+}
+
+#[test]
+fn digit_generator_works() {
+    assert!(digit().check(|c| c.is_ascii_digit()).is_none());
+}
+
+#[test]
+fn ascii_generator_works() {
+    assert!(ascii().check(|c| c.is_ascii()).is_none());
+}
+
+#[test]
+fn number_generator_works() {
+    assert!(number::<i32>().check(|_| true).is_none());
+}
+
+#[test]
+fn positive_generator_works() {
+    assert!(positive::<i32>().check(|n| n >= 0).is_none());
+}
+
+#[test]
+fn negative_generator_works() {
+    assert!(negative::<i32>().check(|n| n <= 0).is_none());
+}
+
+#[test]
+fn with_generator_works() {
+    assert!(with(|| 42).check(|n| n == 42).is_none());
+}
 
 #[test]
 fn size_can_force_minimal_collections() {

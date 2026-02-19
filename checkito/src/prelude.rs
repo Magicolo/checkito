@@ -17,6 +17,7 @@ use crate::{
     same::Same,
     shrink::Shrinker,
     size::Size,
+    standard::{character, number, with},
     state::Sizes,
     unify::Unify,
 };
@@ -185,53 +186,49 @@ pub fn regex(
 ///
 /// This is equivalent to `T::MIN..=T::MAX`.
 #[inline]
-pub const fn number<T: Number>() -> impl Generate<Item = T> {
-    T::FULL
+pub const fn number<T: Number>() -> number::Number<T> {
+    number::Number(PhantomData)
 }
 
 /// A generator for any non-negative [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `0..=T::MAX`.
 #[inline]
-pub const fn positive<T: Number>() -> impl Generate<Item = T> {
-    T::POSITIVE
+pub const fn positive<T: Number>() -> number::Positive<T> {
+    number::Positive(PhantomData)
 }
 
 /// A generator for any non-positive [`Number`] type (includes `0`).
 ///
 /// This is equivalent to `T::MIN..=0`.
 #[inline]
-pub const fn negative<T: Number>() -> impl Generate<Item = T> {
-    T::NEGATIVE
+pub const fn negative<T: Number>() -> number::Negative<T> {
+    number::Negative(PhantomData)
 }
 
 /// A generator for ASCII letters (`a-z`, `A-Z`).
 #[inline]
-pub const fn letter() -> impl Generate<Item = char> {
-    let generator = unify(any(('a'..='z', 'A'..='Z')));
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn letter() -> character::Letter {
+    character::Letter(PhantomData)
 }
 
 /// A generator for ASCII digits (`0-9`).
 #[inline]
-pub const fn digit() -> impl Generate<Item = char> {
-    let generator = '0'..='9';
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn digit() -> character::Digit {
+    character::Digit(PhantomData)
 }
 
 /// A generator for all ASCII characters (0-127).
 #[inline]
-pub const fn ascii() -> impl Generate<Item = char> {
-    let generator = 0 as char..=127 as char;
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn ascii() -> character::Ascii {
+    character::Ascii(PhantomData)
 }
 
 /// Creates a generator from a closure that produces a value.
 ///
-/// This is useful for wrapping simple value creation in a generator.
+/// **This generator assumes that the closure always returns the same
+/// value; if this assumption is violated, `check`ing and `shrink`ing may have
+/// unexpected behaviors.**
 ///
 /// # Examples
 /// ```
@@ -242,10 +239,8 @@ pub const fn ascii() -> impl Generate<Item = char> {
 /// let generator = with(|| MyStruct(42));
 /// ```
 #[inline]
-pub const fn with<T, F: Fn() -> T + Clone>(generator: F) -> impl Generate<Item = T> {
-    let generator = map((), move |_| generator());
-    #[allow(clippy::let_and_return)]
-    generator
+pub const fn with<T, F: Fn() -> T + Clone>(generate: F) -> with::With<F> {
+    with::With::new(generate)
 }
 
 /// Defers the construction of a generator until it is used.

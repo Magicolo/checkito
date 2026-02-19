@@ -5,7 +5,7 @@ use crate::{
     generate::{FullGenerate, Generate},
     shrink::Shrink,
     state::State,
-    utility,
+    utility::{self, tuples},
 };
 use core::{
     fmt::{Debug, Display},
@@ -783,6 +783,14 @@ macro_rules! floating {
     ($($types: ident),*) => { $(pub mod $types { use super::*; floating!($types); })* };
 }
 
+macro_rules! tuple {
+    ($n:ident, $c:tt $(,$p:ident, $t:ident, $i:tt)*) => {
+        impl<$($t: Constant,)*> Constant for ($($t,)*) {
+            const VALUE: Self = ($($t::VALUE,)*);
+        }
+    };
+}
+
 integer!(
     [u8, U8],
     [u16, U16],
@@ -798,3 +806,5 @@ integer!(
     [isize, Isize],
 );
 floating!(f32, f64);
+
+tuples!(tuple);

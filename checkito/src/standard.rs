@@ -1,9 +1,13 @@
 use crate::{
+    any::Any,
     cardinality,
     convert::Convert,
     generate::{FullGenerate, Generate},
+    primitive,
+    primitive::{Constant, char::Char},
     shrink::Shrink,
     state::State,
+    unify::Unify,
 };
 use core::{marker::PhantomData, mem::take};
 use std::{rc::Rc, sync::Arc};
@@ -189,6 +193,137 @@ macro_rules! pointer {
     };
 }
 
+macro_rules! generator {
+    ($name: ident $(<)?$($generic: ident $(: $constraint: path)?),*$(>)?, $item: ty, $type: ty) => {
+        generator!($name <$($generic $(: $constraint)?),*>, $item, $type, <$type as Constant>::VALUE);
+    };
+    ($name: ident $(<)?$($generic: ident $(: $constraint: path)?),*$(>)?, $item: ty, $type: ty, $constant: expr) => {
+        #[derive(Clone, Copy, Debug)]
+        pub struct $name<$($generic: $($constraint)?),*>(pub(crate) PhantomData<($($generic,)*)>);
+
+        impl<$($generic: $($constraint)?),*> Constant for $name<$($generic,)*> {
+            const VALUE: Self = Self(PhantomData);
+        }
+
+        impl<$($generic: $($constraint)?),*> Generate for $name<$($generic,)*> {
+            type Item = $item;
+            type Shrink = <$type as Generate>::Shrink;
+
+            const CARDINALITY: Option<u128> = <$type as Generate>::CARDINALITY;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                $constant.generate(state)
+            }
+
+            fn cardinality(&self) -> Option<u128> {
+                $constant.cardinality()
+            }
+        }
+    };
+}
+
 pointer!(boxed, Box);
 pointer!(rc, Rc);
 pointer!(arc, Arc);
+
+pub mod character {
+    use super::*;
+
+    generator!(
+        Letter,
+        char,
+        Unify<
+            Any<(
+                primitive::Range<Char<'a'>, Char<'z'>>,
+                primitive::Range<Char<'A'>, Char<'Z'>>,
+            )>,
+            char,
+        >
+    );
+
+    generator!(Digit, char, primitive::Range<Char<'0'>, Char<'9'>>);
+    generator!(
+        Ascii,
+        char,
+        primitive::Range<Char<{ 0 as char }>, Char<{ 127 as char }>>
+    );
+}
+
+pub mod number {
+    use super::*;
+
+    generator!(Number<T: primitive::Number>, T, T::Full, T::FULL);
+    generator!(Positive<T: primitive::Number>, T, T::Positive, T::POSITIVE);
+    generator!(Negative<T: primitive::Number>, T, T::Negative, T::NEGATIVE);
+}
+
+pub mod with {
+    use super::*;
+    use core::cell::RefCell;
+
+    #[derive(Debug, Clone)]
+    pub struct With<F>(pub(crate) F);
+
+    impl<T, F: Fn() -> T + Clone> With<F> {
+        pub const fn new(generator: F) -> Self {
+            Self(generator)
+        }
+    }
+
+    pub struct Shrinker<T, F> {
+        generator: F,
+        cached: RefCell<Option<T>>,
+    }
+
+    impl<T, F: core::fmt::Debug> core::fmt::Debug for Shrinker<T, F> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("Shrinker")
+                .field("generator", &self.generator)
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl<T, F: Clone> Clone for Shrinker<T, F> {
+        fn clone(&self) -> Self {
+            Self {
+                generator: self.generator.clone(),
+                cached: RefCell::new(None),
+            }
+        }
+    }
+
+    impl<T, F: Fn() -> T + Clone> Generate for With<F> {
+        type Item = T;
+        type Shrink = Shrinker<T, F>;
+
+        const CARDINALITY: Option<u128> = Some(1);
+
+        fn generate(&self, _state: &mut State) -> Self::Shrink {
+            Shrinker {
+                generator: self.0.clone(),
+                cached: RefCell::new(None),
+            }
+        }
+
+        fn cardinality(&self) -> Option<u128> {
+            Some(1)
+        }
+    }
+
+    impl<T, F: Fn() -> T + Clone> Shrink for Shrinker<T, F> {
+        type Item = T;
+
+        fn item(&self) -> Self::Item {
+            let mut cached = self.cached.borrow_mut();
+            if cached.is_none() {
+                *cached = Some((self.generator)());
+            }
+            // Take the value out
+            cached.take().unwrap()
+        }
+
+        fn shrink(&mut self) -> Option<Self> {
+            None
+        }
+    }
+}
