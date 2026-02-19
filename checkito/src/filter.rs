@@ -4,6 +4,32 @@ use crate::{
     state::{Sizes, State},
 };
 
+/// Helper function for retry-based generation with varying sizes.
+///
+/// This encapsulates the common pattern used in filter/filter_map where
+/// we try multiple times to generate a value that satisfies a predicate,
+/// increasing the size on each retry attempt.
+#[inline]
+pub(crate) fn retry_generate<G, F>(
+    generator: &G,
+    retries: usize,
+    state: &mut State,
+    mut check: F,
+) -> Option<G::Shrink>
+where
+    G: Generate + ?Sized,
+    F: FnMut(&G::Shrink) -> bool,
+{
+    for i in 0..=retries {
+        let sizes = Sizes::from_ratio(i, retries, state.sizes());
+        let shrinker = generator.generate(state.with().sizes(sizes).as_mut());
+        if check(&shrinker) {
+            return Some(shrinker);
+        }
+    }
+    None
+}
+
 #[derive(Clone, Debug)]
 pub struct Filter<G: ?Sized, F> {
     pub(crate) filter: F,
@@ -24,18 +50,12 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let mut outer = None;
-        for i in 0..=self.retries {
-            let sizes = Sizes::from_ratio(i, self.retries, state.sizes());
-            let inner = self.generator.generate(state.with().sizes(sizes).as_mut());
-            let item = inner.item();
-            if (self.filter)(&item) {
-                outer = Some(inner);
-                break;
-            }
-        }
+        let filter = &self.filter;
+        let shrinker = retry_generate(&self.generator, self.retries, state, |s| {
+            filter(&s.item())
+        });
         Shrinker {
-            shrinker: outer,
+            shrinker,
             filter: self.filter.clone(),
         }
     }
