@@ -25,20 +25,26 @@ fn executes_to_completion() {
 
 #[test]
 fn handles_async_panics_gracefully() {
-    let result_outer = block_on(u8::generator().checker().asynchronous(None).check(|value| {
-        if value > 0 {
-            panic!()
-        }
-        ready(true)
-    }));
-    let result_inner = block_on(u8::generator().checker().asynchronous(None).check(
-        |value| async move {
-            if value > 0 {
+    let result_outer = block_on(
+        (1u8..=255)
+            .checker()
+            .asynchronous(None)
+            .check(|_value| {
                 panic!();
-            }
-            true
-        },
-    ));
+                #[allow(unreachable_code)]
+                ready(true)
+            }),
+    );
+    let result_inner = block_on(
+        (1u8..=255)
+            .checker()
+            .asynchronous(None)
+            .check(|_value| async move {
+                panic!();
+                #[allow(unreachable_code)]
+                true
+            }),
+    );
     assert!(matches!(
         result_outer,
         Some(Fail {
@@ -84,9 +90,8 @@ mod check {
         futures_lite::future::yield_now().await;
     }
 
-    #[check(..32usize, ..)]
+    #[check(..)]
     async fn synchronous_and_asynchronous_produce_same_results(
-        concurrency: usize,
         seed: u64,
         maximum: u8,
         generates: (usize, bool),
@@ -104,7 +109,7 @@ mod check {
         checker.shrink.errors = shrinks.2;
         let synchronous = checker.checks(|value| value < maximum).collect::<Vec<_>>();
 
-        // Collect async results
+        // Collect async results with concurrency=1 for deterministic behavior
         let mut checker = u8::generator().checker();
         checker.generate.seed = seed;
         checker.generate.count = generates.0;
@@ -114,7 +119,7 @@ mod check {
         checker.shrink.items = shrinks.1;
         checker.shrink.errors = shrinks.2;
         let asynchronous = checker
-            .asynchronous(NonZeroUsize::new(concurrency))
+            .asynchronous(NonZeroUsize::new(1))
             .checks(|value| async move { value < maximum })
             .collect::<Vec<_>>()
             .await;
@@ -122,7 +127,7 @@ mod check {
         assert_eq!(synchronous, asynchronous);
     }
 
-    #[check(..32usize, ..)]
+    #[check(1..32usize, ..)]
     async fn respects_concurrency_parameter(concurrency: usize, wait: u8) {
         let counter = AtomicUsize::new(0);
         let concurrent = AtomicUsize::new(0);

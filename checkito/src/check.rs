@@ -1124,7 +1124,7 @@ pub(crate) mod asynchronous {
                 };
                 entry.set(Entry::Vacant);
                 Resolution::Resolved {
-                    index: *head,
+                    index,
                     shrinker,
                     state,
                     result,
