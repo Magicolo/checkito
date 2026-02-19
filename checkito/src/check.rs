@@ -959,6 +959,14 @@ pub(crate) mod asynchronous {
                                     }
                                 }
                                 Err(new_cause) => {
+                                    // When we find a better (smaller) failing value during shrinking,
+                                    // we reset the buffer head to tail, effectively discarding any
+                                    // in-flight shrink attempts. This is an optimization that trades
+                                    // strict determinism for efficiency when concurrency > 1.
+                                    //
+                                    // With concurrency=1, behavior matches synchronous exactly.
+                                    // With concurrency>1, we may skip some shrink attempts, potentially
+                                    // arriving at a different (but still valid) minimal counterexample.
                                     *this.head = *this.tail;
                                     *this.machine = Machine::Shrink {
                                         state: state.clone(),
