@@ -738,8 +738,6 @@ pub(crate) mod asynchronous {
     //! that can execute multiple test cases concurrently, controlled by the
     //! `concurrency` parameter.
     //!
-    //! ## Concurrency Semantics
-    //!
     //! Up to `concurrency` futures are spawned and polled concurrently. The
     //! stream maintains strict FIFO ordering of results: even when futures
     //! complete out of order, results are yielded in the order they were

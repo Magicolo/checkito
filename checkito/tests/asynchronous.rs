@@ -67,36 +67,36 @@ mod check {
 
     #[check]
     async fn async_check_runs_correctly() -> bool {
-        futures_lite::future::yield_now().await;
+        yield_now().await;
         true
     }
 
     #[check(_, generate.count = 10)]
     async fn async_check_with_parameter(_value: u16) {
-        futures_lite::future::yield_now().await;
+        yield_now().await;
         // Just test that async check with parameter compiles and runs
     }
 
     #[check]
     async fn async_check_returns_unit() {
-        futures_lite::future::yield_now().await;
+        yield_now().await;
     }
 
     #[check(..)]
     async fn synchronous_and_asynchronous_produce_same_results(
         seed: u64,
         maximum: u8,
-        generates: (usize, bool),
-        shrinks: (usize, bool, bool),
+        generates: (u8, bool),
+        shrinks: (u8, bool, bool),
         exhaustive: Option<bool>,
     ) {
         // Collect sync results
         let mut checker = u8::generator().checker();
         checker.generate.seed = seed;
-        checker.generate.count = generates.0;
+        checker.generate.count = generates.0 as _;
         checker.generate.items = generates.1;
         checker.generate.exhaustive = exhaustive;
-        checker.shrink.count = shrinks.0;
+        checker.shrink.count = shrinks.0 as _;
         checker.shrink.items = shrinks.1;
         checker.shrink.errors = shrinks.2;
         let synchronous = checker.checks(|value| value < maximum).collect::<Vec<_>>();
@@ -104,10 +104,10 @@ mod check {
         // Collect async results with concurrency=1 for deterministic behavior
         let mut checker = u8::generator().checker();
         checker.generate.seed = seed;
-        checker.generate.count = generates.0;
+        checker.generate.count = generates.0 as _;
         checker.generate.items = generates.1;
         checker.generate.exhaustive = exhaustive;
-        checker.shrink.count = shrinks.0;
+        checker.shrink.count = shrinks.0 as _;
         checker.shrink.items = shrinks.1;
         checker.shrink.errors = shrinks.2;
         let asynchronous = checker
@@ -119,7 +119,7 @@ mod check {
         assert_eq!(synchronous, asynchronous);
     }
 
-    #[check(1..32usize, ..)]
+    #[check(1..32usize, 1..32u8)]
     async fn respects_concurrency_parameter(concurrency: usize, wait: u8) {
         let counter = AtomicUsize::new(0);
         let concurrent = AtomicUsize::new(0);
