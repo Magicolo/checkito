@@ -22,7 +22,7 @@ impl<G: Generate, F: Fn() -> G> Generate for Lazy<G, F> {
     }
 
     fn cardinality(&self) -> Option<u128> {
-        self.0.get_or_init(|| self.1()).cardinality()
+        self.0.get().map_or(G::CARDINALITY, G::cardinality)
     }
 }
 
