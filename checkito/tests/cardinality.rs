@@ -170,29 +170,27 @@ fn full_isize_has_correct_cardinality() {
 fn inverse_u8_range_has_same_cardinality_as_forward() {
     // 10u8..=0 is normalized to Range(0, 10) — identical to 0u8..=10
     assert_eq!((10u8..=0).cardinality(), Some(11));
-    assert_eq!((10u8..=0).cardinality(), (0u8..=10).cardinality());
+    assert_eq!((0u8..=10).cardinality(), Some(11));
 }
 
 #[test]
 fn inverse_i32_range_has_same_cardinality_as_forward() {
-    assert_eq!((100i32..=-100).cardinality(), (-100i32..=100).cardinality());
+    assert_eq!((100i32..=-100).cardinality(), Some(201));
+    assert_eq!((-100i32..=100).cardinality(), Some(201));
 }
 
 #[test]
 fn inverse_char_range_has_same_cardinality_as_forward() {
     // 'z'..='a' is normalized to Range('a', 'z') — 26 values
     assert_eq!(('z'..='a').cardinality(), Some(26));
-    assert_eq!(('z'..='a').cardinality(), ('a'..='z').cardinality());
+    assert_eq!(('a'..='z').cardinality(), Some(26));
 }
 
 #[test]
 fn inverse_u8_full_range_has_same_cardinality_as_forward() {
     // u8::MAX..=u8::MIN normalizes to Range(0, 255) — all 256 values
     assert_eq!((u8::MAX..=u8::MIN).cardinality(), Some(256));
-    assert_eq!(
-        (u8::MAX..=u8::MIN).cardinality(),
-        (u8::MIN..=u8::MAX).cardinality()
-    );
+    assert_eq!((u8::MIN..=u8::MAX).cardinality(), Some(256),);
 }
 
 #[test]
