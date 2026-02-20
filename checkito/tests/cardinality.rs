@@ -100,6 +100,36 @@ fn single_value_range_has_cardinality_one() {
 }
 
 #[test]
+fn f32_full_range_has_correct_cardinality() {
+    let generator = f32::generator();
+    // All non-NaN values (finite + both infinities) + 1 for NaN (all NaN patterns treated as one).
+    assert_eq!(generator.cardinality(), Some(4278190083));
+}
+
+#[test]
+fn f64_full_range_has_correct_cardinality() {
+    let generator = f64::generator();
+    // All non-NaN values (finite + both infinities) + 1 for NaN (all NaN patterns treated as one).
+    assert_eq!(generator.cardinality(), Some(18437736874454810627));
+}
+
+#[test]
+fn f32_full_cardinality_equals_finite_plus_infinities_plus_nan() {
+    // The full f32 cardinality is: all finite values (MIN..=MAX) + NEG_INFINITY + INFINITY + NaN.
+    // The generator covers all three: finite via range branches, ±INF and NaN via the Special branch.
+    let finite = (f32::MIN..=f32::MAX).cardinality().unwrap();
+    assert_eq!(f32::generator().cardinality(), Some(finite + 3));
+}
+
+#[test]
+fn f64_full_cardinality_equals_finite_plus_infinities_plus_nan() {
+    // The full f64 cardinality is: all finite values (MIN..=MAX) + NEG_INFINITY + INFINITY + NaN.
+    // The generator covers all three: finite via range branches, ±INF and NaN via the Special branch.
+    let finite = (f64::MIN..=f64::MAX).cardinality().unwrap();
+    assert_eq!(f64::generator().cardinality(), Some(finite + 3));
+}
+
+#[test]
 fn full_usize_has_correct_cardinality() {
     let generator = usize::generator();
     let range = (usize::MAX as u128) - (usize::MIN as u128);
