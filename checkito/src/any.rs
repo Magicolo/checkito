@@ -186,9 +186,8 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: In exhaustive mode, one does not need to 'waste' cardinality
-                // on this 'u8' since the generator to choose can be determined simply
-                // with the current exhaustive index.
+                // TODO: In exhaustive mode, one can be determine which generator
+                // to use with the current exhaustive index.
                 // See `State::any_exhaustive`.
                 let value = state.with().size(1.0).u8(..$c);
                 match value {
