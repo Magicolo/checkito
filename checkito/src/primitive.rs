@@ -294,7 +294,7 @@ macro_rules! range {
             type Item = $type;
             type Shrink = $shrink;
 
-            const CARDINALITY: Option<u128> = $type::CARDINALITY;
+            const CARDINALITY: Option<u128> = <Range<$type> as Generate>::CARDINALITY;
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Range::from(self).generate(state)
@@ -322,7 +322,7 @@ macro_rules! ranges {
             type Item = $type;
             type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = $type::CARDINALITY;
+            const CARDINALITY: Option<u128> = cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker {
@@ -345,7 +345,7 @@ macro_rules! ranges {
             type Item = $type;
             type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> = $type::CARDINALITY;
+            const CARDINALITY: Option<u128> = utility::$type::cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 debug_assert!(self.start().is_finite() && self.end().is_finite());
@@ -369,7 +369,7 @@ macro_rules! ranges {
             type Item = $type;
             type Shrink = Shrinker;
 
-            const CARDINALITY: Option<u128> = $type::CARDINALITY;
+            const CARDINALITY: Option<u128> = cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Shrinker(super::Shrinker {
