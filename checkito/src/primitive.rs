@@ -271,10 +271,7 @@ macro_rules! constant {
 
         impl<const N: $type, const M: $type> From<Range<$name<N>, $name<M>>> for Range<$type> {
             fn from(_: Range<$name<N>, $name<M>>) -> Self {
-                Range(
-                    if N < M { N } else { M } as _,
-                    if N < M { M } else { N } as _,
-                )
+                Range(min(N, M), max(N, M))
             }
         }
 
@@ -282,11 +279,7 @@ macro_rules! constant {
             type Item = $type;
             type Shrink = $shrink;
 
-            const CARDINALITY: Option<u128> = u128::wrapping_sub(
-                if N < M { M } else { N } as _,
-                if N < M { N } else { M } as _,
-            )
-            .checked_add(1);
+            const CARDINALITY: Option<u128> = cardinality(N, M);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 Range::<$type>::from(*self).generate(state)
@@ -341,7 +334,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                u128::wrapping_sub(self.end() as _, self.start() as _).checked_add(1)
+                cardinality(self.start(), self.end())
             }
         }
     };
@@ -388,7 +381,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                u128::wrapping_sub(self.end() as _, self.start() as _).checked_add(1)
+                cardinality(self.start(), self.end())
             }
         }
     };
@@ -595,8 +588,7 @@ pub mod char {
         type Item = char;
         type Shrink = Shrinker;
 
-        const CARDINALITY: Option<u128> =
-            u128::wrapping_sub(char::MAX as _, 0 as char as _).checked_add(1);
+        const CARDINALITY: Option<u128> = cardinality(char::MIN, char::MAX);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
@@ -621,6 +613,30 @@ pub mod char {
 
         fn shrink(&mut self) -> Option<Self> {
             Some(Self(self.0.shrink()?))
+        }
+    }
+
+    pub(crate) const fn min(left: char, right: char) -> char {
+        if left < right { left } else { right }
+    }
+
+    pub(crate) const fn max(left: char, right: char) -> char {
+        if left > right { left } else { right }
+    }
+
+    const fn cardinality(start: char, end: char) -> Option<u128> {
+        // Subtract surrogate code points (U+D800..=U+DFFF) that fall
+        // within [start, end], as they map to REPLACEMENT_CHARACTER.
+        let start = start as u32;
+        let end = end as u32;
+        let surrogates =
+            match u32::checked_sub(super::u32::min(end, 0xDFFF), super::u32::max(start, 0xD800)) {
+                Some(value) => value + 1,
+                None => 0,
+            };
+        match u128::wrapping_sub(end as _, start as _).checked_add(1) {
+            Some(cardinality) => cardinality.checked_sub(surrogates as _),
+            None => None,
         }
     }
 
@@ -660,8 +676,7 @@ macro_rules! integer {
             type Item = $type;
             type Shrink = Shrinker<$type>;
 
-            const CARDINALITY: Option<u128> =
-                u128::wrapping_sub($type::MAX as _, $type::MIN as _).checked_add(1);
+            const CARDINALITY: Option<u128> = cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
                 let value = state.with().size(1.0).u8(..);
@@ -701,6 +716,18 @@ macro_rules! integer {
             const MIN: Self = $type::MIN;
             const ONE: Self = 1 as $type;
             const ZERO: Self = 0 as $type;
+        }
+
+        pub(crate) const fn min(left: $type, right: $type) -> $type {
+            if left < right { left } else { right }
+        }
+
+        pub(crate) const fn max(left: $type, right: $type) -> $type {
+            if left > right { left } else { right }
+        }
+
+        const fn cardinality(start: $type, end: $type) -> Option<u128> {
+            u128::wrapping_sub(max(start, end) as _, min(start, end) as _).checked_add(1)
         }
 
         full!($type);
