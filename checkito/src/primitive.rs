@@ -605,7 +605,7 @@ pub mod char {
 
         // Excludes the surrogate code point range U+D800..=U+DFFF (2,048 values),
         // which are not valid `char` values and are mapped to REPLACEMENT_CHARACTER.
-        const CARDINALITY: Option<u128> = Some(0xD800u128 + (0x10FFFF - 0xE000 + 1));
+        const CARDINALITY: Option<u128> = Some(char::MAX as u128 - (0xDFFF - 0xD800));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             let value = state.with().size(1.0).u8(..);
