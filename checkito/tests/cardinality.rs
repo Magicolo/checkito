@@ -67,9 +67,18 @@ fn i128_full_range_has_correct_cardinality() {
 #[test]
 fn char_full_range_has_correct_cardinality() {
     let generator = char::generator();
-    // char has valid Unicode code points from 0 to char::MAX
-    let expected = u128::wrapping_sub(char::MAX as u128, 0).wrapping_add(1);
-    assert_eq!(generator.cardinality(), Some(expected));
+    // char excludes surrogate code points U+D800..=U+DFFF (2,048 values)
+    // 1,114,112 total - 2,048 surrogates = 1,112,064
+    assert_eq!(generator.cardinality(), Some(1_112_064));
+}
+
+#[test]
+fn char_surrogate_spanning_range_has_correct_cardinality() {
+    // Range spanning the surrogate gap: U+D7FF and U+E000 are valid, surrogates are
+    // not
+    let generator = '\u{D7FF}'..='\u{E000}';
+    // 0xE000 - 0xD7FF + 1 = 2050 total code points, minus 2048 surrogates = 2
+    assert_eq!(generator.cardinality(), Some(2));
 }
 
 #[test]
@@ -97,6 +106,40 @@ fn custom_char_range_has_correct_cardinality() {
 fn single_value_range_has_cardinality_one() {
     let generator = 42u8..=42;
     assert_eq!(generator.cardinality(), Some(1));
+}
+
+#[test]
+fn f32_full_range_has_correct_cardinality() {
+    let generator = f32::generator();
+    // All non-NaN values (finite + both infinities) + 1 for NaN (all NaN patterns
+    // treated as one).
+    assert_eq!(generator.cardinality(), Some(4278190083));
+}
+
+#[test]
+fn f64_full_range_has_correct_cardinality() {
+    let generator = f64::generator();
+    // All non-NaN values (finite + both infinities) + 1 for NaN (all NaN patterns
+    // treated as one).
+    assert_eq!(generator.cardinality(), Some(18437736874454810627));
+}
+
+#[test]
+fn f32_full_cardinality_equals_finite_plus_infinities_plus_nan() {
+    // The full f32 cardinality is: all finite values (MIN..=MAX) + NEG_INFINITY +
+    // INFINITY + NaN. The generator covers all three: finite via range
+    // branches, ±INF and NaN via the Special branch.
+    let finite = (f32::MIN..=f32::MAX).cardinality().unwrap();
+    assert_eq!(f32::generator().cardinality(), Some(finite + 3));
+}
+
+#[test]
+fn f64_full_cardinality_equals_finite_plus_infinities_plus_nan() {
+    // The full f64 cardinality is: all finite values (MIN..=MAX) + NEG_INFINITY +
+    // INFINITY + NaN. The generator covers all three: finite via range
+    // branches, ±INF and NaN via the Special branch.
+    let finite = (f64::MIN..=f64::MAX).cardinality().unwrap();
+    assert_eq!(f64::generator().cardinality(), Some(finite + 3));
 }
 
 #[test]
@@ -132,7 +175,7 @@ fn inverse_u8_range_has_same_cardinality_as_forward() {
 
 #[test]
 fn inverse_i32_range_has_same_cardinality_as_forward() {
-    assert_eq!((100i32..= -100).cardinality(), (-100i32..=100).cardinality());
+    assert_eq!((100i32..=-100).cardinality(), (-100i32..=100).cardinality());
 }
 
 #[test]
@@ -146,5 +189,32 @@ fn inverse_char_range_has_same_cardinality_as_forward() {
 fn inverse_u8_full_range_has_same_cardinality_as_forward() {
     // u8::MAX..=u8::MIN normalizes to Range(0, 255) — all 256 values
     assert_eq!((u8::MAX..=u8::MIN).cardinality(), Some(256));
-    assert_eq!((u8::MAX..=u8::MIN).cardinality(), (u8::MIN..=u8::MAX).cardinality());
+    assert_eq!(
+        (u8::MAX..=u8::MIN).cardinality(),
+        (u8::MIN..=u8::MAX).cardinality()
+    );
+}
+
+#[test]
+fn lazy_delegates_cardinality_to_inner_range() {
+    let generator = lazy(|| 0u8..=10);
+    assert_eq!(generator.cardinality(), Some(256));
+    generator.sample(1.0);
+    assert_eq!(generator.cardinality(), Some(11));
+}
+
+#[test]
+fn lazy_delegates_cardinality_to_inner_bool() {
+    let generator = lazy(|| bool::generator());
+    assert_eq!(generator.cardinality(), Some(2));
+    generator.sample(1.0);
+    assert_eq!(generator.cardinality(), Some(2));
+}
+
+#[test]
+fn lazy_delegates_cardinality_to_inner_unbounded() {
+    let generator = lazy(|| u128::generator());
+    assert_eq!(generator.cardinality(), None);
+    generator.sample(1.0);
+    assert_eq!(generator.cardinality(), None);
 }
