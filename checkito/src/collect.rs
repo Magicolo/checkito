@@ -6,6 +6,7 @@ use crate::{
     state::State,
 };
 use core::{marker::PhantomData, mem::replace};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
 
 #[derive(Debug)]
 pub struct Collect<I: ?Sized, C, F: ?Sized> {
@@ -175,14 +176,46 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
     }
 }
 
-impl<G: FullGenerate> FullGenerate for Vec<G> {
-    type Generator = Collect<G::Generator, Default, Self::Item>;
-    type Item = Vec<G::Item>;
+macro_rules! impl_full_generate_collection {
+    ($type:ident $(, $bound:path)*) => {
+        impl<G: FullGenerate> FullGenerate for $type<G>
+        where
+            $(G::Item: $bound,)*
+        {
+            type Generator = Collect<G::Generator, Default, Self::Item>;
+            type Item = $type<G::Item>;
 
-    fn generator() -> Self::Generator {
-        Collect::new(G::generator())
-    }
+            fn generator() -> Self::Generator {
+                Collect::new(G::generator())
+            }
+        }
+    };
 }
+
+macro_rules! impl_full_generate_map {
+    ($type:ident $(, $bound:path)*) => {
+        impl<K: FullGenerate, V: FullGenerate> FullGenerate for $type<K, V>
+        where
+            $(K::Item: $bound,)*
+        {
+            type Generator = Collect<(K::Generator, V::Generator), Default, Self::Item>;
+            type Item = $type<K::Item, V::Item>;
+
+            fn generator() -> Self::Generator {
+                Collect::new((K::generator(), V::generator()))
+            }
+        }
+    };
+}
+
+impl_full_generate_collection!(Vec);
+impl_full_generate_collection!(VecDeque);
+impl_full_generate_collection!(LinkedList);
+impl_full_generate_collection!(BinaryHeap, Ord);
+impl_full_generate_collection!(HashSet, Eq, core::hash::Hash);
+impl_full_generate_collection!(BTreeSet, Ord);
+impl_full_generate_map!(HashMap, Eq, core::hash::Hash);
+impl_full_generate_map!(BTreeMap, Ord);
 
 impl FullGenerate for String {
     type Generator = Collect<Full<char>, Default, Self::Item>;
