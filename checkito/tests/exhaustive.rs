@@ -32,6 +32,22 @@ fn range_auto_switches_to_exhaustive() {
 }
 
 #[test]
+fn inverse_range_is_normalized_and_exhaustive_covers_same_values() {
+    // Inverse range 9u8..=0 is normalized to Range(0, 9) at conversion time,
+    // so exhaustive iteration produces the same values as the forward range.
+    let forward = (0u8..=9)
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect::<Vec<_>>();
+    let inverse = (9u8..=0)
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect::<Vec<_>>();
+
+    assert_eq!(inverse, forward);
+}
+
+#[test]
 fn range_can_be_forced_to_random_even_if_finite() {
     let mut checker = (0u8..=9).checker();
     checker.generate.count = 25;
