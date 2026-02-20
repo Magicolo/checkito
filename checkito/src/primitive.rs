@@ -390,20 +390,13 @@ macro_rules! ranges {
             fn cardinality(&self) -> Option<u128> {
                 // Subtract surrogate code points (U+D800..=U+DFFF) that fall
                 // within [start, end], as they map to REPLACEMENT_CHARACTER.
-                const SURROGATE_START: u32 = 0xD800;
-                const SURROGATE_END: u32 = 0xDFFF;
                 let start = self.start() as u32;
                 let end = self.end() as u32;
-                let overlap_start = start.max(SURROGATE_START);
-                let overlap_end = end.min(SURROGATE_END);
-                let surrogates = if overlap_start <= overlap_end {
-                    (overlap_end - overlap_start + 1) as u128
-                } else {
-                    0
-                };
+                let surrogates = u32::checked_sub(end.min(0xDFFF), start.max(0xD800))
+                    .map_or(0, |value| value.saturating_add(1));
                 u128::wrapping_sub(end as _, start as _)
                     .checked_add(1)?
-                    .checked_sub(surrogates)
+                    .checked_sub(surrogates as _)
             }
         }
     };
