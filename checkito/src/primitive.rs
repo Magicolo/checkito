@@ -381,15 +381,7 @@ macro_rules! ranges {
             }
 
             fn cardinality(&self) -> Option<u128> {
-                // Subtract surrogate code points (U+D800..=U+DFFF) that fall
-                // within [start, end], as they map to REPLACEMENT_CHARACTER.
-                let start = self.start() as u32;
-                let end = self.end() as u32;
-                let surrogates = u32::checked_sub(end.min(0xDFFF), start.max(0xD800))
-                    .map_or(0, |value| value.saturating_add(1));
-                u128::wrapping_sub(end as _, start as _)
-                    .checked_add(1)?
-                    .checked_sub(surrogates as _)
+                cardinality(self.start(), self.end())
             }
         }
     };
