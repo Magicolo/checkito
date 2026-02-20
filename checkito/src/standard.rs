@@ -38,6 +38,7 @@ pub mod option {
         const CARDINALITY: Option<u128> = cardinality::any_sum(G::CARDINALITY, Some(1));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
+            // TODO: Will this work properly in exhaustive mode?
             if state.with().size(1.0).bool() {
                 Shrinker(true, Some(self.0.generate(state)))
             } else {
@@ -109,6 +110,7 @@ pub mod result {
         const CARDINALITY: Option<u128> = cardinality::any_sum(T::CARDINALITY, E::CARDINALITY);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
+            // TODO: Will this work properly in exhaustive mode?
             Shrinker(if state.with().size(1.0).bool() {
                 Ok(self.0.generate(state))
             } else {
@@ -270,14 +272,16 @@ pub mod with {
         }
     }
 
-    /// Shrinker that caches the generated value to ensure consistent `item()` calls.
+    /// Shrinker that caches the generated value to ensure consistent `item()`
+    /// calls.
     ///
-    /// The `RefCell<Option<T>>` is used to cache the generated value on first access.
-    /// This ensures that multiple calls to `item()` return the same value, which is
-    /// required by the `Shrink` trait contract.
+    /// The `RefCell<Option<T>>` is used to cache the generated value on first
+    /// access. This ensures that multiple calls to `item()` return the same
+    /// value, which is required by the `Shrink` trait contract.
     ///
-    /// The cached value is `None` initially and populated on the first `item()` call,
-    /// then consumed (taken) and returned. Subsequent calls will regenerate the value.
+    /// The cached value is `None` initially and populated on the first `item()`
+    /// call, then consumed (taken) and returned. Subsequent calls will
+    /// regenerate the value.
     pub struct Shrinker<T, F> {
         generator: F,
         cached: RefCell<Option<T>>,
@@ -329,7 +333,9 @@ pub mod with {
             // Safety: The value is guaranteed to be Some after the check above.
             // We take it to transfer ownership to the caller, which is required
             // since item() returns T by value, not &T.
-            cached.take().expect("cached value must be Some after initialization")
+            cached
+                .take()
+                .expect("cached value must be Some after initialization")
         }
 
         fn shrink(&mut self) -> Option<Self> {

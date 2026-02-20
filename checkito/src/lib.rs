@@ -129,7 +129,6 @@ const REPEATS: u32 = 1 << 6;
 
 /*
     TODO:
-    - Add `Constant` implementations for all types that can support it (at least for combinator types).
     - Asynchronous checks seem to hang forever. Add tests.
     - Instead of running a fixed number of checks, determine the number of checks based on the runtime of the generation and check.
     - Support for 'parallel' checks.

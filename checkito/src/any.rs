@@ -186,6 +186,10 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
+                // TODO: In exhaustive mode, one does not need to 'waste' cardinality
+                // on this 'u8' since the generator to choose can be determined simply
+                // with the current exhaustive index.
+                // See `State::any_exhaustive`.
                 let value = state.with().size(1.0).u8(..$c);
                 match value {
                     $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
@@ -211,7 +215,9 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: Use `State::any_tuple`
+                // TODO: In exhaustive mode, the state will try to cover all possible
+                // floats between '0.0..=_total' and some generators may remain uncovered.
+                // Instead, do something similar as `State::any_exhaustive`.
                 let _total = ($(self.$is.weight() +)* 0.0).min(f64::MAX);
                 debug_assert!(_total > 0.0 && _total.is_finite());
                 let mut _random = state.with().size(1.0).f64(0.0..=_total);

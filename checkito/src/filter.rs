@@ -26,6 +26,7 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let mut outer = None;
         for i in 0..=self.retries {
+            // TODO: Will this work properly in exhaustive mode?
             let sizes = Sizes::from_ratio(i, self.retries, state.sizes());
             let inner = self.generator.generate(state.with().sizes(sizes).as_mut());
             let item = inner.item();
