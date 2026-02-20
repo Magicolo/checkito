@@ -738,7 +738,7 @@ macro_rules! floating {
             // All non-NaN values (finite + both infinities) plus 1 for NaN
             // (all NaN bit patterns are considered the same value).
             const CARDINALITY: Option<u128> = match utility::$type::cardinality($type::NEG_INFINITY, $type::INFINITY) {
-                Some(c) => c.checked_add(1),
+                Some(cardinality) => cardinality.checked_add(1),
                 None => None,
             };
 
