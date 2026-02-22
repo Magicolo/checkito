@@ -194,7 +194,7 @@ macro_rules! slice {
     ($pointer: ident) => {
         impl<G: FullGenerate> FullGenerate for $pointer<[G]> {
             type Generator = Collect<G::Generator, Default, Self::Item>;
-            type Item = Box<[G::Item]>;
+            type Item = $pointer<[G::Item]>;
 
             fn generator() -> Self::Generator {
                 Collect::new(G::generator())
