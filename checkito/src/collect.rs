@@ -6,7 +6,11 @@ use crate::{
     state::State,
 };
 use core::{marker::PhantomData, mem::replace};
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
+    rc::Rc,
+    sync::Arc,
+};
 
 #[derive(Debug)]
 pub struct Collect<I: ?Sized, C, F: ?Sized> {
@@ -36,8 +40,9 @@ pub trait Count {
 /// 3. `Shrink`: Shrink individual elements in place
 /// 4. `Done`: No more shrinking possible
 ///
-/// This phased approach helps find minimal test cases by first trying structural
-/// simplifications (fewer elements) before content simplifications (simpler elements).
+/// This phased approach helps find minimal test cases by first trying
+/// structural simplifications (fewer elements) before content simplifications
+/// (simpler elements).
 #[derive(Debug, Clone)]
 pub(crate) enum Machine {
     Truncate(primitive::Shrinker<usize>),
@@ -176,7 +181,29 @@ impl<S: Shrink, F: FromIterator<S::Item>> Shrink for Shrinker<S, F> {
     }
 }
 
-macro_rules! impl_full_generate_collection {
+impl FullGenerate for String {
+    type Generator = Collect<Full<char>, Default, Self::Item>;
+    type Item = String;
+
+    fn generator() -> Self::Generator {
+        Collect::new(char::generator())
+    }
+}
+
+macro_rules! slice {
+    ($pointer: ident) => {
+        impl<G: FullGenerate> FullGenerate for $pointer<[G]> {
+            type Generator = Collect<G::Generator, Default, Self::Item>;
+            type Item = Box<[G::Item]>;
+
+            fn generator() -> Self::Generator {
+                Collect::new(G::generator())
+            }
+        }
+    };
+}
+
+macro_rules! list {
     ($type:ident $(, $bound:path)*) => {
         impl<G: FullGenerate> FullGenerate for $type<G>
         where
@@ -192,7 +219,7 @@ macro_rules! impl_full_generate_collection {
     };
 }
 
-macro_rules! impl_full_generate_map {
+macro_rules! map {
     ($type:ident $(, $bound:path)*) => {
         impl<K: FullGenerate, V: FullGenerate> FullGenerate for $type<K, V>
         where
@@ -208,23 +235,17 @@ macro_rules! impl_full_generate_map {
     };
 }
 
-impl_full_generate_collection!(Vec);
-impl_full_generate_collection!(VecDeque);
-impl_full_generate_collection!(LinkedList);
-impl_full_generate_collection!(BinaryHeap, Ord);
-impl_full_generate_collection!(HashSet, Eq, core::hash::Hash);
-impl_full_generate_collection!(BTreeSet, Ord);
-impl_full_generate_map!(HashMap, Eq, core::hash::Hash);
-impl_full_generate_map!(BTreeMap, Ord);
-
-impl FullGenerate for String {
-    type Generator = Collect<Full<char>, Default, Self::Item>;
-    type Item = String;
-
-    fn generator() -> Self::Generator {
-        Collect::new(char::generator())
-    }
-}
+slice!(Box);
+slice!(Rc);
+slice!(Arc);
+list!(Vec);
+list!(VecDeque);
+list!(LinkedList);
+list!(BinaryHeap, Ord);
+list!(HashSet, Eq, core::hash::Hash);
+list!(BTreeSet, Ord);
+map!(HashMap, Eq, core::hash::Hash);
+map!(BTreeMap, Ord);
 
 impl<C: Count + ?Sized> Count for &C {
     const COUNT: Option<Range<usize>> = C::COUNT;
