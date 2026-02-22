@@ -193,7 +193,7 @@ impl Check {
                 rest + signature.inputs.len().saturating_sub(self.generators.len()),
                 span,
             ),
-            None => (usize::MAX, usize::MAX, Span::call_site()),
+            None => (usize::MAX, usize::MAX, self.span),
         };
         let mut expressions = self.generators.iter();
         let mut generators = Vec::new();
