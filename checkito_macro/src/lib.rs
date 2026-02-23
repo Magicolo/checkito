@@ -66,17 +66,14 @@ pub fn check(
         }
     });
     let mut runs = Vec::new();
-    let error = checks
-        .into_iter()
-        .filter_map(|check| match check.run(&function.sig) {
-            Ok(run) => {
-                runs.push(run);
-                None
-            }
-            Err(error) => Some(error.to_compile_error()),
-        })
-        .collect::<TokenStream>();
-    if error.is_empty() {
+    let mut errors = Vec::new();
+    for check in checks {
+        match check.run(&function.sig) {
+            Ok(run) => runs.push(run),
+            Err(error) => errors.push(error.to_compile_error()),
+        }
+    }
+    if errors.is_empty() {
         quote! {
             #(#attributes)*
             #[test]
@@ -87,6 +84,6 @@ pub fn check(
         }
         .into()
     } else {
-        error.into()
+        TokenStream::from_iter(errors).into()
     }
 }
