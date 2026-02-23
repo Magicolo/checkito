@@ -44,6 +44,6 @@ impl From<Regex> for TokenStream {
             Some(repeats) => quote!({ #repeats }.into()),
             None => quote!(None),
         };
-        quote!(::checkito::regex(#pattern, #repeats).unwrap()).into()
+        quote!(::checkito::regex(#pattern, #repeats).expect("valid regex")).into()
     }
 }
