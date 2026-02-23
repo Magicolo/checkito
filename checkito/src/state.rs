@@ -358,9 +358,9 @@ impl State {
 }
 
 const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
-    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
+    let range = u128::wrapping_sub(end, start).saturating_add(1);
     let index = replace(index, index.saturating_div(range)) % range;
-    u128::wrapping_add(start as _, index)
+    u128::wrapping_add(start, index)
 }
 
 /// Maps a zero-anchored exhaustive index to a `(offset, is_negative)` pair
@@ -621,21 +621,24 @@ macro_rules! integer {
                         Mode::Exhaustive(index) => {
                             // Generate small values (near zero) first by reordering the
                             // exhaustive index instead of enumerating linearly from `start`.
-                            let ustart = start as u128;
-                            let uend = end as u128;
-                            let total = u128::wrapping_sub(uend, ustart);
+                            let range = (start as u128, end as u128);
+                            let total = u128::wrapping_sub(range.1, range.0);
                             let local = consume(index, 0, total);
                             #[allow(unused_comparisons)]
                             if start >= 0 {
                                 // Entirely non-negative: ascending from start.
-                                u128::wrapping_add(ustart, local) as $integer
+                                u128::wrapping_add(range.0, local) as $integer
                             } else if end <= 0 {
                                 // Entirely non-positive: descending from end (closest to zero).
-                                u128::wrapping_sub(uend, local) as $integer
+                                u128::wrapping_sub(range.1, local) as $integer
                             } else {
                                 // Spans zero: 0, 1, -1, 2, -2, … via small_first.
-                                let (k, is_neg) = small_first(local, end as u128, 0u128.wrapping_sub(ustart));
-                                if is_neg { 0u128.wrapping_sub(k) as $integer } else { k as $integer }
+                                let (value, negative) = small_first(local, end as u128, 0u128.wrapping_sub(range.0));
+                                if negative {
+                                    0u128.wrapping_sub(value) as $integer
+                                } else {
+                                    value as $integer
+                                }
                             }
                         }
                     }
@@ -704,24 +707,26 @@ macro_rules! floating {
                             // integer strategy: non-positive ranges start from the
                             // end closest to zero; ranges spanning zero interleave
                             // positive and negative values by magnitude.
-                            let bits_start = utility::$number::to_bits(start) as u128;
-                            let bits_end = utility::$number::to_bits(end) as u128;
-                            let total = bits_end - bits_start;
+                            let range = (
+                                utility::$number::to_bits(start) as u128,
+                                utility::$number::to_bits(end) as u128
+                            );
+                            let total = range.1 - range.0;
                             let local = consume(index, 0, total);
                             if start >= 0.0 {
                                 // Entirely non-negative: go upward from start.
-                                utility::$number::from_bits((bits_start + local) as _)
+                                utility::$number::from_bits((range.0 + local) as _)
                             } else if end <= 0.0 {
                                 // Entirely non-positive: go downward from end (closest to 0).
-                                utility::$number::from_bits((bits_end - local) as _)
+                                utility::$number::from_bits((range.1 - local) as _)
                             } else {
                                 // Spans zero: 0.0, +ε, -ε, +2ε, -2ε, … via small_first.
-                                let bits_zero = utility::$number::to_bits(0.0) as u128;
-                                let (k, is_neg) = small_first(local, bits_end - bits_zero, bits_zero - bits_start);
-                                if is_neg {
-                                    utility::$number::from_bits((bits_zero - k) as _)
+                                let zero = utility::$number::to_bits(0.0) as u128;
+                                let (value, negative) = small_first(local, range.1 - zero, zero - range.0);
+                                if negative {
+                                    utility::$number::from_bits((zero - value) as _)
                                 } else {
-                                    utility::$number::from_bits((bits_zero + k) as _)
+                                    utility::$number::from_bits((zero + value) as _)
                                 }
                             }
                         }
@@ -924,6 +929,7 @@ impl<R: Into<Range<f64>>> From<R> for Sizes {
 mod tests {
     use super::*;
     use core::cmp::Ordering;
+    use std::collections::HashSet;
 
     #[test]
     fn is_within_bounds() {
@@ -1052,13 +1058,45 @@ mod tests {
         // the first few samples.  (Use to_bits for total-order comparisons so
         // that -0.0 and 0.0 are treated as distinct adjacent values.)
         let zero_bits = utility::f32::to_bits(0.0);
-        let values: Vec<u32> =
-            Iterator::map(0..5, |i| utility::f32::to_bits(State::exhaustive(i, 1000).f32(-1.0..=1.0))).collect();
+        let values: Vec<u32> = Iterator::map(0..5, |i| {
+            utility::f32::to_bits(State::exhaustive(i, 1000).f32(-1.0..=1.0))
+        })
+        .collect();
         // index 0 → 0.0, index 1 → small positive (> 0.0 in total order),
         // index 2 → small negative (< 0.0 in total order but closest to it),
         // index 3 → next positive (larger than index 1), index 4 → next negative.
         assert_eq!(values[0], zero_bits);
         assert!(values[1] > zero_bits && values[1] < values[3]);
         assert!(values[2] < zero_bits && values[2] > values[4]);
+    }
+
+    #[test]
+    fn exhaustive_f32_covers_special_values() {
+        let left = [
+            0f32,
+            1.0f32,
+            f32::MIN,
+            f32::MAX,
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::MIN_POSITIVE,
+            f32::EPSILON,
+            362186.12478f32,
+            -129846159827198.98987654f32,
+            0.99996522f32,
+            -0.000000000172f32,
+        ]
+        .into_iter()
+        .map(utility::f32::to_bits)
+        .collect::<HashSet<_>>();
+
+        let right = Iterator::map(0..u32::MAX, |i| {
+            State::exhaustive(i as _, u32::MAX as _).f32(..)
+        })
+        .map(utility::f32::to_bits)
+        .filter(|value| left.contains(value))
+        .collect::<HashSet<_>>();
+        assert_eq!(left, right);
     }
 }
