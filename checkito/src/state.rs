@@ -584,7 +584,7 @@ macro_rules! integer {
                                 start + value
                             } else if end <= 0 {
                                 debug_assert!(start < 0);
-                                end - value
+                                end.wrapping_sub(value)
                             } else {
                                 debug_assert!(start < 0);
                                 debug_assert!(end > 0);

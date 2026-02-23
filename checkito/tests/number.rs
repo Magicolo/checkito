@@ -150,6 +150,14 @@ mod range {
                 }
 
                 #[test]
+                fn negative_full_range_no_overflow() {
+                    // Regression test for issue #13: end.wrapping_sub(value) overflow
+                    // when generating from a fully-negative range at full size.
+                    let samples: Vec<$type> = ($type::MIN..=0 as $type).samples(10_000).collect();
+                    assert!(samples.iter().all(|&v| v >= $type::MIN && v <= 0 as $type));
+                }
+
+                #[test]
                 fn check_finds_maximum() {
                     let fail = (negative::<$type>(), negative::<$type>().keep())
                         .check(|(left, right)| left > right)
