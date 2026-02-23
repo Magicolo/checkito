@@ -799,8 +799,42 @@ macro_rules! floating {
             fn shrink(&mut self) -> Option<Self> {
                 if self.item.is_finite() {
                     shrink!(self, $type)
+                } else if self.item == $type::INFINITY {
+                    // Shrink INFINITY toward MAX (largest finite value) so that
+                    // subsequent calls can continue bisecting toward 0.
+                    self.direction = Direction::High;
+                    self.start = 0 as $type;
+                    self.end = $type::MAX;
+                    Some(Shrinker {
+                        start: 0 as $type,
+                        end: $type::MAX,
+                        item: $type::MAX,
+                        direction: Direction::None,
+                    })
+                } else if self.item == $type::NEG_INFINITY {
+                    // Shrink NEG_INFINITY toward MIN (most negative finite value)
+                    // so that subsequent calls can continue bisecting toward 0.
+                    self.direction = Direction::Low;
+                    self.start = $type::MIN;
+                    self.end = 0 as $type;
+                    Some(Shrinker {
+                        start: $type::MIN,
+                        end: 0 as $type,
+                        item: $type::MIN,
+                        direction: Direction::None,
+                    })
                 } else {
-                    None
+                    // NaN: try 0.0 as the simplest possible value; subsequent
+                    // shrink calls on this shrinker return None (start == end).
+                    self.direction = Direction::High;
+                    self.start = 0 as $type;
+                    self.end = 0 as $type;
+                    Some(Shrinker {
+                        start: 0 as $type,
+                        end: 0 as $type,
+                        item: 0 as $type,
+                        direction: Direction::None,
+                    })
                 }
             }
         }
