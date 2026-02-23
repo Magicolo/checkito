@@ -363,6 +363,27 @@ const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
     u128::wrapping_add(start as _, index)
 }
 
+/// Maps a zero-anchored exhaustive index to a `(offset, is_negative)` pair
+/// for generating small-magnitude values first.
+///
+/// - `pos`: number of steps available in the positive direction.
+/// - `neg`: number of steps available in the negative direction.
+///
+/// Ordering: anchor, +1, −1, +2, −2, … until the shorter side is exhausted,
+/// then the remaining steps from the longer side.
+const fn small_first(local: u128, pos: u128, neg: u128) -> (u128, bool) {
+    let min_side = if pos < neg { pos } else { neg };
+    let k = (local + 1) / 2;
+    if k <= min_side {
+        // Interleaved zone: odd → positive offset, even → negative offset.
+        // k == 0 (local == 0) falls here and yields offset 0 (the anchor).
+        (k, local % 2 == 0)
+    } else {
+        // Past the shorter side: continue monotonically on the longer side.
+        (local - min_side, pos < neg)
+    }
+}
+
 /// Computes the number of exhaustive items covered by the first `terms`
 /// length-buckets when bucket sizes grow geometrically.
 ///
@@ -606,48 +627,15 @@ macro_rules! integer {
                             let local = consume(index, 0, total);
                             #[allow(unused_comparisons)]
                             if start >= 0 {
-                                // Range is entirely non-negative: generate upward from start.
+                                // Entirely non-negative: ascending from start.
                                 u128::wrapping_add(ustart, local) as $integer
                             } else if end <= 0 {
-                                // Range is entirely non-positive: generate downward from end
-                                // (the value closest to zero).
+                                // Entirely non-positive: descending from end (closest to zero).
                                 u128::wrapping_sub(uend, local) as $integer
                             } else {
-                                // Range spans zero: interleave 0, 1, -1, 2, -2, …
-                                // so that small-magnitude values come first.
-                                let pos = end as u128;
-                                let neg = 0u128.wrapping_sub(ustart);
-                                let min_side = pos.min(neg);
-                                if local == 0 {
-                                    0
-                                } else {
-                                    // k = ceil(local / 2): the magnitude of the current step.
-                                    let k = (local + 1) / 2;
-                                    if k <= min_side {
-                                        // Interleaved zone: alternate positive and negative.
-                                        if local % 2 == 1 {
-                                            k as $integer
-                                        } else {
-                                            0u128.wrapping_sub(k) as $integer
-                                        }
-                                    } else {
-                                        // Extra zone: one side is exhausted; continue with
-                                        // the remaining values from the longer side.
-                                        // Compute extra_index without multiplying min_side by 2.
-                                        let delta = k - min_side; // >= 1
-                                        let extra = if local % 2 == 1 {
-                                            2 * (delta - 1)
-                                        } else {
-                                            2 * delta - 1
-                                        };
-                                        let v = min_side + 1 + extra;
-                                        if pos < neg {
-                                            0u128.wrapping_sub(v) as $integer
-                                        } else {
-                                            v as $integer
-                                        }
-                                    }
-                                }
+                                // Spans zero: 0, 1, -1, 2, -2, … via small_first.
+                                let (k, is_neg) = small_first(local, end as u128, 0u128.wrapping_sub(ustart));
+                                if is_neg { 0u128.wrapping_sub(k) as $integer } else { k as $integer }
                             }
                         }
                     }
@@ -727,39 +715,13 @@ macro_rules! floating {
                                 // Entirely non-positive: go downward from end (closest to 0).
                                 utility::$number::from_bits((bits_end - local) as _)
                             } else {
-                                // Spans zero: interleave 0.0, +ε, -ε, +2ε, -2ε, …
+                                // Spans zero: 0.0, +ε, -ε, +2ε, -2ε, … via small_first.
                                 let bits_zero = utility::$number::to_bits(0.0) as u128;
-                                let pos_range = bits_end - bits_zero;
-                                let neg_range = bits_zero - bits_start;
-                                let min_side = pos_range.min(neg_range);
-                                if local == 0 {
-                                    0.0
+                                let (k, is_neg) = small_first(local, bits_end - bits_zero, bits_zero - bits_start);
+                                if is_neg {
+                                    utility::$number::from_bits((bits_zero - k) as _)
                                 } else {
-                                    // k = ceil(local / 2): distance from zero in bit steps.
-                                    let k = (local + 1) / 2;
-                                    if k <= min_side {
-                                        // Interleaved zone: alternate positive and negative.
-                                        if local % 2 == 1 {
-                                            utility::$number::from_bits((bits_zero + k) as _)
-                                        } else {
-                                            utility::$number::from_bits((bits_zero - k) as _)
-                                        }
-                                    } else {
-                                        // Extra zone: one side is exhausted; continue with
-                                        // the remaining values from the longer side.
-                                        let delta = k - min_side; // >= 1
-                                        let extra = if local % 2 == 1 {
-                                            2 * (delta - 1)
-                                        } else {
-                                            2 * delta - 1
-                                        };
-                                        let v = min_side + 1 + extra;
-                                        if pos_range < neg_range {
-                                            utility::$number::from_bits((bits_zero - v) as _)
-                                        } else {
-                                            utility::$number::from_bits((bits_zero + v) as _)
-                                        }
-                                    }
+                                    utility::$number::from_bits((bits_zero + k) as _)
                                 }
                             }
                         }
