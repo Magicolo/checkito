@@ -74,7 +74,7 @@ let generator = lazy(u128::generator);
 
 ## Status
 
-**Fixed** in this PR. All five clippy errors are resolved and CI should now
+**Fixed** in this PR. All six clippy errors are resolved and CI should now
 pass the `clippy` job.
 
 ## Related
