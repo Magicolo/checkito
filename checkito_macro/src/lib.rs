@@ -48,7 +48,7 @@ pub fn check(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     use core::mem::{replace, take};
-    use quote::{format_ident, quote};
+    use quote::{__private::TokenStream, format_ident, quote};
     use syn::{ItemFn, Visibility, parse_macro_input};
 
     let check: check::Check = parse_macro_input!(attribute);
@@ -66,19 +66,27 @@ pub fn check(
         }
     });
     let mut runs = Vec::new();
-    for check in checks {
-        match check.run(&function.sig) {
-            Ok(run) => runs.push(run),
-            Err(error) => return error.to_compile_error().into(),
+    let error = checks
+        .into_iter()
+        .filter_map(|check| match check.run(&function.sig) {
+            Ok(run) => {
+                runs.push(run);
+                None
+            }
+            Err(error) => Some(error.to_compile_error()),
+        })
+        .collect::<TokenStream>();
+    if error.is_empty() {
+        quote! {
+            #(#attributes)*
+            #[test]
+            #visibility fn #name() {
+                #function
+                #(#runs;)*
+            }
         }
+        .into()
+    } else {
+        error.into()
     }
-    quote! {
-        #(#attributes)*
-        #[test]
-        #visibility fn #name() {
-            #function
-            #(#runs;)*
-        }
-    }
-    .into()
 }
