@@ -151,8 +151,9 @@ mod range {
 
                 #[test]
                 fn negative_full_range_no_overflow() {
-                    // Regression test for issue #13: end.wrapping_sub(value) overflow
-                    // when generating from a fully-negative range at full size.
+                    // Regression test for issue #13: avoid overflow in a debug-only
+                    // `end - value` subtraction when generating from the $type::MIN..=0
+                    // range at full size (for unsigned types this degenerates to 0..=0).
                     assert!(
                         ($type::MIN..=0 as $type)
                             .check(|value| value >= $type::MIN && value <= 0 as $type)
