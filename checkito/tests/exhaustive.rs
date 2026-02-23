@@ -32,6 +32,7 @@ fn range_auto_switches_to_exhaustive() {
 }
 
 #[test]
+#[allow(clippy::reversed_empty_ranges)]
 fn inverse_range_is_normalized_and_exhaustive_covers_same_values() {
     // Inverse range 9u8..=0 is normalized to Range(0, 9) at conversion time,
     // so exhaustive iteration produces the same values as the forward range.
