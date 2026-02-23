@@ -581,7 +581,7 @@ macro_rules! integer {
                             #[allow(unused_comparisons)]
                             if start >= 0 {
                                 debug_assert!(end > 0);
-                                start + value
+                                start.wrapping_add(value)
                             } else if end <= 0 {
                                 debug_assert!(start < 0);
                                 end.wrapping_sub(value)
