@@ -39,6 +39,7 @@ fn inverse_range_is_normalized_and_exhaustive_covers_same_values() {
         .checks(Ok::<_, ()>)
         .map(|result| result.into_item())
         .collect::<Vec<_>>();
+    #[allow(clippy::reversed_empty_ranges)]
     let inverse = (9u8..=0)
         .checks(Ok::<_, ()>)
         .map(|result| result.into_item())
