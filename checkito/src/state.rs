@@ -541,9 +541,7 @@ macro_rules! range {
     };
 }
 
-// Generates all range-conversion impls except RangeFull.
-// floating! uses this to provide its own RangeFull that spans all bit patterns.
-macro_rules! partial_ranges {
+macro_rules! ranges {
     ($name: ident, $up: expr, $down: expr) => {
         impl From<$name> for Range<$name> {
             fn from(value: $name) -> Self {
@@ -556,12 +554,6 @@ macro_rules! partial_ranges {
         range!($name, ops::RangeInclusive<$name>, $up, $down);
         range!($name, ops::RangeToInclusive<$name>, $up, $down);
         range!($name, ops::RangeFrom<$name>, $up, $down);
-    };
-}
-
-macro_rules! ranges {
-    ($name: ident, $up: expr, $down: expr) => {
-        partial_ranges!($name, $up, $down);
         range!($name, ops::RangeFull, $up, $down);
     };
 }
@@ -662,20 +654,7 @@ macro_rules! integer {
 
 macro_rules! floating {
     ($number: ident, $bits: ident) => {
-        // Use partial_ranges! so we can supply our own RangeFull below.
-        partial_ranges!($number, utility::$number::next_up, utility::$number::next_down);
-
-        // RangeFull spans every bit pattern by using the total-order extremes as
-        // endpoints.  utility::$number::from_bits(0) is the most-negative NaN
-        // in total order; from_bits($bits::MAX) is the most-positive NaN.
-        impl From<ops::RangeFull> for Range<$number> {
-            fn from(_: ops::RangeFull) -> Self {
-                Self(
-                    utility::$number::from_bits(0),          // total-order minimum
-                    utility::$number::from_bits($bits::MAX),  // total-order maximum
-                )
-            }
-        }
+        ranges!($number, utility::$number::next_up, utility::$number::next_down);
 
         impl State {
             #[inline]
@@ -695,13 +674,13 @@ macro_rules! floating {
                 }
 
                 fn generate(state: &mut State, Range(start, end): Range<$number>) -> $number {
+                    assert!(start.is_finite() && end.is_finite());
+
                     let size = state.size();
                     let scale = state.scale();
                     match &mut state.mode {
                         Mode::Random(..) | Mode::Exhaustive(..) if start == end => start,
                         Mode::Random(random) => {
-                            // Random mode requires finite endpoints for arithmetic.
-                            assert!(start.is_finite() && end.is_finite());
                             if start >= 0.0 {
                                 debug_assert!(end > 0.0);
                                 start + random.$number() * shrink(end - start, size, scale)
@@ -728,8 +707,6 @@ macro_rules! floating {
                             // integer strategy: non-positive ranges start from the
                             // end closest to zero; ranges spanning zero interleave
                             // positive and negative values by magnitude.
-                            // Non-finite endpoints (e.g. from RangeFull) are handled
-                            // correctly because only bit arithmetic is used here.
                             let range = (
                                 utility::$number::to_bits(start) as u128,
                                 utility::$number::to_bits(end) as u128
@@ -785,10 +762,7 @@ integer!(
     [isize, usize, Isize]
 );
 
-// $bits must be the *unsigned* integer type of the same width as the float
-// (u32 for f32, u64 for f64) so that $bits::MAX represents all-ones bits and
-// utility::$number::from_bits($bits::MAX) is the largest total-order value.
-floating!([f32, u32], [f64, u64]);
+floating!([f32, i32], [f64, i64]);
 
 impl Modes {
     pub(crate) fn with(
@@ -946,15 +920,8 @@ impl Default for Sizes {
 
 impl<R: Into<Range<f64>>> From<R> for Sizes {
     fn from(value: R) -> Self {
-        let Range(start, end) = value.into();
-        // Non-finite endpoints are produced when the caller uses a full-range
-        // float RangeFull (e.g. `generate.sizes = ..`).  Valid sizes live in
-        // [0.0, 1.0], so map -∞ / NaN to 0.0 (minimum) and +∞ / NaN to 1.0
-        // (maximum), exactly matching the behaviour of the old f64::MIN/f64::MAX
-        // endpoints after clamping inside Sizes::new.
-        let start = if start.is_finite() { start } else { 0.0 };
-        let end = if end.is_finite() { end } else { 1.0 };
-        Self::new(start.min(end), start.max(end), Self::SCALE)
+        let range = value.into();
+        Self::new(range.start(), range.end(), Self::SCALE)
     }
 }
 
@@ -1100,37 +1067,5 @@ mod tests {
         assert_eq!(values[0], zero_bits);
         assert!(values[1] > zero_bits && values[1] < values[3]);
         assert!(values[2] < zero_bits && values[2] > values[4]);
-    }
-
-    #[test]
-    fn exhaustive_f32_covers_special_values() {
-        // The full-range exhaustive f32(..) generator spans all 2^32 bit patterns,
-        // ordered by magnitude via small_first.  For a total-order offset k from
-        // zero: index = 2k-1 for positive k, index = 2k for negative k.
-        // Verify each representative special value is generated at its expected index.
-        let zero = utility::f32::to_bits(0.0_f32) as u128;
-        let check = |value: f32| {
-            let bits = utility::f32::to_bits(value) as u128;
-            let index = if bits == zero {
-                0
-            } else if bits > zero {
-                2 * (bits - zero) - 1
-            } else {
-                2 * (zero - bits)
-            };
-            assert_eq!(
-                utility::f32::to_bits(State::exhaustive(index as usize, usize::MAX).f32(..)),
-                utility::f32::to_bits(value),
-                "f32 {:?} not generated at expected index {}",
-                value, index,
-            );
-        };
-        for value in [
-            0f32, 1.0, f32::MIN, f32::MAX, f32::NAN, f32::INFINITY, f32::NEG_INFINITY,
-            f32::MIN_POSITIVE, f32::EPSILON, 362186.12478, -129846159827198.98987654,
-            0.99996522, -0.000000000172f32,
-        ] {
-            check(value);
-        }
     }
 }
