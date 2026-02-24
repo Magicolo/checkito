@@ -358,9 +358,30 @@ impl State {
 }
 
 const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
-    let range = u128::wrapping_sub(end as _, start as _).saturating_add(1);
+    let range = u128::wrapping_sub(end, start).saturating_add(1);
     let index = replace(index, index.saturating_div(range)) % range;
-    u128::wrapping_add(start as _, index)
+    u128::wrapping_add(start, index)
+}
+
+/// Maps a zero-anchored exhaustive index to a `(offset, is_negative)` pair
+/// for generating small-magnitude values first.
+///
+/// - `pos`: number of steps available in the positive direction.
+/// - `neg`: number of steps available in the negative direction.
+///
+/// Ordering: anchor, +1, −1, +2, −2, … until the shorter side is exhausted,
+/// then the remaining steps from the longer side.
+const fn small_first(local: u128, pos: u128, neg: u128) -> (u128, bool) {
+    let min_side = if pos < neg { pos } else { neg };
+    let k = (local + 1) / 2;
+    if k <= min_side {
+        // Interleaved zone: odd → positive offset, even → negative offset.
+        // k == 0 (local == 0) falls here and yields offset 0 (the anchor).
+        (k, local % 2 == 0)
+    } else {
+        // Past the shorter side: continue monotonically on the longer side.
+        (local - min_side, pos < neg)
+    }
 }
 
 /// Computes the number of exhaustive items covered by the first `terms`
@@ -597,8 +618,29 @@ macro_rules! integer {
                                 wrap
                             }
                         }
-                        // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
-                        Mode::Exhaustive(index) => consume(index, start as _, end as _) as $integer,
+                        Mode::Exhaustive(index) => {
+                            // Generate small values (near zero) first by reordering the
+                            // exhaustive index instead of enumerating linearly from `start`.
+                            let range = (start as u128, end as u128);
+                            let total = u128::wrapping_sub(range.1, range.0);
+                            let local = consume(index, 0, total);
+                            #[allow(unused_comparisons)]
+                            if start >= 0 {
+                                // Entirely non-negative: ascending from start.
+                                u128::wrapping_add(range.0, local) as $integer
+                            } else if end <= 0 {
+                                // Entirely non-positive: descending from end (closest to zero).
+                                u128::wrapping_sub(range.1, local) as $integer
+                            } else {
+                                // Spans zero: 0, 1, -1, 2, -2, … via small_first.
+                                let (value, negative) = small_first(local, end as u128, 0u128.wrapping_sub(range.0));
+                                if negative {
+                                    0u128.wrapping_sub(value) as $integer
+                                } else {
+                                    value as $integer
+                                }
+                            }
+                        }
                     }
                 }
                 generate(self, range.into())
@@ -659,11 +701,35 @@ macro_rules! floating {
                                 }
                             }
                         }
-                        // TODO: Generate 'small' values first. Maybe use the same adjustment as Random?
-                        Mode::Exhaustive(index) => utility::$number::from_bits(consume(
-                            index,
-                            utility::$number::to_bits(start) as _,
-                            utility::$number::to_bits(end) as _) as _),
+                        Mode::Exhaustive(index) => {
+                            // Generate small-magnitude values first by working in the
+                            // total-order bit space.  The transformation mirrors the
+                            // integer strategy: non-positive ranges start from the
+                            // end closest to zero; ranges spanning zero interleave
+                            // positive and negative values by magnitude.
+                            let range = (
+                                utility::$number::to_bits(start) as u128,
+                                utility::$number::to_bits(end) as u128
+                            );
+                            let total = range.1 - range.0;
+                            let local = consume(index, 0, total);
+                            if start >= 0.0 {
+                                // Entirely non-negative: go upward from start.
+                                utility::$number::from_bits((range.0 + local) as _)
+                            } else if end <= 0.0 {
+                                // Entirely non-positive: go downward from end (closest to 0).
+                                utility::$number::from_bits((range.1 - local) as _)
+                            } else {
+                                // Spans zero: 0.0, +ε, -ε, +2ε, -2ε, … via small_first.
+                                let zero = utility::$number::to_bits(0.0) as u128;
+                                let (value, negative) = small_first(local, range.1 - zero, zero - range.0);
+                                if negative {
+                                    utility::$number::from_bits((zero - value) as _)
+                                } else {
+                                    utility::$number::from_bits((zero + value) as _)
+                                }
+                            }
+                        }
                     }
                 }
                 generate(self, range.into())
@@ -942,5 +1008,64 @@ mod tests {
         let left = utility::f32::to_bits(*left);
         let right = utility::f32::to_bits(*right);
         u32::cmp(&left, &right)
+    }
+
+    #[test]
+    fn exhaustive_integer_small_values_first() {
+        fn collect(count: usize, generate: impl Fn(&mut State) -> i32) -> Vec<i32> {
+            Iterator::map(0..count, |i| generate(&mut State::exhaustive(i, count))).collect()
+        }
+
+        // Non-negative range: ascending from start.
+        let values = collect(5, |s| s.i32(0..=4));
+        assert_eq!(values, [0, 1, 2, 3, 4]);
+
+        // Non-positive range: descending from end (end is closest to 0).
+        let values = collect(5, |s| s.i32(-4..=0));
+        assert_eq!(values, [0, -1, -2, -3, -4]);
+
+        // Symmetric range spanning 0: interleaved 0, 1, -1, 2, -2, ...
+        let values = collect(5, |s| s.i32(-2..=2));
+        assert_eq!(values, [0, 1, -1, 2, -2]);
+
+        // Asymmetric range with more positives: interleave up to the smaller side,
+        // then continue with the remaining positives.
+        let values = collect(7, |s| s.i32(-2..=4));
+        assert_eq!(values, [0, 1, -1, 2, -2, 3, 4]);
+
+        // Asymmetric range with more negatives: interleave up to the smaller side,
+        // then continue with the remaining negatives.
+        let values = collect(7, |s| s.i32(-4..=2));
+        assert_eq!(values, [0, 1, -1, 2, -2, -3, -4]);
+
+        // First few exhaustive values for a large range should be near zero.
+        let values = collect(5, |s| s.i32(-1000..=1000));
+        assert_eq!(values, [0, 1, -1, 2, -2]);
+    }
+
+    #[test]
+    fn exhaustive_float_small_values_first() {
+        // Non-positive range: first value must be 0.0 (the end, closest to 0).
+        let first = State::exhaustive(0, 100).f32(-1.0..=0.0);
+        assert_eq!(first, 0.0);
+
+        // Range spanning 0: first value is 0.0.
+        let first = State::exhaustive(0, 1000).f32(-1.0..=1.0);
+        assert_eq!(first, 0.0);
+
+        // For a range spanning 0, the total-order magnitude should increase for
+        // the first few samples.  (Use to_bits for total-order comparisons so
+        // that -0.0 and 0.0 are treated as distinct adjacent values.)
+        let zero_bits = utility::f32::to_bits(0.0);
+        let values: Vec<u32> = Iterator::map(0..5, |i| {
+            utility::f32::to_bits(State::exhaustive(i, 1000).f32(-1.0..=1.0))
+        })
+        .collect();
+        // index 0 → 0.0, index 1 → small positive (> 0.0 in total order),
+        // index 2 → small negative (< 0.0 in total order but closest to it),
+        // index 3 → next positive (larger than index 1), index 4 → next negative.
+        assert_eq!(values[0], zero_bits);
+        assert!(values[1] > zero_bits && values[1] < values[3]);
+        assert!(values[2] < zero_bits && values[2] > values[4]);
     }
 }
