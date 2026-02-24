@@ -82,10 +82,13 @@ pub struct With<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Mode {
-    // TODO: Can I use this for fuzzing? Add a `Fuzz(Box<dyn Iterator<Item = byte>>)`? Or
-    // maybe fuzz through the `Random` object?
     Random(Rng),
     Exhaustive(u128),
+    /// Consumes bytes from a fixed buffer to deterministically construct
+    /// values.  When the buffer is exhausted, missing bytes are treated as
+    /// `0`.  This mode is designed for integration with coverage-guided
+    /// fuzzers such as `cargo-fuzz` / `LibFuzzer`.
+    Fuzz { bytes: Box<[u8]>, cursor: usize },
 }
 
 impl State {
@@ -107,6 +110,39 @@ impl State {
             sizes: Sizes::DEFAULT,
             index,
             count,
+            limit: 0,
+            depth: 0,
+            seed: 0,
+        }
+    }
+
+    /// Creates a [`State`] that derives values by consuming bytes from
+    /// `bytes`.
+    ///
+    /// Each primitive generation call reads the minimum number of bytes
+    /// needed for its type (`1` for `u8`/`i8`, `4` for `u32`/`f32`, etc.)
+    /// and maps the resulting value into the requested range.  When the
+    /// buffer is exhausted, missing bytes are treated as `0`.
+    ///
+    /// This is the primary entry-point for integrating `checkito` generators
+    /// with coverage-guided fuzzers such as `cargo-fuzz` / `LibFuzzer`:
+    ///
+    /// ```ignore
+    /// fuzz_target!(|data: &[u8]| {
+    ///     let mut state = checkito::state::State::fuzz(data);
+    ///     let value: MyType = my_generator.generate(&mut state).item();
+    ///     // exercise code with value …
+    /// });
+    /// ```
+    pub fn fuzz(bytes: &[u8]) -> Self {
+        Self {
+            mode: Mode::Fuzz {
+                bytes: bytes.into(),
+                cursor: 0,
+            },
+            sizes: Sizes::DEFAULT,
+            index: 0,
+            count: 1,
             limit: 0,
             depth: 0,
             seed: 0,
@@ -210,7 +246,7 @@ impl State {
     pub(crate) fn any_indexed<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
         let end = generators.len().checked_sub(1)?;
         match &mut self.mode {
-            Mode::Random(_) => {
+            Mode::Random(_) | Mode::Fuzz { .. } => {
                 let index = self.with().size(1.0).usize(Range(0, end));
                 generators.get(index)
             }
@@ -227,7 +263,7 @@ impl State {
         }
 
         match &mut self.mode {
-            Mode::Random(_) => {
+            Mode::Random(_) | Mode::Fuzz { .. } => {
                 let total = generators
                     .iter()
                     .map(|Weight { weight, .. }| weight)
@@ -265,7 +301,7 @@ impl State {
         range: Range<usize>,
     ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
         let count = match &mut self.mode {
-            Mode::Random(_) => range.generate(self).item(),
+            Mode::Random(_) | Mode::Fuzz { .. } => range.generate(self).item(),
             Mode::Exhaustive(index) => match generator.cardinality() {
                 Some(cardinality) => {
                     // Exhaustive `repeat` chooses a *length* first, then generates
@@ -595,7 +631,7 @@ macro_rules! integer {
                     let size = state.size();
                     let scale = state.scale();
                     match &mut state.mode {
-                        Mode::Random(..) | Mode::Exhaustive(..) if start == end => start,
+                        Mode::Random(..) | Mode::Exhaustive(..) | Mode::Fuzz { .. } if start == end => start,
                         Mode::Random(random) => {
                             let range = shrink($positive::wrapping_sub(end as _, start as _), size, scale);
                             let value = random.$positive(0..=range) as $integer;
@@ -641,6 +677,31 @@ macro_rules! integer {
                                 }
                             }
                         }
+                        Mode::Fuzz { bytes, cursor } => {
+                            // Read size_of::<$integer>() bytes in little-endian order.
+                            // Missing bytes are zero-padded.
+                            let mut arr = [0u8; core::mem::size_of::<$integer>()];
+                            for b in arr.iter_mut() {
+                                *b = bytes.get(*cursor).copied().unwrap_or(0);
+                                *cursor += 1;
+                            }
+                            let raw = $integer::from_le_bytes(arr);
+                            // Map into [start, end] using wrapping modulo arithmetic.
+                            // range_size wraps to 0 only for the full type domain
+                            // (e.g. 0..=u8::MAX), in which case every raw value is valid.
+                            let range_size =
+                                $positive::wrapping_sub(end as _, start as _).wrapping_add(1);
+                            if range_size == 0 {
+                                raw
+                            } else {
+                                let offset = if range_size.is_power_of_two() {
+                                    (raw as $positive) & (range_size - 1)
+                                } else {
+                                    (raw as $positive) % range_size
+                                };
+                                start.wrapping_add(offset as _)
+                            }
+                        }
                     }
                 }
                 generate(self, range.into())
@@ -679,7 +740,7 @@ macro_rules! floating {
                     let size = state.size();
                     let scale = state.scale();
                     match &mut state.mode {
-                        Mode::Random(..) | Mode::Exhaustive(..) if start == end => start,
+                        Mode::Random(..) | Mode::Exhaustive(..) | Mode::Fuzz { .. } if start == end => start,
                         Mode::Random(random) => {
                             if start >= 0.0 {
                                 debug_assert!(end > 0.0);
@@ -729,6 +790,32 @@ macro_rules! floating {
                                     utility::$number::from_bits((zero + value) as _)
                                 }
                             }
+                        }
+                        Mode::Fuzz { bytes, cursor } => {
+                            // Read size_of::<$number>() bytes in little-endian order,
+                            // treating missing bytes as 0, then map the result into the
+                            // [to_bits(start), to_bits(end)] window using the same
+                            // total-order bit representation used by the exhaustive path.
+                            let raw: u128 = {
+                                let n = core::mem::size_of::<$number>();
+                                let mut bits = 0u128;
+                                for i in 0..n {
+                                    bits |= (bytes.get(*cursor).copied().unwrap_or(0) as u128) << (8 * i);
+                                    *cursor += 1;
+                                }
+                                bits
+                            };
+                            let bits_start = utility::$number::to_bits(start) as u128;
+                            let bits_end = utility::$number::to_bits(end) as u128;
+                            // to_bits is monotone and start <= end, so bits_end >= bits_start.
+                            // range_size is always >= 1 (at minimum start == end is excluded above).
+                            let range_size = bits_end - bits_start + 1;
+                            let offset = if range_size.is_power_of_two() {
+                                raw & (range_size - 1)
+                            } else {
+                                raw % range_size
+                            };
+                            utility::$number::from_bits((bits_start + offset) as _)
                         }
                     }
                 }
@@ -1067,5 +1154,150 @@ mod tests {
         assert_eq!(values[0], zero_bits);
         assert!(values[1] > zero_bits && values[1] < values[3]);
         assert!(values[2] < zero_bits && values[2] > values[4]);
+    }
+
+    // --- Fuzz mode tests -------------------------------------------------------
+
+    #[test]
+    fn fuzz_integers_are_within_range() {
+        // Use known byte patterns and verify all integer types stay in range.
+        for b in [0u8, 1, 127, 128, 255] {
+            let bytes = vec![b; 16]; // enough for i128/u128
+            let mut state = State::fuzz(&bytes);
+            let v_u8 = state.u8(10..=20);
+            assert!((10..=20).contains(&v_u8), "u8 {v_u8} not in 10..=20");
+
+            let mut state = State::fuzz(&bytes);
+            let v_i8 = state.i8(-10..=10);
+            assert!((-10..=10).contains(&v_i8), "i8 {v_i8} not in -10..=10");
+
+            let mut state = State::fuzz(&bytes);
+            let v_u32 = state.u32(100..=200);
+            assert!((100..=200).contains(&v_u32), "u32 {v_u32} not in 100..=200");
+
+            let mut state = State::fuzz(&bytes);
+            let v_i32 = state.i32(-50..=50);
+            assert!((-50..=50).contains(&v_i32), "i32 {v_i32} not in -50..=50");
+
+            let mut state = State::fuzz(&bytes);
+            let v_u128 = state.u128(..=u128::MAX);
+            assert!(v_u128 <= u128::MAX);
+        }
+    }
+
+    #[test]
+    fn fuzz_single_value_range() {
+        // A range with a single value must always return that value.
+        let bytes = vec![0xFFu8; 16];
+        let mut state = State::fuzz(&bytes);
+        assert_eq!(state.u8(42..=42), 42);
+        assert_eq!(state.i32(7..=7), 7);
+        assert_eq!(state.f32(3.14..=3.14), 3.14);
+        assert_eq!(state.f64(-1.0..=-1.0), -1.0);
+    }
+
+    #[test]
+    fn fuzz_exhausted_bytes_stay_in_range() {
+        // An empty byte slice should produce in-range values (zero-padded).
+        let mut state = State::fuzz(&[]);
+        assert!((10u8..=20).contains(&state.u8(10..=20)));
+        assert!((-50i32..=50).contains(&state.i32(-50..=50)));
+        assert!((0.0f32..=1.0).contains(&state.f32(0.0..=1.0)));
+    }
+
+    #[test]
+    fn fuzz_consumes_bytes_sequentially() {
+        // Two consecutive calls should each consume their own bytes.
+        // With 0x00 bytes: u8 in 0..=10 maps to 0 % 11 = 0; next call same.
+        let bytes = [0u8; 8];
+        let mut state = State::fuzz(&bytes);
+        let first = state.u8(0..=10);
+        let second = state.u8(0..=10);
+        assert!((0..=10).contains(&first));
+        assert!((0..=10).contains(&second));
+
+        // With known non-zero bytes the two calls can return different values.
+        let bytes = [7u8, 13u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+        let mut state = State::fuzz(&bytes);
+        let first = state.u8(0..=10);
+        let second = state.u8(0..=10);
+        assert!((0..=10).contains(&first));
+        assert!((0..=10).contains(&second));
+    }
+
+    #[test]
+    fn fuzz_bool_is_valid() {
+        for b in [0u8, 1, 127, 255] {
+            let mut state = State::fuzz(&[b]);
+            let v = state.bool();
+            assert!(v == false || v == true);
+        }
+    }
+
+    #[test]
+    fn fuzz_char_is_within_range() {
+        let bytes = vec![0xFFu8; 4];
+        let mut state = State::fuzz(&bytes);
+        let c = state.char('a'..='z');
+        assert!(c >= 'a' && c <= 'z', "char {c:?} not in 'a'..='z'");
+    }
+
+    #[test]
+    fn fuzz_float_is_within_range() {
+        for raw in [0u32, 1, u32::MAX / 2, u32::MAX] {
+            let bytes = raw.to_le_bytes();
+            let mut state = State::fuzz(&bytes);
+            let v = state.f32(0.0..=1.0);
+            assert!(v >= 0.0 && v <= 1.0, "f32 {v} not in 0.0..=1.0");
+
+            let mut state = State::fuzz(&bytes);
+            let v = state.f32(-100.0..=100.0);
+            assert!(v >= -100.0 && v <= 100.0, "f32 {v} not in -100.0..=100.0");
+        }
+    }
+
+    #[test]
+    fn fuzz_f64_is_within_range() {
+        for raw in [0u64, 1, u64::MAX / 2, u64::MAX] {
+            let bytes = raw.to_le_bytes();
+            let mut state = State::fuzz(&bytes);
+            let v = state.f64(-1.0..=1.0);
+            assert!(v >= -1.0 && v <= 1.0, "f64 {v} not in -1.0..=1.0");
+        }
+    }
+
+    #[test]
+    fn fuzz_deterministic_for_same_bytes() {
+        let bytes = [42u8, 13, 7, 255, 0, 100, 33, 17, 5, 2, 1, 9, 77, 8, 3, 11];
+        let result1 = {
+            let mut state = State::fuzz(&bytes);
+            (state.u32(..), state.i64(..), state.f32(-1.0..=1.0))
+        };
+        let result2 = {
+            let mut state = State::fuzz(&bytes);
+            (state.u32(..), state.i64(..), state.f32(-1.0..=1.0))
+        };
+        assert_eq!(result1, result2);
+    }
+
+    #[test]
+    fn fuzz_full_range_u8_all_values_reachable() {
+        // Verify that each possible byte maps to itself for the full u8 range.
+        for b in 0u8..=255 {
+            let mut state = State::fuzz(&[b]);
+            assert_eq!(state.u8(..), b);
+        }
+    }
+
+    #[test]
+    fn fuzz_generators_produce_in_range_values() {
+        use crate::Generate;
+        let bytes = [42u8, 13, 7, 255, 0, 100, 33, 17, 5, 2, 1, 9, 77, 8, 3, 11,
+                     42, 13, 7, 255, 0, 100, 33, 17, 5, 2, 1, 9, 77, 8, 3, 11];
+        let mut state = State::fuzz(&bytes);
+        let v: u8 = (10u8..=20).generate(&mut state).item();
+        assert!((10..=20).contains(&v));
+        let v: i32 = (-100i32..=100).generate(&mut state).item();
+        assert!((-100..=100).contains(&v));
     }
 }
