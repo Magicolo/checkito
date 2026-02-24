@@ -38,11 +38,16 @@ pub mod option {
         const CARDINALITY: Option<u128> = cardinality::any_sum(G::CARDINALITY, Some(1));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            // TODO: Will this work properly in exhaustive mode?
-            if state.with().size(1.0).bool() {
-                Shrinker(true, Some(self.0.generate(state)))
-            } else {
-                Shrinker(false, None)
+            match state.any_exhaustive_arm(&[self.0.cardinality(), Some(1)]) {
+                Some(0) => Shrinker(true, Some(self.0.generate(state))),
+                Some(_) => Shrinker(false, None),
+                None => {
+                    if state.with().size(1.0).bool() {
+                        Shrinker(true, Some(self.0.generate(state)))
+                    } else {
+                        Shrinker(false, None)
+                    }
+                }
             }
         }
 
@@ -110,12 +115,15 @@ pub mod result {
         const CARDINALITY: Option<u128> = cardinality::any_sum(T::CARDINALITY, E::CARDINALITY);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            // TODO: Will this work properly in exhaustive mode?
-            Shrinker(if state.with().size(1.0).bool() {
-                Ok(self.0.generate(state))
-            } else {
-                Err(self.1.generate(state))
-            })
+            match state.any_exhaustive_arm(&[self.0.cardinality(), self.1.cardinality()]) {
+                Some(0) => Shrinker(Ok(self.0.generate(state))),
+                Some(_) => Shrinker(Err(self.1.generate(state))),
+                None => Shrinker(if state.with().size(1.0).bool() {
+                    Ok(self.0.generate(state))
+                } else {
+                    Err(self.1.generate(state))
+                }),
+            }
         }
 
         fn cardinality(&self) -> Option<u128> {

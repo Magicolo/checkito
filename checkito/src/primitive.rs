@@ -591,16 +591,26 @@ pub mod char {
         const CARDINALITY: Option<u128> = cardinality(char::MIN, char::MAX);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            // TODO: Will this work properly in exhaustive mode?
-            let value = state.with().size(1.0).u8(..);
-            match value {
-                0..=249 => Range(Char::MIN, Char::MAX).generate(state),
-                250.. => Shrinker(super::Shrinker {
+            match state.any_exhaustive_arm(&[Range(Char::MIN, Char::MAX).cardinality(), SpecialType::CARDINALITY]) {
+                Some(0) => Range(Char::MIN, Char::MAX).generate(state),
+                Some(_) => Shrinker(super::Shrinker {
                     start: 0,
                     end: char::MAX as _,
                     item: Special::<char>::VALUE.generate(state) as _,
                     direction: Direction::None,
                 }),
+                None => {
+                    let value = state.with().size(1.0).u8(..);
+                    match value {
+                        0..=249 => Range(Char::MIN, Char::MAX).generate(state),
+                        250.. => Shrinker(super::Shrinker {
+                            start: 0,
+                            end: char::MAX as _,
+                            item: Special::<char>::VALUE.generate(state) as _,
+                            direction: Direction::None,
+                        }),
+                    }
+                }
             }
         }
     }
@@ -680,16 +690,26 @@ macro_rules! integer {
             const CARDINALITY: Option<u128> = cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: Will this work properly in exhaustive mode?
-                let value = state.with().size(1.0).u8(..);
-                match value {
-                    0..=249 => Range($type::MIN, $type::MAX).generate(state),
-                    250.. => Shrinker {
+                match state.any_exhaustive_arm(&[cardinality($type::MIN, $type::MAX), SpecialType::CARDINALITY]) {
+                    Some(0) => Range($type::MIN, $type::MAX).generate(state),
+                    Some(_) => Shrinker {
                         start: $type::MIN,
                         end: $type::MAX,
                         item: Special::<$type>::VALUE.generate(state),
                         direction: Direction::None
                     },
+                    None => {
+                        let value = state.with().size(1.0).u8(..);
+                        match value {
+                            0..=249 => Range($type::MIN, $type::MAX).generate(state),
+                            250.. => Shrinker {
+                                start: $type::MIN,
+                                end: $type::MAX,
+                                item: Special::<$type>::VALUE.generate(state),
+                                direction: Direction::None
+                            },
+                        }
+                    }
                 }
             }
         }
@@ -772,19 +792,38 @@ macro_rules! floating {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: Will this work properly in exhaustive mode?
-                let value = state.with().size(1.0).u8(..);
-                match value {
-                    0..=89 => ($type::MIN..=$type::MAX).generate(state),
-                    90..=179 => (-$type::EPSILON.recip()..=$type::EPSILON.recip()).generate(state),
-                    180..=214 => ($type::MIN.recip()..=$type::MAX.recip()).generate(state),
-                    215..=249 => (-$type::EPSILON..=$type::EPSILON).generate(state),
-                    250.. => Shrinker {
+                match state.any_exhaustive_arm(&[
+                    ($type::MIN..=$type::MAX).cardinality(),
+                    (-$type::EPSILON.recip()..=$type::EPSILON.recip()).cardinality(),
+                    ($type::MIN.recip()..=$type::MAX.recip()).cardinality(),
+                    (-$type::EPSILON..=$type::EPSILON).cardinality(),
+                    SpecialType::CARDINALITY,
+                ]) {
+                    Some(0) => ($type::MIN..=$type::MAX).generate(state),
+                    Some(1) => (-$type::EPSILON.recip()..=$type::EPSILON.recip()).generate(state),
+                    Some(2) => ($type::MIN.recip()..=$type::MAX.recip()).generate(state),
+                    Some(3) => (-$type::EPSILON..=$type::EPSILON).generate(state),
+                    Some(_) => Shrinker {
                         start: $type::MIN,
                         end: $type::MAX,
                         item: Special::<$type>::VALUE.generate(state),
                         direction: Direction::None
                     },
+                    None => {
+                        let value = state.with().size(1.0).u8(..);
+                        match value {
+                            0..=89 => ($type::MIN..=$type::MAX).generate(state),
+                            90..=179 => (-$type::EPSILON.recip()..=$type::EPSILON.recip()).generate(state),
+                            180..=214 => ($type::MIN.recip()..=$type::MAX.recip()).generate(state),
+                            215..=249 => (-$type::EPSILON..=$type::EPSILON).generate(state),
+                            250.. => Shrinker {
+                                start: $type::MIN,
+                                end: $type::MAX,
+                                item: Special::<$type>::VALUE.generate(state),
+                                direction: Direction::None
+                            },
+                        }
+                    }
                 }
             }
         }

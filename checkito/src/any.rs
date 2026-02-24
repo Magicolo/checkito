@@ -186,13 +186,15 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: In exhaustive mode, one can be determine which generator
-                // to use with the current exhaustive index.
-                // See `State::any_exhaustive`.
-                let value = state.with().size(1.0).u8(..$c);
-                match value {
-                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
-                    _ => unreachable!(),
+                match state.any_exhaustive_arm(&[$( self.0.$is.cardinality(),)*]) {
+                    $(Some($is) => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
+                    _ => {
+                        let value = state.with().size(1.0).u8(..$c);
+                        match value {
+                            $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
+                            _ => unreachable!(),
+                        }
+                    }
                 }
             }
 
@@ -214,22 +216,24 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: In exhaustive mode, the state will try to cover all possible
-                // floats between '0.0..=_total' and some generators may remain uncovered.
-                // Instead, do something similar as `State::any_exhaustive`.
-                let _total = ($(self.$is.weight() +)* 0.0).min(f64::MAX);
-                debug_assert!(_total > 0.0 && _total.is_finite());
-                let mut _random = state.with().size(1.0).f64(0.0..=_total);
-                debug_assert!(_random.is_finite());
-                $(
-                    let weight = self.$is.weight();
-                    if _random < weight {
-                        return orn::$n::Or::$ts(self.$is.value().generate(state));
-                    } else {
-                        _random -= weight;
+                match state.any_exhaustive_arm(&[$( self.$is.cardinality(),)*]) {
+                    $(Some($is) => orn::$n::Or::$ts(self.$is.value().generate(state)),)*
+                    _ => {
+                        let _total = ($(self.$is.weight() +)* 0.0).min(f64::MAX);
+                        debug_assert!(_total > 0.0 && _total.is_finite());
+                        let mut _random = state.with().size(1.0).f64(0.0..=_total);
+                        debug_assert!(_random.is_finite());
+                        $(
+                            let weight = self.$is.weight();
+                            if _random < weight {
+                                return orn::$n::Or::$ts(self.$is.value().generate(state));
+                            } else {
+                                _random -= weight;
+                            }
+                        )*
+                        unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");
                     }
-                )*
-                unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");
+                }
             }
 
             fn cardinality(&self) -> Option<u128> {

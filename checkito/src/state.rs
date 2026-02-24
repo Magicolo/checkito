@@ -257,7 +257,37 @@ impl State {
         }
     }
 
-    // TODO: Implement `any_tuple_indexed` and `any_tuple_weighted`...
+    /// Returns the index of the generator that owns the current exhaustive index,
+    /// updating `self.mode` so the index is local to the chosen generator.
+    /// Returns `None` in random mode.
+    ///
+    /// Uses the same cycling interleave logic as `any_exhaustive`: generators are
+    /// visited repeatedly in order, proportional to their cardinalities. The loop
+    /// terminates for any non-pathological input (at least one non-zero finite
+    /// cardinality, or any `None` cardinality). An input where every cardinality
+    /// is `Some(0)` would loop indefinitely, matching the analogous behaviour of
+    /// `any_exhaustive`.
+    pub(crate) fn any_exhaustive_arm(&mut self, cardinalities: &[Option<u128>]) -> Option<usize> {
+        let Mode::Exhaustive(index) = &mut self.mode else {
+            return None;
+        };
+        if cardinalities.is_empty() {
+            return None;
+        }
+        loop {
+            for (i, &card) in cardinalities.iter().enumerate() {
+                match card {
+                    Some(c) if *index < c => return Some(i),
+                    Some(c) => *index -= c,
+                    None => return Some(i),
+                }
+            }
+        }
+    }
+
+    pub(crate) fn is_exhaustive(&self) -> bool {
+        matches!(self.mode, Mode::Exhaustive(_))
+    }
 
     pub(crate) fn repeat<'a, 'b, G: Generate + ?Sized>(
         &'a mut self,

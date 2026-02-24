@@ -24,6 +24,14 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
+        if state.is_exhaustive() {
+            let inner = self.generator.generate(state);
+            let item = inner.item();
+            return Shrinker {
+                shrinker: if (self.filter)(&item) { Some(inner) } else { None },
+                filter: self.filter.clone(),
+            };
+        }
         let mut outer = None;
         for i in 0..=self.retries {
             // TODO: Will this work properly in exhaustive mode?

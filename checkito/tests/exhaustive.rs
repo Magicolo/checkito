@@ -269,3 +269,105 @@ fn convert_preserves_values_exhaustively() {
 
     assert_eq!(values, vec![0, 1, 2, 3, 4]);
 }
+
+#[test]
+fn full_integer_exhaustive_covers_special_values() {
+    // In exhaustive mode, Full<i8> should cover its full range including
+    // special values (0, MIN, MAX) through the cycling mechanism.
+    let mut checker = <i8>::generator().checker();
+    // Use a count large enough to cycle through range + special branches.
+    // i8 range has 256 values; special has 3. Total cycle = 259.
+    checker.generate.count = 259;
+    checker.generate.exhaustive = Some(true);
+
+    let values: HashSet<i8> = checker
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect();
+
+    assert!(values.contains(&0i8));
+    assert!(values.contains(&i8::MIN));
+    assert!(values.contains(&i8::MAX));
+}
+
+#[test]
+fn option_bool_exhaustive_covers_none_and_some() {
+    // Option<bool> in exhaustive mode should deterministically produce
+    // both None and Some(_) values.
+    let values: Vec<Option<bool>> = Option::<bool>::generator()
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect();
+
+    // cardinality of Option<bool> is Some(3): None, Some(false), Some(true).
+    assert_eq!(values.len(), 3);
+    assert!(values.contains(&None));
+    assert!(values.contains(&Some(false)));
+    assert!(values.contains(&Some(true)));
+}
+
+#[test]
+fn result_bool_bool_exhaustive_covers_all_variants() {
+    // Result<bool, bool> in exhaustive mode should cover all 4 combinations.
+    let values: HashSet<Result<bool, bool>> = Result::<bool, bool>::generator()
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect();
+
+    assert_eq!(values.len(), 4);
+    assert!(values.contains(&Ok(false)));
+    assert!(values.contains(&Ok(true)));
+    assert!(values.contains(&Err(false)));
+    assert!(values.contains(&Err(true)));
+}
+
+#[test]
+fn any_tuple_exhaustive_covers_all_sub_generators() {
+    // (0u8..=1, 10u8..=11).any() in exhaustive mode with count=4 should
+    // produce all four values deterministically.
+    let values = (0u8..=1, 10u8..=11)
+        .any()
+        .unify::<u8>()
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect::<HashSet<_>>();
+
+    assert_eq!(values.len(), 4);
+    assert!(values.contains(&0u8));
+    assert!(values.contains(&1u8));
+    assert!(values.contains(&10u8));
+    assert!(values.contains(&11u8));
+}
+
+#[test]
+fn filter_exhaustive_produces_one_value_per_index() {
+    // In exhaustive mode, filter should not retry but produce one value
+    // per exhaustive index (Some if accepted, None if rejected).
+    let values = Generate::filter(0u8..=3, |&x| x % 2 == 0)
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect::<Vec<_>>();
+
+    // 0u8..=3 has cardinality 4, so 4 exhaustive iterations.
+    // Indices 0,2 produce even values (Some), indices 1,3 produce odd (None).
+    assert_eq!(values.len(), 4);
+    assert!(values.contains(&Some(0)));
+    assert!(values.contains(&Some(2)));
+    assert!(values.contains(&None));
+}
+
+#[test]
+fn weighted_any_tuple_exhaustive_ignores_weights() {
+    // Weighted tuple any in exhaustive mode should ignore weights and
+    // deterministically cover all sub-generators.
+    let values = (
+        Weight::new(0.1, 0u8..=1),
+        Weight::new(10.0, 10u8..=11),
+    )
+        .unify::<u8>()
+        .checks(Ok::<_, ()>)
+        .map(|result| result.into_item())
+        .collect::<HashSet<_>>();
+
+    assert_eq!(values.len(), 4);
+}
