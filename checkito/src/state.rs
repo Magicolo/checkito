@@ -257,36 +257,84 @@ impl State {
         }
     }
 
-    /// Returns the index of the generator that owns the current exhaustive index,
-    /// updating `self.mode` so the index is local to the chosen generator.
-    /// Returns `None` in random mode.
+    /// Selects one of `cardinalities.len()` branches, returning its index.
     ///
-    /// Uses the same cycling interleave logic as `any_exhaustive`: generators are
-    /// visited repeatedly in order, proportional to their cardinalities. The loop
-    /// terminates for any non-pathological input (at least one non-zero finite
-    /// cardinality, or any `None` cardinality). An input where every cardinality
-    /// is `Some(0)` would loop indefinitely, matching the analogous behaviour of
-    /// `any_exhaustive`.
-    pub(crate) fn any_exhaustive_arm(&mut self, cardinalities: &[Option<u128>]) -> Option<usize> {
-        let Mode::Exhaustive(index) = &mut self.mode else {
-            return None;
-        };
-        if cardinalities.is_empty() {
-            return None;
-        }
-        loop {
-            for (i, &card) in cardinalities.iter().enumerate() {
-                match card {
-                    Some(c) if *index < c => return Some(i),
-                    Some(c) => *index -= c,
-                    None => return Some(i),
+    /// - **Exhaustive mode**: deterministically cycles through branches in
+    ///   proportion to their cardinalities (same interleave logic as
+    ///   `any_exhaustive`), updating the exhaustive index to be local to the
+    ///   chosen branch.
+    /// - **Random mode**: picks uniformly at random.
+    ///
+    /// The loop terminates for any non-pathological input (at least one
+    /// non-zero finite cardinality, or any `None` cardinality). An input where
+    /// every cardinality is `Some(0)` would loop indefinitely.
+    pub(crate) fn any_branch(&mut self, cardinalities: &[Option<u128>]) -> usize {
+        match &mut self.mode {
+            Mode::Exhaustive(index) => {
+                loop {
+                    for (i, &card) in cardinalities.iter().enumerate() {
+                        match card {
+                            Some(c) if *index < c => return i,
+                            Some(c) => *index -= c,
+                            None => return i,
+                        }
+                    }
                 }
+            }
+            Mode::Random(_) => {
+                let end = cardinalities.len().saturating_sub(1);
+                self.with().size(1.0).usize(Range(0, end))
             }
         }
     }
 
-    pub(crate) fn is_exhaustive(&self) -> bool {
-        matches!(self.mode, Mode::Exhaustive(_))
+    /// Like `any_branch` but uses weighted random selection in random mode.
+    /// Weights are ignored in exhaustive mode; only cardinalities determine
+    /// the cycling.
+    pub(crate) fn any_branch_weighted(
+        &mut self,
+        weights: &[f64],
+        cardinalities: &[Option<u128>],
+    ) -> usize {
+        match &mut self.mode {
+            Mode::Exhaustive(index) => {
+                loop {
+                    for (i, &card) in cardinalities.iter().enumerate() {
+                        match card {
+                            Some(c) if *index < c => return i,
+                            Some(c) => *index -= c,
+                            None => return i,
+                        }
+                    }
+                }
+            }
+            Mode::Random(_) => {
+                let total = weights.iter().sum::<f64>().min(f64::MAX);
+                debug_assert!(total > 0.0 && total.is_finite());
+                let mut random = self.with().size(1.0).f64(0.0..=total);
+                debug_assert!(random.is_finite());
+                for (i, &weight) in weights.iter().enumerate() {
+                    if random < weight {
+                        return i;
+                    } else {
+                        random -= weight;
+                    }
+                }
+                unreachable!("weights are finite and positive")
+            }
+        }
+    }
+
+    /// Returns the effective number of retries for the current mode.
+    ///
+    /// In exhaustive mode this is always `0` — each exhaustive index step
+    /// produces exactly one generate attempt. In random mode this is
+    /// `retries` unchanged.
+    pub(crate) fn effective_retries(&self, retries: usize) -> usize {
+        match self.mode {
+            Mode::Exhaustive(_) => 0,
+            Mode::Random(_) => retries,
+        }
     }
 
     pub(crate) fn repeat<'a, 'b, G: Generate + ?Sized>(

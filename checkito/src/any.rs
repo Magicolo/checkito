@@ -6,7 +6,6 @@ use crate::{
     state::{State, Weight},
     utility::tuples,
 };
-use core::f64;
 use ref_cast::RefCast;
 use std::{rc::Rc, sync::Arc};
 
@@ -186,15 +185,9 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_exhaustive_arm(&[$( self.0.$is.cardinality(),)*]) {
-                    $(Some($is) => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
-                    _ => {
-                        let value = state.with().size(1.0).u8(..$c);
-                        match value {
-                            $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
-                            _ => unreachable!(),
-                        }
-                    }
+                match state.any_branch(&[$( self.0.$is.cardinality(),)*]) {
+                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
+                    _ => unreachable!(),
                 }
             }
 
@@ -216,23 +209,12 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_exhaustive_arm(&[$( self.$is.cardinality(),)*]) {
-                    $(Some($is) => orn::$n::Or::$ts(self.$is.value().generate(state)),)*
-                    _ => {
-                        let _total = ($(self.$is.weight() +)* 0.0).min(f64::MAX);
-                        debug_assert!(_total > 0.0 && _total.is_finite());
-                        let mut _random = state.with().size(1.0).f64(0.0..=_total);
-                        debug_assert!(_random.is_finite());
-                        $(
-                            let weight = self.$is.weight();
-                            if _random < weight {
-                                return orn::$n::Or::$ts(self.$is.value().generate(state));
-                            } else {
-                                _random -= weight;
-                            }
-                        )*
-                        unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");
-                    }
+                match state.any_branch_weighted(
+                    &[$( self.$is.weight(),)*],
+                    &[$( self.$is.cardinality(),)*],
+                ) {
+                    $($is => orn::$n::Or::$ts(self.$is.value().generate(state)),)*
+                    _ => unreachable!("any_branch_weighted always returns an index within bounds"),
                 }
             }
 

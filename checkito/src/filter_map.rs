@@ -24,18 +24,10 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        if state.is_exhaustive() {
-            let inner = self.generator.generate(state);
-            let item = inner.item();
-            return Shrinker {
-                shrinker: if (self.filter)(item).is_some() { Some(inner) } else { None },
-                map: self.filter.clone(),
-            };
-        }
+        let retries = state.effective_retries(self.retries);
         let mut outer = None;
-        for i in 0..=self.retries {
-            // TODO: Will this work properly in exhaustive mode?
-            let sizes = Sizes::from_ratio(i, self.retries, state.sizes());
+        for i in 0..=retries {
+            let sizes = Sizes::from_ratio(i, retries, state.sizes());
             let inner = self.generator.generate(state.with().sizes(sizes).as_mut());
             let item = inner.item();
             if (self.filter)(item).is_some() {
