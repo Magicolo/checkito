@@ -125,16 +125,16 @@ macro_rules! slice {
     };
 }
 
-slice!(Any<[G]>, any_indexed, []);
-slice!(Any<[G; N]>, any_indexed, [N]);
-slice!(Any<Vec<G>>, any_indexed, []);
+slice!(Any<[G]>, any, []);
+slice!(Any<[G; N]>, any, [N]);
+slice!(Any<Vec<G>>, any, []);
 slice!([Weight<G>], any_weighted, []);
 slice!([Weight<G>; N], any_weighted, [N]);
 slice!(Vec<Weight<G>>, any_weighted, []);
 
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
-    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
+    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl<$($ts: Generate,)*> Generate for orn::$n::Or<$($ts,)*> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
@@ -185,10 +185,7 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_branch(&[$( self.0.$is.cardinality(),)*]) {
-                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
-                    _ => unreachable!(),
-                }
+                state.$n($(&self.0.$is,)*).generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
@@ -209,12 +206,9 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_branch_weighted(
-                    &[$( self.$is.weight(),)*],
-                    &[$( self.$is.cardinality(),)*],
-                ) {
-                    $($is => orn::$n::Or::$ts(self.$is.value().generate(state)),)*
-                    _ => unreachable!("any_branch_weighted always returns an index within bounds"),
+                match state.any_weighted(&[$(self.$is.as_ref().map(orn::$n::Or::$ts),)*]) {
+                    Some(generator) => generator.generate(state),
+                    None => unreachable!(),
                 }
             }
 

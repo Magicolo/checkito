@@ -4,7 +4,7 @@ use crate::{
     collect::Count,
     generate::{FullGenerate, Generate},
     shrink::Shrink,
-    state::State,
+    state::{State, Weight},
     utility::{self, tuples},
 };
 use core::{
@@ -12,6 +12,7 @@ use core::{
     marker::PhantomData,
     ops::{self, Add, Div, Mul, Sub},
 };
+use orn::{Or2, Or5};
 
 /// Direction for shrinking numeric values.
 ///
@@ -591,14 +592,19 @@ pub mod char {
         const CARDINALITY: Option<u128> = cardinality(char::MIN, char::MAX);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            match state.any_branch(&[Range(Char::MIN, Char::MAX).cardinality(), SpecialType::CARDINALITY]) {
-                0 => Range(Char::MIN, Char::MAX).generate(state),
-                _ => Shrinker(super::Shrinker {
+            match (
+                Weight::one(SPECIAL),
+                Weight::new(25.0, Range(Char::MIN, Char::MAX)),
+            )
+                .generate(state)
+            {
+                Or2::T0(item) => Shrinker(super::Shrinker {
                     start: 0,
                     end: char::MAX as _,
-                    item: Special::<char>::VALUE.generate(state) as _,
+                    item: item.into::<char>() as _,
                     direction: Direction::None,
                 }),
+                Or2::T1(shrinker) => shrinker,
             }
         }
     }
@@ -678,14 +684,17 @@ macro_rules! integer {
             const CARDINALITY: Option<u128> = cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_branch(&[cardinality($type::MIN, $type::MAX), SpecialType::CARDINALITY]) {
-                    0 => Range($type::MIN, $type::MAX).generate(state),
-                    _ => Shrinker {
+                match (
+                    Weight::one(SPECIAL),
+                    Weight::new(50.0, Range($type::MIN, $type::MAX)))
+                .generate(state) {
+                    Or2::T0(item) => Shrinker {
                         start: $type::MIN,
                         end: $type::MAX,
-                        item: Special::<$type>::VALUE.generate(state),
+                        item: item.into(),
                         direction: Direction::None
                     },
+                    Or2::T1(shrinker) => shrinker,
                 }
             }
         }
@@ -768,23 +777,20 @@ macro_rules! floating {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_branch(&[
-                    ($type::MIN..=$type::MAX).cardinality(),
-                    (-$type::EPSILON.recip()..=$type::EPSILON.recip()).cardinality(),
-                    ($type::MIN.recip()..=$type::MAX.recip()).cardinality(),
-                    (-$type::EPSILON..=$type::EPSILON).cardinality(),
-                    SpecialType::CARDINALITY,
-                ]) {
-                    0 => ($type::MIN..=$type::MAX).generate(state),
-                    1 => (-$type::EPSILON.recip()..=$type::EPSILON.recip()).generate(state),
-                    2 => ($type::MIN.recip()..=$type::MAX.recip()).generate(state),
-                    3 => (-$type::EPSILON..=$type::EPSILON).generate(state),
-                    _ => Shrinker {
+                match (
+                    Weight::one(SPECIAL),
+                    Weight::new(10.0, Range($type::MIN, $type::MAX)),
+                    Weight::new(10.0, Range(-$type::EPSILON.recip(), $type::EPSILON.recip())),
+                    Weight::new(5.0, Range($type::MIN.recip(), $type::MAX.recip())),
+                    Weight::new(5.0, Range(-$type::EPSILON, $type::EPSILON)),
+                ).generate(state) {
+                    Or5::T0(item) => Shrinker {
                         start: $type::MIN,
                         end: $type::MAX,
-                        item: Special::<$type>::VALUE.generate(state),
+                        item: item.into(),
                         direction: Direction::None
                     },
+                    Or5::T1(shrinker) | Or5::T2(shrinker) | Or5::T3(shrinker) | Or5::T4(shrinker) => shrinker,
                 }
             }
         }
@@ -823,7 +829,7 @@ macro_rules! floating {
         same!($type);
         ranges!(FLOATING, $type);
     };
-    ($($types: ident),*) => { $(pub mod $types { use super::*; floating!($types); })* };
+    ($($type: ident),* $(,)?) => { $(pub mod $type { use super::*; floating!($type); })* };
 }
 
 macro_rules! tuple {

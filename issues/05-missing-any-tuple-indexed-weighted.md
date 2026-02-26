@@ -2,7 +2,7 @@
 
 ## Summary
 
-`State` exposes `any_indexed` and `any_weighted` for slice-based random
+`State` exposes `any` and `any_weighted` for slice-based random
 selection but has no equivalent for tuple-based selection where each element
 is a different type. This forces the `Any<(G0, G1, ...)>` tuple implementation
 to use a raw `u8` draw instead of the proper exhaustive-mode-aware helper.
@@ -17,9 +17,9 @@ to use a raw `u8` draw instead of the proper exhaustive-mode-aware helper.
 
 ## Context
 
-`State::any_indexed` (state.rs:210) handles homogeneous slices:
+`State::any` (state.rs:210) handles homogeneous slices:
 ```rust
-pub(crate) fn any_indexed<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
+pub(crate) fn any<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
     let end = generators.len().checked_sub(1)?;
     match &mut self.mode {
         Mode::Random(_) => {
@@ -34,7 +34,7 @@ pub(crate) fn any_indexed<'a, G: Generate>(&mut self, generators: &'a [G]) -> Op
 There is no corresponding method for heterogeneous tuples. The result is that
 `Any<(G0, G1, ...)>` (the macro-generated tuple impl in `any.rs`) uses a
 direct `u8` draw and does not benefit from the exhaustive-index routing that
-`any_indexed` provides. This is the root cause of the bug described in Issue 04.
+`any` provides. This is the root cause of the bug described in Issue 04.
 
 ## Proposed Fix
 

@@ -1,7 +1,7 @@
 use crate::{
     GENERATES, Generate, Shrink,
     primitive::{Range, u8::U8},
-    utility,
+    utility::{self, tuples},
 };
 use core::{
     iter::FusedIterator,
@@ -9,6 +9,7 @@ use core::{
     ops::{self, Bound},
 };
 use fastrand::Rng;
+use orn::Or2;
 use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,13 +59,41 @@ impl<T> Weight<T> {
     pub const fn value(&self) -> &T {
         &self.generator
     }
+
+    pub const fn as_ref(&self) -> Weight<&T> {
+        Weight {
+            weight: self.weight,
+            generator: &self.generator,
+        }
+    }
+
+    pub const fn as_mut(&mut self) -> Weight<&mut T> {
+        Weight {
+            weight: self.weight,
+            generator: &mut self.generator,
+        }
+    }
+
+    pub fn map<U: Generate>(self, map: impl FnOnce(T) -> U) -> Weight<U> {
+        Weight {
+            weight: self.weight,
+            generator: map(self.generator),
+        }
+    }
 }
 
 impl<G: Generate> Weight<G> {
-    pub fn new(weight: f64, generator: G) -> Self {
+    pub const fn new(weight: f64, generator: G) -> Self {
         assert!(weight.is_finite());
         assert!(weight >= f64::EPSILON);
         Self { weight, generator }
+    }
+
+    pub const fn one(generator: G) -> Self {
+        Self {
+            weight: 1.0,
+            generator,
+        }
     }
 }
 
@@ -113,17 +142,15 @@ impl State {
         }
     }
 
-    pub(crate) fn any_exhaustive<I: IntoIterator<Item: Generate, IntoIter: Clone>>(
+    pub(crate) fn any_exhaustive<I: IntoIterator<Item = Option<u128>, IntoIter: Clone>>(
         index: &mut u128,
-        generators: I,
-    ) -> Option<I::Item> {
-        for generator in generators.into_iter().cycle() {
-            match generator.cardinality() {
-                Some(cardinality) if *index < cardinality => {
-                    return Some(generator);
-                }
+        cardinalities: I,
+    ) -> Option<usize> {
+        for (i, cardinality) in cardinalities.into_iter().enumerate().cycle() {
+            match cardinality {
+                Some(cardinality) if *index < cardinality => return Some(i),
                 Some(cardinality) => *index -= cardinality,
-                None => return Some(generator),
+                None => return Some(i),
             }
         }
         None
@@ -207,14 +234,48 @@ impl State {
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 
-    pub(crate) fn any_indexed<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
-        let end = generators.len().checked_sub(1)?;
+    pub(crate) fn any2_weighted<G: Generate, H: Generate>(
+        &mut self,
+        one: Weight<G>,
+        two: Weight<H>,
+    ) -> Or2<G, H> {
         match &mut self.mode {
             Mode::Random(_) => {
+                let total = one.weight + two.weight;
+                debug_assert!(total > 0.0 && total.is_finite());
+                let random = self.with().size(1.0).f64(0.0..=total);
+                debug_assert!(random.is_finite());
+                if random < one.weight {
+                    Or2::T0(one.generator)
+                } else {
+                    Or2::T1(two.generator)
+                }
+            }
+            Mode::Exhaustive(index) => {
+                match Self::any_exhaustive(index, [one.cardinality(), two.cardinality()]) {
+                    Some(0) => Or2::T0(one.generator),
+                    Some(1) => Or2::T1(two.generator),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    pub(crate) fn any<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
+        if generators.is_empty() {
+            return None;
+        }
+
+        match &mut self.mode {
+            Mode::Random(_) => {
+                let end = generators.len().checked_sub(1)?;
                 let index = self.with().size(1.0).usize(Range(0, end));
                 generators.get(index)
             }
-            Mode::Exhaustive(index) => Self::any_exhaustive(index, generators),
+            Mode::Exhaustive(index) => generators.get(Self::any_exhaustive(
+                index,
+                generators.iter().map(G::cardinality),
+            )?),
         }
     }
 
@@ -251,77 +312,12 @@ impl State {
                     "there is at least one item in the slice and weights are finite and `> 0.0`"
                 );
             }
-            Mode::Exhaustive(index) => {
-                Self::any_exhaustive(index, generators.iter().map(Weight::value))
-            }
-        }
-    }
-
-    /// Selects one of `cardinalities.len()` branches, returning its index.
-    ///
-    /// - **Exhaustive mode**: deterministically cycles through branches in
-    ///   proportion to their cardinalities (same interleave logic as
-    ///   `any_exhaustive`), updating the exhaustive index to be local to the
-    ///   chosen branch.
-    /// - **Random mode**: picks uniformly at random.
-    ///
-    /// The loop terminates for any non-pathological input (at least one
-    /// non-zero finite cardinality, or any `None` cardinality). An input where
-    /// every cardinality is `Some(0)` would loop indefinitely.
-    pub(crate) fn any_branch(&mut self, cardinalities: &[Option<u128>]) -> usize {
-        match &mut self.mode {
-            Mode::Exhaustive(index) => {
-                loop {
-                    for (i, &card) in cardinalities.iter().enumerate() {
-                        match card {
-                            Some(c) if *index < c => return i,
-                            Some(c) => *index -= c,
-                            None => return i,
-                        }
-                    }
-                }
-            }
-            Mode::Random(_) => {
-                let end = cardinalities.len().saturating_sub(1);
-                self.with().size(1.0).usize(Range(0, end))
-            }
-        }
-    }
-
-    /// Like `any_branch` but uses weighted random selection in random mode.
-    /// Weights are ignored in exhaustive mode; only cardinalities determine
-    /// the cycling.
-    pub(crate) fn any_branch_weighted(
-        &mut self,
-        weights: &[f64],
-        cardinalities: &[Option<u128>],
-    ) -> usize {
-        match &mut self.mode {
-            Mode::Exhaustive(index) => {
-                loop {
-                    for (i, &card) in cardinalities.iter().enumerate() {
-                        match card {
-                            Some(c) if *index < c => return i,
-                            Some(c) => *index -= c,
-                            None => return i,
-                        }
-                    }
-                }
-            }
-            Mode::Random(_) => {
-                let total = weights.iter().sum::<f64>().min(f64::MAX);
-                debug_assert!(total > 0.0 && total.is_finite());
-                let mut random = self.with().size(1.0).f64(0.0..=total);
-                debug_assert!(random.is_finite());
-                for (i, &weight) in weights.iter().enumerate() {
-                    if random < weight {
-                        return i;
-                    } else {
-                        random -= weight;
-                    }
-                }
-                unreachable!("weights are finite and positive")
-            }
+            Mode::Exhaustive(index) => generators
+                .get(Self::any_exhaustive(
+                    index,
+                    generators.iter().map(Weight::value).map(G::cardinality),
+                )?)
+                .map(Weight::value),
         }
     }
 
@@ -818,6 +814,33 @@ macro_rules! floating {
         $(floating!($number, $bits);)*
     }
 }
+
+macro_rules! or {
+    ($n:ident, $c:tt) => {};
+    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
+        impl State {
+            pub fn $n<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
+                match &mut self.mode {
+                    Mode::Random(_) => {
+                        match self.with().size(1.0).u8(0..=$c) {
+                            $($is => orn::$n::Or::$ts($ps),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                    Mode::Exhaustive(index) => {
+                        match Self::any_exhaustive(index, [$($ps.cardinality(),)*]) {
+                            $(Some($is) => orn::$n::Or::$ts($ps),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+        }
+    };
+}
+
+tuples!(or);
+
 ranges!(
     char,
     |value: char| char::from_u32(u32::saturating_add(value as _, 1))

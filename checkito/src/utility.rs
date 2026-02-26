@@ -146,7 +146,7 @@ pub(crate) mod f64 {
 }
 
 macro_rules! tuples {
-    ($m:ident) => {
+    ($m: ident) => {
         $m!(or0, 0);
         $m!(or1, 1, p0, T0, 0);
         $m!(or2, 2, p0, T0, 0, p1, T1, 1);

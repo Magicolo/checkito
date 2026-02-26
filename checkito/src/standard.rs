@@ -1,4 +1,5 @@
 use crate::{
+    any,
     any::Any,
     cardinality,
     convert::Convert,
@@ -38,10 +39,7 @@ pub mod option {
         const CARDINALITY: Option<u128> = cardinality::any_sum(G::CARDINALITY, Some(1));
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            match state.any_branch(&[self.0.cardinality(), Some(1)]) {
-                0 => Shrinker(true, Some(self.0.generate(state))),
-                _ => Shrinker(false, None),
-            }
+            any((None::<G>, Some(&self.0))).generate(state).into()
         }
 
         fn cardinality(&self) -> Option<u128> {
@@ -57,7 +55,7 @@ pub mod option {
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
             Shrinker(
-                true,
+                self.is_some(),
                 self.as_ref().map(|generator| generator.generate(state)),
             )
         }
@@ -108,10 +106,9 @@ pub mod result {
         const CARDINALITY: Option<u128> = cardinality::any_sum(T::CARDINALITY, E::CARDINALITY);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            match state.any_branch(&[self.0.cardinality(), self.1.cardinality()]) {
-                0 => Shrinker(Ok(self.0.generate(state))),
-                _ => Shrinker(Err(self.1.generate(state))),
-            }
+            any((Ok::<_, E>(&self.0), Err::<T, _>(&self.1)))
+                .generate(state)
+                .into()
         }
 
         fn cardinality(&self) -> Option<u128> {
