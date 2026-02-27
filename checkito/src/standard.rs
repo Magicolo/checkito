@@ -254,7 +254,6 @@ pub mod number {
 
 pub mod with {
     use super::*;
-    use core::cell::RefCell;
 
     #[derive(Debug, Clone)]
     pub struct With<F>(pub(crate) F);
@@ -265,49 +264,17 @@ pub mod with {
         }
     }
 
-    /// Shrinker that caches the generated value to ensure consistent `item()`
-    /// calls.
-    ///
-    /// The `RefCell<Option<T>>` is used to cache the generated value on first
-    /// access. This ensures that multiple calls to `item()` return the same
-    /// value, which is required by the `Shrink` trait contract.
-    ///
-    /// The cached value is `None` initially and populated on the first `item()`
-    /// call, then consumed (taken) and returned. Subsequent calls will
-    /// regenerate the value.
-    pub struct Shrinker<T, F> {
-        generator: F,
-        cached: RefCell<Option<T>>,
-    }
+    #[derive(Debug, Clone)]
+    pub struct Shrinker<F>(F);
 
-    impl<T, F: core::fmt::Debug> core::fmt::Debug for Shrinker<T, F> {
-        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            f.debug_struct("Shrinker")
-                .field("generator", &self.generator)
-                .finish_non_exhaustive()
-        }
-    }
-
-    impl<T, F: Clone> Clone for Shrinker<T, F> {
-        fn clone(&self) -> Self {
-            Self {
-                generator: self.generator.clone(),
-                cached: RefCell::new(None),
-            }
-        }
-    }
-
-    impl<T, F: Fn() -> T + Clone> Generate for With<F> {
+    impl<T, F: FnOnce() -> T + Clone> Generate for With<F> {
         type Item = T;
-        type Shrink = Shrinker<T, F>;
+        type Shrink = Shrinker<F>;
 
         const CARDINALITY: Option<u128> = Some(1);
 
         fn generate(&self, _state: &mut State) -> Self::Shrink {
-            Shrinker {
-                generator: self.0.clone(),
-                cached: RefCell::new(None),
-            }
+            Shrinker(self.0.clone())
         }
 
         fn cardinality(&self) -> Option<u128> {
@@ -315,20 +282,11 @@ pub mod with {
         }
     }
 
-    impl<T, F: Fn() -> T + Clone> Shrink for Shrinker<T, F> {
+    impl<T, F: FnOnce() -> T + Clone> Shrink for Shrinker<F> {
         type Item = T;
 
         fn item(&self) -> Self::Item {
-            let mut cached = self.cached.borrow_mut();
-            if cached.is_none() {
-                *cached = Some((self.generator)());
-            }
-            // Safety: The value is guaranteed to be Some after the check above.
-            // We take it to transfer ownership to the caller, which is required
-            // since item() returns T by value, not &T.
-            cached
-                .take()
-                .expect("cached value must be Some after initialization")
+            self.0.clone()()
         }
 
         fn shrink(&mut self) -> Option<Self> {
