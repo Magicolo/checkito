@@ -233,16 +233,14 @@ impl State {
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 
-    pub(crate) fn any<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
+    pub(crate) fn any_uniform<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
         if generators.is_empty() {
             return None;
         }
 
         match &mut self.mode {
             Mode::Random(_) => {
-                let end = generators.len().checked_sub(1)?;
-                let index = self.with().size(1.0).usize(Range(0, end));
-                generators.get(index)
+                generators.get(self.with().size(1.0).usize(Range(0, generators.len() - 1)))
             }
             Mode::Exhaustive(index) => generators.get(Self::any_exhaustive(
                 index,
@@ -269,20 +267,14 @@ impl State {
                 debug_assert!(total > 0.0 && total.is_finite());
                 let mut random = self.with().size(1.0).f64(0.0..=total);
                 debug_assert!(random.is_finite());
-                for Weight {
-                    weight,
-                    generator: value,
-                } in generators
-                {
-                    if random < *weight {
-                        return Some(value);
+                for Weight { weight, generator } in generators {
+                    if random <= *weight {
+                        return Some(generator);
                     } else {
                         random -= weight;
                     }
                 }
-                unreachable!(
-                    "there is at least one item in the slice and weights are finite and `> 0.0`"
-                );
+                unreachable!();
             }
             Mode::Exhaustive(index) => generators
                 .get(Self::any_exhaustive(
@@ -794,7 +786,7 @@ macro_rules! or {
             pub fn $u<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {
-                        match self.with().size(1.0).u8(0..=$c) {
+                        match self.with().size(1.0).u8(Range(0, $c - 1)) {
                             $($is => orn::$n::Or::$ts($ps),)*
                             _ => unreachable!(),
                         }
@@ -815,7 +807,7 @@ macro_rules! or {
                         debug_assert!(total > 0.0 && total.is_finite());
                         let mut _random = self.with().size(1.0).f64(0.0..=total);
                         debug_assert!(_random.is_finite());
-                        $(if _random < $ps.weight {
+                        $(if _random <= $ps.weight {
                             return orn::$n::Or::$ts($ps.generator);
                         } else {
                             _random -= $ps.weight;

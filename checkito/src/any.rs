@@ -125,9 +125,9 @@ macro_rules! slice {
     };
 }
 
-slice!(Any<[G]>, any, []);
-slice!(Any<[G; N]>, any, [N]);
-slice!(Any<Vec<G>>, any, []);
+slice!(Any<[G]>, any_uniform, []);
+slice!(Any<[G; N]>, any_uniform, [N]);
+slice!(Any<Vec<G>>, any_uniform, []);
 slice!([Weight<G>], any_weighted, []);
 slice!([Weight<G>; N], any_weighted, [N]);
 slice!(Vec<Weight<G>>, any_weighted, []);
