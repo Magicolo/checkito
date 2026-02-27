@@ -1,8 +1,4 @@
-use crate::{
-    generate::Generate,
-    shrink::Shrink,
-    state::{Sizes, State},
-};
+use crate::{generate::Generate, shrink::Shrink, state::State};
 
 #[derive(Clone, Debug)]
 pub struct Filter<G: ?Sized, F> {
@@ -24,19 +20,10 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let retries = state.effective_retries(self.retries);
-        let mut outer = None;
-        for i in 0..=retries {
-            let sizes = Sizes::from_ratio(i, retries, state.sizes());
-            let inner = self.generator.generate(state.with().sizes(sizes).as_mut());
-            let item = inner.item();
-            if (self.filter)(&item) {
-                outer = Some(inner);
-                break;
-            }
-        }
         Shrinker {
-            shrinker: outer,
+            shrinker: state.retry(&self.generator, self.retries, |shrinker| {
+                (self.filter)(&shrinker.item())
+            }),
             filter: self.filter.clone(),
         }
     }

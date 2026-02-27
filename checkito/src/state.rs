@@ -285,25 +285,37 @@ impl State {
         }
     }
 
-    /// Returns the effective number of retries for the current mode.
-    ///
-    /// In exhaustive mode this is always `0` — each exhaustive index step
-    /// produces exactly one generate attempt. In random mode this is
-    /// `retries` unchanged.
-    pub(crate) fn effective_retries(&self, retries: usize) -> usize {
-        match self.mode {
-            Mode::Exhaustive(_) => 0,
-            Mode::Random(_) => retries,
+    pub(crate) fn retry<F: FnMut(&G::Shrink) -> bool, G: Generate>(
+        &mut self,
+        generator: G,
+        retries: usize,
+        mut filter: F,
+    ) -> Option<G::Shrink> {
+        match &mut self.mode {
+            Mode::Random(_) => {
+                for i in 0..=retries {
+                    let sizes = Sizes::from_ratio(i, retries, self.sizes());
+                    let shrink = generator.generate(self.with().sizes(sizes).as_mut());
+                    if filter(&shrink) {
+                        return Some(shrink);
+                    }
+                }
+                None
+            }
+            Mode::Exhaustive(_) => {
+                let shrink = generator.generate(self);
+                filter(&shrink).then_some(shrink)
+            }
         }
     }
 
-    pub(crate) fn repeat<'a, 'b, G: Generate + ?Sized>(
+    pub(crate) fn repeat<'a, G: Generate>(
         &'a mut self,
-        generator: &'b G,
+        generator: G,
         range: Range<usize>,
-    ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
+    ) -> impl Iterator<Item = G::Shrink> + use<'a, G> {
         let count = match &mut self.mode {
-            Mode::Random(_) => range.generate(self).item(),
+            Mode::Random(_) => self.usize(range),
             Mode::Exhaustive(index) => match generator.cardinality() {
                 Some(cardinality) => {
                     // Exhaustive `repeat` chooses a *length* first, then generates
