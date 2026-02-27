@@ -133,8 +133,8 @@ slice!([Weight<G>; N], any_weighted, [N]);
 slice!(Vec<Weight<G>>, any_weighted, []);
 
 macro_rules! tuple {
-    ($n:ident, $c:tt) => {};
-    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
+    ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
+    ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl<$($ts: Generate,)*> Generate for orn::$n::Or<$($ts,)*> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
@@ -185,7 +185,7 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                state.$n($(&self.0.$is,)*).generate(state)
+                state.$u($(&self.0.$is,)*).generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
@@ -206,10 +206,7 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match state.any_weighted(&[$(self.$is.as_ref().map(orn::$n::Or::$ts),)*]) {
-                    Some(generator) => generator.generate(state),
-                    None => unreachable!(),
-                }
+                state.$w($(self.$is.as_ref(),)*).generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
@@ -221,4 +218,4 @@ macro_rules! tuple {
     };
 }
 
-tuples!(tuple);
+tuples!(@any tuple);

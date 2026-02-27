@@ -9,7 +9,6 @@ use core::{
     ops::{self, Bound},
 };
 use fastrand::Rng;
-use orn::Or2;
 use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -232,33 +231,6 @@ impl State {
         let Range(start, end) = range.into();
         let value = self.u32(Range(start as u32, end as u32));
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
-    }
-
-    pub(crate) fn any2_weighted<G: Generate, H: Generate>(
-        &mut self,
-        one: Weight<G>,
-        two: Weight<H>,
-    ) -> Or2<G, H> {
-        match &mut self.mode {
-            Mode::Random(_) => {
-                let total = one.weight + two.weight;
-                debug_assert!(total > 0.0 && total.is_finite());
-                let random = self.with().size(1.0).f64(0.0..=total);
-                debug_assert!(random.is_finite());
-                if random < one.weight {
-                    Or2::T0(one.generator)
-                } else {
-                    Or2::T1(two.generator)
-                }
-            }
-            Mode::Exhaustive(index) => {
-                match Self::any_exhaustive(index, [one.cardinality(), two.cardinality()]) {
-                    Some(0) => Or2::T0(one.generator),
-                    Some(1) => Or2::T1(two.generator),
-                    _ => unreachable!(),
-                }
-            }
-        }
     }
 
     pub(crate) fn any<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
@@ -817,9 +789,9 @@ macro_rules! floating {
 
 macro_rules! or {
     ($n:ident, $c:tt) => {};
-    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
+    ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl State {
-            pub fn $n<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
+            pub fn $u<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {
                         match self.with().size(1.0).u8(0..=$c) {
@@ -835,11 +807,35 @@ macro_rules! or {
                     }
                 }
             }
+
+            #[allow(dead_code)]
+            pub(crate) fn $w<$($ts: Generate,)*>(&mut self, $($ps: Weight<$ts>,)*) -> orn::$n::Or<$($ts,)*> {
+                match &mut self.mode {
+                    Mode::Random(_) => {
+                        let mut _total = $($ps.weight +)* 0.0f64;
+                        debug_assert!(_total > 0.0 && _total.is_finite());
+                        let random = self.with().size(1.0).f64(0.0..=_total);
+                        debug_assert!(random.is_finite());
+                        $(if random < $ps.weight {
+                            return orn::$n::Or::$ts($ps.generator);
+                        } else {
+                            _total -= $ps.weight;
+                        })*
+                        unreachable!();
+                    }
+                    Mode::Exhaustive(index) => {
+                        match Self::any_exhaustive(index, [$($ps.generator.cardinality(),)*]) {
+                            $(Some($is) => orn::$n::Or::$ts($ps.generator),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
         }
     };
 }
 
-tuples!(or);
+tuples!(@any or);
 
 ranges!(
     char,
