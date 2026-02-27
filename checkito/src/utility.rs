@@ -146,60 +146,46 @@ pub(crate) mod f64 {
 }
 
 macro_rules! tuples {
-    ($m:ident) => {
-        $m!(or0, 0);
-        $m!(or1, 1, p0, T0, 0);
-        $m!(or2, 2, p0, T0, 0, p1, T1, 1);
-        $m!(or3, 3, p0, T0, 0, p1, T1, 1, p2, T2, 2);
-        $m!(or4, 4, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3);
-        $m!(
-            or5, 5, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4
+    ($m: ident) => {
+        tuples!(@recurse $m
+            [or0, 0, or1, 1, or2, 2, or3, 3, or4, 4, or5, 5, or6, 6, or7, 7, or8, 8, or9, 9, or10, 10, or11, 11, or12, 12, or13, 13, or14, 14, or15, 15,]
+            []
+            [p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6, p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11, p12, T12, 12, p13, T13, 13, p14, T14, 14, p15, T15, 15,]);
+    };
+    ($m: ident, $e0: tt, $e1: tt, $e2: tt, $e3: tt, $e4: tt, $e5: tt, $e6: tt, $e7: tt, $e8: tt, $e9: tt, $e10: tt, $e11: tt, $e12: tt, $e13: tt, $e14: tt, $e15: tt $(,)?) => {
+        tuples!(@recurse $m
+            [[$e0], or0, 0, [$e1], or1, 1, [$e2], or2, 2, [$e3], or3, 3, [$e4], or4, 4, [$e5], or5, 5, [$e6], or6, 6, [$e7], or7, 7, [$e8], or8, 8, [$e9], or9, 9, [$e10], or10, 10, [$e11], or11, 11, [$e12], or12, 12, [$e13], or13, 13, [$e14], or14, 14, [$e15], or15, 15,]
+            []
+            [p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6, p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11, p12, T12, 12, p13, T13, 13, p14, T14, 14, p15, T15, 15,]);
+    };
+    (@any $m: ident) => {
+        tuples!(
+            $m,
+            [any0_uniform, any0_weighted],
+            [any1_uniform, any1_weighted],
+            [any2_uniform, any2_weighted],
+            [any3_uniform, any3_weighted],
+            [any4_uniform, any4_weighted],
+            [any5_uniform, any5_weighted],
+            [any6_uniform, any6_weighted],
+            [any7_uniform, any7_weighted],
+            [any8_uniform, any8_weighted],
+            [any9_uniform, any9_weighted],
+            [any10_uniform, any10_weighted],
+            [any11_uniform, any11_weighted],
+            [any12_uniform, any12_weighted],
+            [any13_uniform, any13_weighted],
+            [any14_uniform, any14_weighted],
+            [any15_uniform, any15_weighted],
         );
-        $m!(
-            or6, 6, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5
-        );
-        $m!(
-            or7, 7, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6
-        );
-        $m!(
-            or8, 8, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7
-        );
-        $m!(
-            or9, 9, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8
-        );
-        $m!(
-            or10, 10, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9
-        );
-        $m!(
-            or11, 11, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10
-        );
-        $m!(
-            or12, 12, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11
-        );
-        $m!(
-            or13, 13, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11, p12, T12, 12
-        );
-        $m!(
-            or14, 14, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11, p12, T12, 12, p13, T13,
-            13
-        );
-        $m!(
-            or15, 15, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11, p12, T12, 12, p13, T13,
-            13, p14, T14, 14
-        );
-        $m!(
-            or16, 16, p0, T0, 0, p1, T1, 1, p2, T2, 2, p3, T3, 3, p4, T4, 4, p5, T5, 5, p6, T6, 6,
-            p7, T7, 7, p8, T8, 8, p9, T9, 9, p10, T10, 10, p11, T11, 11, p12, T12, 12, p13, T13,
-            13, p14, T14, 14, p15, T15, 15
-        );
+    };
+    (@recurse $m: ident [] [$($ps: ident, $ts: ident, $is: tt,)*] []) => {};
+    (@recurse $m: ident
+        [$([$e: tt],)? $n: ident, $c: tt, $($([$es: tt],)? $ns: ident, $cs: tt,)*]
+        [$($ps: ident, $ts: ident, $is: tt,)*]
+        [$q: ident, $u: ident, $j: tt, $($qs: ident, $us: ident, $js: tt,)*]) => {
+        $m!($n, $c $(, $e)? $(, $ps, $ts, $is)*);
+        tuples!(@recurse $m [$($([$es],)? $ns, $cs,)*] [$($ps, $ts, $is,)* $q, $u, $j,] [$($qs, $us, $js,)*]);
     };
 }
 

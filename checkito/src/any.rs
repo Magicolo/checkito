@@ -6,7 +6,6 @@ use crate::{
     state::{State, Weight},
     utility::tuples,
 };
-use core::f64;
 use ref_cast::RefCast;
 use std::{rc::Rc, sync::Arc};
 
@@ -126,16 +125,16 @@ macro_rules! slice {
     };
 }
 
-slice!(Any<[G]>, any_indexed, []);
-slice!(Any<[G; N]>, any_indexed, [N]);
-slice!(Any<Vec<G>>, any_indexed, []);
+slice!(Any<[G]>, any_uniform, []);
+slice!(Any<[G; N]>, any_uniform, [N]);
+slice!(Any<Vec<G>>, any_uniform, []);
 slice!([Weight<G>], any_weighted, []);
 slice!([Weight<G>; N], any_weighted, [N]);
 slice!(Vec<Weight<G>>, any_weighted, []);
 
 macro_rules! tuple {
-    ($n:ident, $c:tt) => {};
-    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
+    ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
+    ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl<$($ts: Generate,)*> Generate for orn::$n::Or<$($ts,)*> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
@@ -186,14 +185,7 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: In exhaustive mode, one can be determine which generator
-                // to use with the current exhaustive index.
-                // See `State::any_exhaustive`.
-                let value = state.with().size(1.0).u8(..$c);
-                match value {
-                    $($is => orn::$n::Or::$ts(self.0.$is.generate(state)),)*
-                    _ => unreachable!(),
-                }
+                state.$u($(&self.0.$is,)*).generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
@@ -214,22 +206,7 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                // TODO: In exhaustive mode, the state will try to cover all possible
-                // floats between '0.0..=_total' and some generators may remain uncovered.
-                // Instead, do something similar as `State::any_exhaustive`.
-                let _total = ($(self.$is.weight() +)* 0.0).min(f64::MAX);
-                debug_assert!(_total > 0.0 && _total.is_finite());
-                let mut _random = state.with().size(1.0).f64(0.0..=_total);
-                debug_assert!(_random.is_finite());
-                $(
-                    let weight = self.$is.weight();
-                    if _random < weight {
-                        return orn::$n::Or::$ts(self.$is.value().generate(state));
-                    } else {
-                        _random -= weight;
-                    }
-                )*
-                unreachable!("there is at least one item in the tuple and weights are finite and `> 0.0`");
+                state.$w($(self.$is.as_ref(),)*).generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
@@ -241,4 +218,4 @@ macro_rules! tuple {
     };
 }
 
-tuples!(tuple);
+tuples!(@any tuple);

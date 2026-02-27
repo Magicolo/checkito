@@ -1,8 +1,4 @@
-use crate::{
-    generate::Generate,
-    shrink::Shrink,
-    state::{Sizes, State},
-};
+use crate::{generate::Generate, shrink::Shrink, state::State};
 
 #[derive(Debug, Clone)]
 pub struct FilterMap<G: ?Sized, F> {
@@ -24,19 +20,10 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let mut outer = None;
-        for i in 0..=self.retries {
-            // TODO: Will this work properly in exhaustive mode?
-            let sizes = Sizes::from_ratio(i, self.retries, state.sizes());
-            let inner = self.generator.generate(state.with().sizes(sizes).as_mut());
-            let item = inner.item();
-            if (self.filter)(item).is_some() {
-                outer = Some(inner);
-                break;
-            }
-        }
         Shrinker {
-            shrinker: outer,
+            shrinker: state.retry(&self.generator, self.retries, |shrink| {
+                (self.filter)(shrink.item()).is_some()
+            }),
             map: self.filter.clone(),
         }
     }

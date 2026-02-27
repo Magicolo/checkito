@@ -82,7 +82,7 @@ fn generate(&self, state: &mut State) -> Self::Shrink {
 The challenge is that each sub-generator produces a different concrete `Shrink`
 type, so they must be wrapped in `orn::Or` variants. The macro-generated code
 needs to construct a virtual dispatch table similar to what is done for
-`any_indexed`.
+`any`.
 
 For the weighted variant, weights should be ignored in exhaustive mode (same
 as the slice-based path).

@@ -1,7 +1,7 @@
 use crate::{
     GENERATES, Generate, Shrink,
     primitive::{Range, u8::U8},
-    utility,
+    utility::{self, tuples},
 };
 use core::{
     iter::FusedIterator,
@@ -58,13 +58,41 @@ impl<T> Weight<T> {
     pub const fn value(&self) -> &T {
         &self.generator
     }
+
+    pub const fn as_ref(&self) -> Weight<&T> {
+        Weight {
+            weight: self.weight,
+            generator: &self.generator,
+        }
+    }
+
+    pub const fn as_mut(&mut self) -> Weight<&mut T> {
+        Weight {
+            weight: self.weight,
+            generator: &mut self.generator,
+        }
+    }
+
+    pub fn map<U: Generate>(self, map: impl FnOnce(T) -> U) -> Weight<U> {
+        Weight {
+            weight: self.weight,
+            generator: map(self.generator),
+        }
+    }
 }
 
 impl<G: Generate> Weight<G> {
-    pub fn new(weight: f64, generator: G) -> Self {
+    pub const fn new(weight: f64, generator: G) -> Self {
         assert!(weight.is_finite());
         assert!(weight >= f64::EPSILON);
         Self { weight, generator }
+    }
+
+    pub const fn one(generator: G) -> Self {
+        Self {
+            weight: 1.0,
+            generator,
+        }
     }
 }
 
@@ -113,17 +141,15 @@ impl State {
         }
     }
 
-    pub(crate) fn any_exhaustive<I: IntoIterator<Item: Generate, IntoIter: Clone>>(
+    pub(crate) fn any_exhaustive<I: IntoIterator<Item = Option<u128>, IntoIter: Clone>>(
         index: &mut u128,
-        generators: I,
-    ) -> Option<I::Item> {
-        for generator in generators.into_iter().cycle() {
-            match generator.cardinality() {
-                Some(cardinality) if *index < cardinality => {
-                    return Some(generator);
-                }
+        cardinalities: I,
+    ) -> Option<usize> {
+        for (i, cardinality) in cardinalities.into_iter().enumerate().cycle() {
+            match cardinality {
+                Some(cardinality) if *index < cardinality => return Some(i),
                 Some(cardinality) => *index -= cardinality,
-                None => return Some(generator),
+                None => return Some(i),
             }
         }
         None
@@ -207,14 +233,19 @@ impl State {
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 
-    pub(crate) fn any_indexed<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
-        let end = generators.len().checked_sub(1)?;
+    pub(crate) fn any_uniform<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
+        if generators.is_empty() {
+            return None;
+        }
+
         match &mut self.mode {
             Mode::Random(_) => {
-                let index = self.with().size(1.0).usize(Range(0, end));
-                generators.get(index)
+                generators.get(self.with().size(1.0).usize(Range(0, generators.len() - 1)))
             }
-            Mode::Exhaustive(index) => Self::any_exhaustive(index, generators),
+            Mode::Exhaustive(index) => generators.get(Self::any_exhaustive(
+                index,
+                generators.iter().map(G::cardinality),
+            )?),
         }
     }
 
@@ -236,36 +267,55 @@ impl State {
                 debug_assert!(total > 0.0 && total.is_finite());
                 let mut random = self.with().size(1.0).f64(0.0..=total);
                 debug_assert!(random.is_finite());
-                for Weight {
-                    weight,
-                    generator: value,
-                } in generators
-                {
-                    if random < *weight {
-                        return Some(value);
+                for Weight { weight, generator } in generators {
+                    if random <= *weight {
+                        return Some(generator);
                     } else {
                         random -= weight;
                     }
                 }
-                unreachable!(
-                    "there is at least one item in the slice and weights are finite and `> 0.0`"
-                );
+                unreachable!();
             }
-            Mode::Exhaustive(index) => {
-                Self::any_exhaustive(index, generators.iter().map(Weight::value))
+            Mode::Exhaustive(index) => generators
+                .get(Self::any_exhaustive(
+                    index,
+                    generators.iter().map(Weight::value).map(G::cardinality),
+                )?)
+                .map(Weight::value),
+        }
+    }
+
+    pub(crate) fn retry<F: FnMut(&G::Shrink) -> bool, G: Generate>(
+        &mut self,
+        generator: G,
+        retries: usize,
+        mut filter: F,
+    ) -> Option<G::Shrink> {
+        match &mut self.mode {
+            Mode::Random(_) => {
+                for i in 0..=retries {
+                    let sizes = Sizes::from_ratio(i, retries, self.sizes());
+                    let shrink = generator.generate(self.with().sizes(sizes).as_mut());
+                    if filter(&shrink) {
+                        return Some(shrink);
+                    }
+                }
+                None
+            }
+            Mode::Exhaustive(_) => {
+                let shrink = generator.generate(self);
+                filter(&shrink).then_some(shrink)
             }
         }
     }
 
-    // TODO: Implement `any_tuple_indexed` and `any_tuple_weighted`...
-
-    pub(crate) fn repeat<'a, 'b, G: Generate + ?Sized>(
+    pub(crate) fn repeat<'a, G: Generate>(
         &'a mut self,
-        generator: &'b G,
+        generator: G,
         range: Range<usize>,
-    ) -> impl Iterator<Item = G::Shrink> + use<'a, 'b, G> {
+    ) -> impl Iterator<Item = G::Shrink> + use<'a, G> {
         let count = match &mut self.mode {
-            Mode::Random(_) => range.generate(self).item(),
+            Mode::Random(_) => self.usize(range),
             Mode::Exhaustive(index) => match generator.cardinality() {
                 Some(cardinality) => {
                     // Exhaustive `repeat` chooses a *length* first, then generates
@@ -366,21 +416,25 @@ const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
 /// Maps a zero-anchored exhaustive index to a `(offset, is_negative)` pair
 /// for generating small-magnitude values first.
 ///
-/// - `pos`: number of steps available in the positive direction.
-/// - `neg`: number of steps available in the negative direction.
+/// - `positive`: number of steps available in the positive direction.
+/// - `negative`: number of steps available in the negative direction.
 ///
 /// Ordering: anchor, +1, −1, +2, −2, … until the shorter side is exhausted,
 /// then the remaining steps from the longer side.
-const fn small_first(local: u128, pos: u128, neg: u128) -> (u128, bool) {
-    let min_side = if pos < neg { pos } else { neg };
-    let k = (local + 1) / 2;
-    if k <= min_side {
+const fn small_first(value: u128, positive: u128, negative: u128) -> (u128, bool) {
+    let minimum = if positive < negative {
+        positive
+    } else {
+        negative
+    };
+    let offset = value.div_ceil(2);
+    if offset <= minimum {
         // Interleaved zone: odd → positive offset, even → negative offset.
         // k == 0 (local == 0) falls here and yields offset 0 (the anchor).
-        (k, local % 2 == 0)
+        (offset, value % 2 == 0)
     } else {
         // Past the shorter side: continue monotonically on the longer side.
-        (local - min_side, pos < neg)
+        (value - minimum, positive < negative)
     }
 }
 
@@ -740,6 +794,58 @@ macro_rules! floating {
         $(floating!($number, $bits);)*
     }
 }
+
+macro_rules! or {
+    ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
+    ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
+        impl State {
+            #[allow(clippy::too_many_arguments)]
+            pub fn $u<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
+                match &mut self.mode {
+                    Mode::Random(_) => {
+                        match self.with().size(1.0).u8(Range(0, $c - 1)) {
+                            $($is => orn::$n::Or::$ts($ps),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                    Mode::Exhaustive(index) => {
+                        match Self::any_exhaustive(index, [$($ps.cardinality(),)*]) {
+                            $(Some($is) => orn::$n::Or::$ts($ps),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+
+            #[allow(clippy::too_many_arguments)]
+            pub(crate) fn $w<$($ts: Generate,)*>(&mut self, $($ps: Weight<$ts>,)*) -> orn::$n::Or<$($ts,)*> {
+                match &mut self.mode {
+                    Mode::Random(_) => {
+                        let total = $($ps.weight +)* 0.0f64;
+                        debug_assert!(total > 0.0 && total.is_finite());
+                        let mut _random = self.with().size(1.0).f64(0.0..=total);
+                        debug_assert!(_random.is_finite());
+                        $(if _random <= $ps.weight {
+                            return orn::$n::Or::$ts($ps.generator);
+                        } else {
+                            _random -= $ps.weight;
+                        })*
+                        unreachable!();
+                    }
+                    Mode::Exhaustive(index) => {
+                        match Self::any_exhaustive(index, [$($ps.generator.cardinality(),)*]) {
+                            $(Some($is) => orn::$n::Or::$ts($ps.generator),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+        }
+    };
+}
+
+tuples!(@any or);
+
 ranges!(
     char,
     |value: char| char::from_u32(u32::saturating_add(value as _, 1))
