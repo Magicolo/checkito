@@ -1,7 +1,7 @@
 use crate::{
     GENERATES, Generate, Shrink,
     primitive::{Range, u8::U8},
-    utility::{self, tuples},
+    utility::{self, tuples_any},
 };
 use core::{
     iter::FusedIterator,
@@ -9,7 +9,6 @@ use core::{
     ops::{self, Bound},
 };
 use fastrand::Rng;
-use orn::Or2;
 use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -232,33 +231,6 @@ impl State {
         let Range(start, end) = range.into();
         let value = self.u32(Range(start as u32, end as u32));
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
-    }
-
-    pub(crate) fn any2_weighted<G: Generate, H: Generate>(
-        &mut self,
-        one: Weight<G>,
-        two: Weight<H>,
-    ) -> Or2<G, H> {
-        match &mut self.mode {
-            Mode::Random(_) => {
-                let total = one.weight + two.weight;
-                debug_assert!(total > 0.0 && total.is_finite());
-                let random = self.with().size(1.0).f64(0.0..=total);
-                debug_assert!(random.is_finite());
-                if random < one.weight {
-                    Or2::T0(one.generator)
-                } else {
-                    Or2::T1(two.generator)
-                }
-            }
-            Mode::Exhaustive(index) => {
-                match Self::any_exhaustive(index, [one.cardinality(), two.cardinality()]) {
-                    Some(0) => Or2::T0(one.generator),
-                    Some(1) => Or2::T1(two.generator),
-                    _ => unreachable!(),
-                }
-            }
-        }
     }
 
     pub(crate) fn any<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
@@ -815,21 +787,69 @@ macro_rules! floating {
     }
 }
 
-macro_rules! or {
-    ($n:ident, $c:tt) => {};
-    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
+/// Generates `State::anyN_uniform` (uniform random / exhaustive-by-cardinality selection
+/// among N generators passed by value) and `State::anyN_weighted` (same but with
+/// `Weight<G>` wrappers for weighted random selection) for every arity 1..=16.
+///
+/// The 0-generator case is omitted because there is nothing to select from.
+macro_rules! state_methods {
+    // 0-generator case: nothing to generate.
+    ($uniform:ident, $weighted:ident, $orn:ident, $c:tt) => {};
+    ($uniform:ident, $weighted:ident, $orn:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl State {
-            pub fn $n<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
+            /// Selects one of the provided generators uniformly at random (random
+            /// mode) or deterministically by exhaustive index (exhaustive mode).
+            pub fn $uniform<$($ts: Generate,)*>(
+                &mut self,
+                $($ps: $ts,)*
+            ) -> orn::$orn::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {
-                        match self.with().size(1.0).u8(0..=$c) {
-                            $($is => orn::$n::Or::$ts($ps),)*
+                        // `0..$c` produces indices 0..count-1 (exclusive upper bound).
+                        match self.with().size(1.0).u8(0..$c) {
+                            $($is => orn::$orn::Or::$ts($ps),)*
                             _ => unreachable!(),
                         }
                     }
                     Mode::Exhaustive(index) => {
                         match Self::any_exhaustive(index, [$($ps.cardinality(),)*]) {
-                            $(Some($is) => orn::$n::Or::$ts($ps),)*
+                            $(Some($is) => orn::$orn::Or::$ts($ps),)*
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
+
+            /// Like [`$uniform`] but each generator is paired with a `Weight`
+            /// that biases selection in random mode.  In exhaustive mode weights
+            /// are ignored; only cardinalities determine the cycling order.
+            pub fn $weighted<$($ts: Generate,)*>(
+                &mut self,
+                $($ps: Weight<$ts>,)*
+            ) -> orn::$orn::Or<$($ts,)*> {
+                match &mut self.mode {
+                    Mode::Random(_) => {
+                        let total = ($($ps.weight +)* 0.0_f64);
+                        debug_assert!(total > 0.0 && total.is_finite());
+                        let mut random = self.with().size(1.0).f64(0.0..=total);
+                        debug_assert!(random.is_finite());
+                        $(
+                            if random < $ps.weight {
+                                return orn::$orn::Or::$ts($ps.generator);
+                            } else {
+                                random -= $ps.weight;
+                            }
+                        )*
+                        // Suppress the "value assigned but never read" lint: after all
+                        // arms the final subtraction into `random` precedes unreachable!
+                        let _ = random;
+                        unreachable!(
+                            "weights are finite and at least one is > 0.0"
+                        );
+                    }
+                    Mode::Exhaustive(index) => {
+                        match Self::any_exhaustive(index, [$($ps.cardinality(),)*]) {
+                            $(Some($is) => orn::$orn::Or::$ts($ps.generator),)*
                             _ => unreachable!(),
                         }
                     }
@@ -839,7 +859,7 @@ macro_rules! or {
     };
 }
 
-tuples!(or);
+tuples_any!(state_methods);
 
 ranges!(
     char,
