@@ -788,7 +788,7 @@ macro_rules! floating {
 }
 
 macro_rules! or {
-    ($n:ident, $c:tt) => {};
+    ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
     ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl State {
             pub fn $u<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
@@ -808,7 +808,6 @@ macro_rules! or {
                 }
             }
 
-            #[allow(dead_code)]
             pub(crate) fn $w<$($ts: Generate,)*>(&mut self, $($ps: Weight<$ts>,)*) -> orn::$n::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {

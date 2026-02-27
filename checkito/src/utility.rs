@@ -161,6 +161,7 @@ macro_rules! tuples {
     (@any $m: ident) => {
         tuples!(
             $m,
+            [any0_uniform, any0_weighted],
             [any1_uniform, any1_weighted],
             [any2_uniform, any2_weighted],
             [any3_uniform, any3_weighted],
@@ -176,7 +177,6 @@ macro_rules! tuples {
             [any13_uniform, any13_weighted],
             [any14_uniform, any14_weighted],
             [any15_uniform, any15_weighted],
-            [any16_uniform, any16_weighted],
         );
     };
     (@recurse $m: ident [] [$($ps: ident, $ts: ident, $is: tt,)*] []) => {};
