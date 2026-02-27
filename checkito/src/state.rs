@@ -811,14 +811,14 @@ macro_rules! or {
             pub(crate) fn $w<$($ts: Generate,)*>(&mut self, $($ps: Weight<$ts>,)*) -> orn::$n::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {
-                        let mut _total = $($ps.weight +)* 0.0f64;
-                        debug_assert!(_total > 0.0 && _total.is_finite());
-                        let random = self.with().size(1.0).f64(0.0..=_total);
-                        debug_assert!(random.is_finite());
-                        $(if random < $ps.weight {
+                        let total = $($ps.weight +)* 0.0f64;
+                        debug_assert!(total > 0.0 && total.is_finite());
+                        let mut _random = self.with().size(1.0).f64(0.0..=total);
+                        debug_assert!(_random.is_finite());
+                        $(if _random < $ps.weight {
                             return orn::$n::Or::$ts($ps.generator);
                         } else {
-                            _total -= $ps.weight;
+                            _random -= $ps.weight;
                         })*
                         unreachable!();
                     }
