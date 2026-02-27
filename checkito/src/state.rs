@@ -416,21 +416,25 @@ const fn consume(index: &mut u128, start: u128, end: u128) -> u128 {
 /// Maps a zero-anchored exhaustive index to a `(offset, is_negative)` pair
 /// for generating small-magnitude values first.
 ///
-/// - `pos`: number of steps available in the positive direction.
-/// - `neg`: number of steps available in the negative direction.
+/// - `positive`: number of steps available in the positive direction.
+/// - `negative`: number of steps available in the negative direction.
 ///
 /// Ordering: anchor, +1, −1, +2, −2, … until the shorter side is exhausted,
 /// then the remaining steps from the longer side.
-const fn small_first(local: u128, pos: u128, neg: u128) -> (u128, bool) {
-    let min_side = if pos < neg { pos } else { neg };
-    let k = (local + 1) / 2;
-    if k <= min_side {
+const fn small_first(value: u128, positive: u128, negative: u128) -> (u128, bool) {
+    let minimum = if positive < negative {
+        positive
+    } else {
+        negative
+    };
+    let offset = value.div_ceil(2);
+    if offset <= minimum {
         // Interleaved zone: odd → positive offset, even → negative offset.
         // k == 0 (local == 0) falls here and yields offset 0 (the anchor).
-        (k, local % 2 == 0)
+        (offset, value % 2 == 0)
     } else {
         // Past the shorter side: continue monotonically on the longer side.
-        (local - min_side, pos < neg)
+        (value - minimum, positive < negative)
     }
 }
 
@@ -795,6 +799,7 @@ macro_rules! or {
     ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
     ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl State {
+            #[allow(clippy::too_many_arguments)]
             pub fn $u<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {
@@ -812,6 +817,7 @@ macro_rules! or {
                 }
             }
 
+            #[allow(clippy::too_many_arguments)]
             pub(crate) fn $w<$($ts: Generate,)*>(&mut self, $($ps: Weight<$ts>,)*) -> orn::$n::Or<$($ts,)*> {
                 match &mut self.mode {
                     Mode::Random(_) => {
