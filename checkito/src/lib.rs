@@ -126,8 +126,3 @@ const COLLECTS: usize = 1 << 10;
 const RETRIES: usize = 1 << 8;
 #[cfg(feature = "regex")]
 const REPEATS: u32 = 1 << 6;
-
-/*
-    TODO:
-    - Instead of running a fixed number of checks, determine the number of checks based on the runtime of the generation and check.
-*/

@@ -110,8 +110,7 @@ pub struct With<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Mode {
-    // TODO: Can I use this for fuzzing? Add a `Fuzz(Box<dyn Iterator<Item = byte>>)`? Or
-    // maybe fuzz through the `Random` object?
+    // TODO: Can I use this for fuzzing? Add a `Fuzz(Box<dyn Iterator<Item = byte>>)`?
     Random(Rng),
     Exhaustive(u128),
 }
