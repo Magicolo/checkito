@@ -116,6 +116,10 @@ fn person_has_valid_name_and_is_major(person: Person) {
 /// equal to `generate.count`), `#[check]` will automatically switch to
 /// exhaustive mode and test every possible value instead of sampling randomly.
 ///
+/// This also means that a test with only the `#[check]` attribute (no specified
+/// generator) will run exactly once (since the implicit generator is `()` with
+/// a cardinality of 1).
+///
 /// Here, `bool` has only 2 possible values and `0u8..=9` has 10, so every
 /// combination (20 total) is tested exhaustively without any extra
 /// configuration.
