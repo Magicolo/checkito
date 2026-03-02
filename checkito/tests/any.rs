@@ -98,6 +98,8 @@ mod check {
         let one = samples.iter().filter(|&&value| value == 1).count();
         let ten = samples.iter().filter(|&&value| value == 10).count();
         let hundred = samples.iter().filter(|&&value| value == 100).count();
+        // With weights 1:10:100 and >= 500 samples, the weak ordering holds
+        // reliably. The <= comparison allows ties but not inversions.
         assert!(one <= ten);
         assert!(ten <= hundred);
     }

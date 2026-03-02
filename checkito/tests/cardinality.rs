@@ -251,10 +251,9 @@ mod check {
         } else {
             (end, start)
         };
-        assert_eq!(
-            (low..=high).cardinality(),
-            Some((high as i128 - low as i128 + 1) as u128)
-        );
+        // Use i128 subtraction which cannot overflow for i16 operands.
+        let expected = (high as i128 - low as i128 + 1) as u128;
+        assert_eq!((low..=high).cardinality(), Some(expected));
     }
 
     #[check(_)]
