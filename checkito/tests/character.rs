@@ -51,6 +51,29 @@ fn full_does_not_panic() {
 }
 
 #[test]
+fn exclusive_range_past_surrogate_start_skips_surrogates() {
+    // '\u{D7FF}'..'z' has an exclusive lower bound of '\u{D7FF}'.
+    // After applying $up to U+D7FF, start should be U+E000 (not U+FFFD).
+    for c in ('\u{D7FF}'..'\u{E010}').samples(1000) {
+        let code = c as u32;
+        assert!(
+            code < 0xD800 || code >= 0xE000,
+            "surrogate U+{:04X} generated",
+            code
+        );
+    }
+}
+
+#[test]
+fn exclusive_range_end_at_e000_skips_surrogates() {
+    // 'a'..'\u{E000}' should produce up to U+D7FF, not any surrogate.
+    for c in ('a'..'\u{E000}').samples(1000) {
+        let code = c as u32;
+        assert!(code < 0xD800, "surrogate or post-surrogate U+{:04X} generated", code);
+    }
+}
+
+#[test]
 fn collects_exhaustively() {
     let range = 'a'..='Z';
     let set = range
