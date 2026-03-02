@@ -10,7 +10,7 @@ use crate::{
 use core::{
     fmt::{Debug, Display},
     marker::PhantomData,
-    ops::{self, Add, Div, Mul, Sub},
+    ops::{self},
 };
 use orn::{Or2, Or3, Or5};
 
@@ -44,9 +44,7 @@ pub struct Shrinker<T> {
     pub(crate) direction: Direction,
 }
 
-pub trait Number:
-    Sized + Copy + Clone + Debug + Display + PartialEq + PartialOrd + Default + Add + Sub + Mul + Div
-{
+pub trait Number: Sized + Copy + Clone + Debug + Display + PartialEq + PartialOrd {
     type Full: Generate<Item = Self>;
     type Positive: Generate<Item = Self>;
     type Negative: Generate<Item = Self>;
