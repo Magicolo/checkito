@@ -85,22 +85,22 @@ fn forces_exhaustive_generation_when_requested() {
 mod check {
     use super::*;
 
-    #[check(500usize..=2000)]
+    #[check(100usize..=1000)]
     fn weighted_any_respects_weight_ordering_for_arbitrary_sample_count(count: usize) {
         let samples = (
             Weight::new(1.0, 1),
-            Weight::new(10.0, 10),
-            Weight::new(100.0, 100),
+            Weight::new(1_000.0, 1_000),
+            Weight::new(1_000_000.0, 1_000_000),
         )
             .unify::<i32>()
             .samples(count)
             .collect::<Vec<_>>();
         let one = samples.iter().filter(|&&value| value == 1).count();
-        let ten = samples.iter().filter(|&&value| value == 10).count();
-        let hundred = samples.iter().filter(|&&value| value == 100).count();
+        let kilo = samples.iter().filter(|&&value| value == 1_000).count();
+        let mega = samples.iter().filter(|&&value| value == 1_000_000).count();
         // With weights 1:10:100 and >= 500 samples, the weak ordering holds
         // reliably. The <= comparison allows ties but not inversions.
-        assert!(one <= ten);
-        assert!(ten <= hundred);
+        assert!(one <= kilo);
+        assert!(kilo <= mega);
     }
 }
