@@ -1,6 +1,6 @@
 [package]
 name = "checkito"
-version = "4.0.0"
+version = "4.0.1"
 description = "A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing."
 documentation = "https://docs.rs/checkito/latest/checkito/"
 authors = { workspace = true }
@@ -23,7 +23,7 @@ constant = ["checkito_macro/constant"]
 asynchronous = ["futures-lite/std", "checkito_macro/asynchronous"]
 
 [dependencies]
-checkito_macro = { version = "0.5.0", path = "../checkito_macro", default-features = false, optional = true }
+checkito_macro = { version = "0.5.1", path = "../checkito_macro", default-features = false, optional = true }
 fastrand = "2.3"
 futures-lite = { version = "2.6", default-features = false, optional = true }
 orn = { version = "1.0", default-features = false, features = [
