@@ -1042,7 +1042,7 @@ mod tests {
         let mut random = Rng::new();
         for count in 1usize..=1000 {
             let generators = Iterator::map(1..=count, |i| {
-                Weight::new(i as f64 / random.f64() / random.f64(), i)
+                Weight::new(i as f64 / random.f64() / random.f64() + f64::EPSILON, i)
             })
             .collect::<Vec<_>>();
             let mut state = State::random(0, 1, Sizes::DEFAULT, random.u64(..));
