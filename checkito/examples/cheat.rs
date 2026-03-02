@@ -112,6 +112,29 @@ fn person_has_valid_name_and_is_major(person: Person) {
     assert!(person.age >= 18);
 }
 
+/// If a generator has a small domain (i.e. its cardinality is less than or
+/// equal to `generate.count`), `#[check]` will automatically switch to
+/// exhaustive mode and test every possible value instead of sampling randomly.
+///
+/// Here, `bool` has only 2 possible values and `0u8..=9` has 10, so every
+/// combination (20 total) is tested exhaustively without any extra
+/// configuration.
+#[check(_, 0u8..=9)]
+fn exhaustive_when_small_domain(value: bool, digit: u8) {
+    // Both values are fully enumerated; no random sampling needed.
+    assert!(digit <= 9);
+    assert!(value || !value);
+}
+
+/// Marking a checking function as `async` will automatically have its test
+/// values evaluated concurrently. The concurrency level is determined by the
+/// system's available parallelism.
+#[check(0u64..1000)]
+async fn async_check(value: u64) {
+    // Simulate an asynchronous operation.
+    assert!(value < 1000);
+}
+
 /// The `#[check]` attribute essentially expands to a call to [`Check::check`]
 /// with pretty printing. For some more complex scenarios, it may become more
 /// convenient to simply call the [`Check::check`] manually.
