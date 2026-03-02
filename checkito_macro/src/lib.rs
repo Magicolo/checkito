@@ -1,5 +1,3 @@
-use quote::ToTokens;
-
 #[cfg(feature = "check")]
 mod check;
 #[cfg(feature = "constant")]
@@ -29,6 +27,7 @@ determining the correct number of iterations for a `Checker::checks`.
 #[cfg(feature = "constant")]
 #[proc_macro]
 pub fn constant(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    use quote::ToTokens;
     let expression = syn::parse_macro_input!(input);
     match constant::convert(&expression) {
         Some(tokens) => tokens.into(),
