@@ -651,8 +651,65 @@ pub mod char {
     constant!(char, Char, Shrinker);
 }
 
+macro_rules! nonzero {
+    (unsigned, $inner: ident, $constant: ident, $nonzero: ident) => {
+        impl FullGenerate for ::core::num::$nonzero {
+            type Item = ::core::num::$nonzero;
+            type Generator = crate::map::Map<
+                Range<$constant::<{ 1 as $inner }>, $constant::<{ $inner::MAX }>>,
+                fn($inner) -> ::core::num::$nonzero,
+            >;
+
+            fn generator() -> Self::Generator {
+                fn to_nonzero(n: $inner) -> ::core::num::$nonzero {
+                    // SAFETY: n is guaranteed to be in [1, $inner::MAX], so n != 0.
+                    unsafe { ::core::num::$nonzero::new_unchecked(n) }
+                }
+                let range: Range<$constant::<{ 1 as $inner }>, $constant::<{ $inner::MAX }>> =
+                    Constant::VALUE;
+                range.map(to_nonzero as fn($inner) -> ::core::num::$nonzero)
+            }
+        }
+    };
+    (signed, $inner: ident, $constant: ident, $nonzero: ident) => {
+        impl FullGenerate for ::core::num::$nonzero {
+            type Item = ::core::num::$nonzero;
+            type Generator = crate::map::Map<
+                crate::unify::Unify<
+                    Any<(
+                        Range<$constant::<{ $inner::MIN }>, $constant::<{ -1 as $inner }>>,
+                        Range<$constant::<{ 1 as $inner }>, $constant::<{ $inner::MAX }>>,
+                    )>,
+                    $inner,
+                >,
+                fn($inner) -> ::core::num::$nonzero,
+            >;
+
+            fn generator() -> Self::Generator {
+                fn to_nonzero(n: $inner) -> ::core::num::$nonzero {
+                    // SAFETY: n is guaranteed to be in [$inner::MIN, -1] or [1, $inner::MAX],
+                    // so n != 0.
+                    unsafe { ::core::num::$nonzero::new_unchecked(n) }
+                }
+                let negative: Range<
+                    $constant::<{ $inner::MIN }>,
+                    $constant::<{ -1 as $inner }>,
+                > = Constant::VALUE;
+                let positive: Range<
+                    $constant::<{ 1 as $inner }>,
+                    $constant::<{ $inner::MAX }>,
+                > = Constant::VALUE;
+                (negative, positive)
+                    .any()
+                    .unify::<$inner>()
+                    .map(to_nonzero as fn($inner) -> ::core::num::$nonzero)
+            }
+        }
+    };
+}
+
 macro_rules! integer {
-    ($type: ident, $constant: ident) => {
+    ($type: ident, $constant: ident, $sign: ident, $nonzero: ident) => {
         type SpecialType = Any<($type, $type, $type)>;
         const SPECIAL: SpecialType = Any((0 as $type, $type::MIN, $type::MAX));
 
@@ -741,8 +798,9 @@ macro_rules! integer {
         same!($type);
         ranges!(INTEGER, $type);
         constant!($type, $constant, Shrinker::<$type>);
+        nonzero!($sign, $type, $constant, $nonzero);
     };
-    ($([$type: ident, $constant: ident]),*$(,)?) => { $(pub mod $type { use super::*; integer!($type, $constant); })* };
+    ($([$type: ident, $constant: ident, $sign: ident, $nonzero: ident]),*$(,)?) => { $(pub mod $type { use super::*; integer!($type, $constant, $sign, $nonzero); })* };
 }
 
 macro_rules! floating {
@@ -841,18 +899,18 @@ macro_rules! tuple {
 }
 
 integer!(
-    [u8, U8],
-    [u16, U16],
-    [u32, U32],
-    [u64, U64],
-    [u128, U128],
-    [usize, Usize],
-    [i8, I8],
-    [i16, I16],
-    [i32, I32],
-    [i64, I64],
-    [i128, I128],
-    [isize, Isize],
+    [u8, U8, unsigned, NonZeroU8],
+    [u16, U16, unsigned, NonZeroU16],
+    [u32, U32, unsigned, NonZeroU32],
+    [u64, U64, unsigned, NonZeroU64],
+    [u128, U128, unsigned, NonZeroU128],
+    [usize, Usize, unsigned, NonZeroUsize],
+    [i8, I8, signed, NonZeroI8],
+    [i16, I16, signed, NonZeroI16],
+    [i32, I32, signed, NonZeroI32],
+    [i64, I64, signed, NonZeroI64],
+    [i128, I128, signed, NonZeroI128],
+    [isize, Isize, signed, NonZeroIsize],
 );
 floating!(f32, f64);
 
