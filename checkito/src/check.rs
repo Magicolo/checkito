@@ -276,6 +276,7 @@ impl<G: Generate, R> Checker<G, R> {
 }
 
 impl<T, P: Prove> Result<T, P> {
+    /// Returns the seed used to generate the underlying value.
     pub const fn seed(&self) -> u64 {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.seed(),
@@ -283,6 +284,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns the size used to generate the underlying value (`0.0..=1.0`).
     pub const fn size(&self) -> f64 {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.size(),
@@ -290,6 +292,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns the number of values generated before this result.
     pub const fn generates(&self) -> usize {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.generates,
@@ -297,6 +300,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns the number of shrink steps that occurred before this result.
     pub const fn shrinks(&self) -> usize {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.shrinks,
@@ -304,6 +308,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns the generator state that produced the underlying value.
     pub const fn state(&self) -> &State {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => &pass.state,
@@ -311,6 +316,8 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns the inner [`Pass`] if this is a `Pass` result, or a `Shrink`
+    /// result when `shrink` is `true`.
     pub fn pass(&self, shrink: bool) -> Option<&Pass<T, P::Proof>> {
         match self {
             Result::Pass(pass) => Some(pass),
@@ -319,6 +326,8 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Converts this result into the inner [`Pass`] if it is a `Pass` result,
+    /// or a `Shrink` result when `shrink` is `true`. Returns `Err(self)` otherwise.
     #[allow(clippy::result_large_err)]
     pub fn into_pass(self, shrink: bool) -> result::Result<Pass<T, P::Proof>, Self> {
         match self {
@@ -328,6 +337,8 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Returns the inner [`Fail`] if this is a `Fail` result, or a `Shrunk`
+    /// result when `shrunk` is `true`.
     pub fn fail(&self, shrunk: bool) -> Option<&Fail<T, P::Error>> {
         match self {
             Result::Fail(fail) => Some(fail),
@@ -336,6 +347,8 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Converts this result into the inner [`Fail`] if it is a `Fail` result,
+    /// or a `Shrunk` result when `shrunk` is `true`. Returns `Err(self)` otherwise.
     #[allow(clippy::result_large_err)]
     pub fn into_fail(self, shrunk: bool) -> result::Result<Fail<T, P::Error>, Self> {
         match self {
@@ -345,6 +358,7 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Consumes this result and returns the underlying item.
     pub fn into_item(self) -> T {
         match self {
             Result::Pass(pass) | Result::Shrink(pass) => pass.item,
@@ -352,6 +366,8 @@ impl<T, P: Prove> Result<T, P> {
         }
     }
 
+    /// Converts this result into a standard [`result::Result`], where pass
+    /// variants map to `Ok` and fail variants map to `Err`.
     #[allow(clippy::result_large_err)]
     pub fn into_result(self) -> result::Result<Pass<T, P::Proof>, Fail<T, P::Error>> {
         match self {
@@ -362,24 +378,33 @@ impl<T, P: Prove> Result<T, P> {
 }
 
 impl<T, P> Pass<T, P> {
+    /// Returns the seed used to generate the value.
     pub const fn seed(&self) -> u64 {
         self.state.seed()
     }
 
+    /// Returns the size used to generate the value (`0.0..=1.0`).
     pub const fn size(&self) -> f64 {
         self.state.size()
     }
 }
 
 impl<T, P> Fail<T, P> {
+    /// Returns the seed used to generate the failing value.
     pub const fn seed(&self) -> u64 {
         self.state.seed()
     }
 
+    /// Returns the size used to generate the failing value (`0.0..=1.0`).
     pub const fn size(&self) -> f64 {
         self.state.size()
     }
 
+    /// Returns a human-readable description of the failure cause.
+    ///
+    /// - For a [`Cause::Panic`] with a message, returns that message.
+    /// - For a [`Cause::Panic`] without a message, returns `"panicked"`.
+    /// - For a [`Cause::Disprove`], returns the `Debug` representation of the error.
     pub fn message(&self) -> Cow<'static, str>
     where
         P: Debug,
@@ -1031,6 +1056,11 @@ pub(crate) mod asynchronous {
         index: usize,
     ) -> Pin<&mut Entry<S, P>> {
         let count = entries.len();
+        // SAFETY: `index % count` is always in bounds (assuming count > 0, which is
+        // guaranteed by the caller since the buffer is allocated with at least one slot).
+        // `Pin::map_unchecked_mut` is sound because the `Entry` values inside the
+        // `Box<[Entry]>` are never moved — the `Box` itself may move, but its contents
+        // stay at a stable address.
         unsafe { entries.map_unchecked_mut(|entries| &mut entries[index % count]) }
     }
 

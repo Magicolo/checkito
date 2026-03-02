@@ -20,7 +20,7 @@ The purpose of the library is to test general properties of a program rather tha
 - Generators can produce arbitrary complex values with their combinators, in a similar way that `Iterator`s can.
 - Given a proper generator, `checkito` will sample the input space to find a failing case for your test.
 - Once a failing case is found, `checkito` will try to reduce the input to the simplest version of it that continues to fail (using a kind of binary search of the input space) to make the debugging process easier.
-- Note that `checkito` does not guarantee any kind of exhaustive search of the input space (the size of it gets out of hand rather quickly) and is meant as a complement to other testing strategies.
+- For generators with a small number of possible values (e.g., `bool`, a short range, or a tuple of small types), `checkito` will automatically run exhaustively to cover all possible values. For larger or infinite input spaces, it samples randomly. This is meant as a complement to other testing strategies.
 - It is recommended to write a regular unit test with the exact failing input to prevent a regression and to truly guarantee that the failing input is always tested.
 
 ---
