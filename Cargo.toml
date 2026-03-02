@@ -15,4 +15,4 @@ categories = ["development-tools::testing"]
 rust-version = "1.83"
 
 [workspace.dependencies]
-regex-syntax = { version = "0.8.9", default-features = false }
+regex-syntax = { version = "0.8", default-features = false }
