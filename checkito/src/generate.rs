@@ -183,8 +183,9 @@ pub trait Generate {
     /// // A generator for even numbers between 0 and 100.
     /// let evens = Generate::filter(0..100, |&x| x % 2 == 0);
     ///
-    /// // The generated value is an `Option`.
-    /// evens.check(|x: Option<i32>| assert!(x.unwrap() % 2 == 0));
+    /// // The generated value is an `Option`. `None` means no matching value
+    /// // was found within the retry limit, which is an acceptable outcome.
+    /// evens.check(|x: Option<i32>| x.map_or(true, |x| x % 2 == 0));
     /// ```
     fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
     where
@@ -231,7 +232,8 @@ pub trait Generate {
     ///         None
     ///     }
     /// });
-    /// roots.check(|x: Option<i32>| assert!(x.is_some()));
+    /// // `None` means no perfect square was found within the retry limit.
+    /// roots.check(|x: Option<i32>| x.map_or(true, |root| root * root < 100));
     /// ```
     fn filter_map<T, F: Fn(Self::Item) -> Option<T> + Clone>(self, filter: F) -> FilterMap<Self, F>
     where
