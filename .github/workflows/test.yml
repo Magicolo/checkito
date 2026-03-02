@@ -14,8 +14,8 @@ jobs:
         strategy:
             matrix:
                 command:
-                    - cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset
-                    - cargo hack test --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
+                    - cargo hack nextest run --release --lib --bins --benches --tests --verbose --feature-powerset
+                    - cargo hack nextest run --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
                     - cargo hack test --release --doc --verbose --all-features
                     - cargo hack test --release --examples --verbose --all-features
         steps:
