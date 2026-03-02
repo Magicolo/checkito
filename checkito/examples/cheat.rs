@@ -120,19 +120,22 @@ fn person_has_valid_name_and_is_major(person: Person) {
 /// combination (20 total) is tested exhaustively without any extra
 /// configuration.
 #[check(_, 0u8..=9)]
-fn exhaustive_when_small_domain(value: bool, digit: u8) {
-    // Both values are fully enumerated; no random sampling needed.
-    assert!(digit <= 9);
-    assert!(value || !value);
+fn exhaustive_when_small_domain(sign: bool, digit: u8) {
+    // Both generators are fully enumerated; no random sampling needed.
+    let signed = if sign { digit as i16 } else { -(digit as i16) };
+    assert!((-9..=9).contains(&signed));
 }
 
 /// Marking a checking function as `async` will automatically have its test
 /// values evaluated concurrently. The concurrency level is determined by the
 /// system's available parallelism.
+///
+/// The function body is an ordinary `async` block, so `.await` can be used
+/// freely.
 #[check(0u64..1000)]
 async fn async_check(value: u64) {
-    // Simulate an asynchronous operation.
-    assert!(value < 1000);
+    let doubled = async { value * 2 }.await;
+    assert!(doubled < 2000);
 }
 
 /// The `#[check]` attribute essentially expands to a call to [`Check::check`]
