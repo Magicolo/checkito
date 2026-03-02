@@ -144,10 +144,23 @@ impl State {
         index: &mut u128,
         cardinalities: I,
     ) -> Option<usize> {
+        let mut last = (usize::MAX, false);
         for (i, cardinality) in cardinalities.into_iter().enumerate().cycle() {
+            if last.0 < i {
+                last.0 = i;
+            } else if replace(&mut last.1, true) {
+                break;
+            } else {
+                last.0 = i;
+            }
+
             match cardinality {
                 Some(cardinality) if *index < cardinality => return Some(i),
-                Some(cardinality) => *index -= cardinality,
+                Some(0) => continue,
+                Some(cardinality) => {
+                    *index -= cardinality;
+                    last.1 = false;
+                }
                 None => return Some(i),
             }
         }
@@ -1172,5 +1185,20 @@ mod tests {
         assert_eq!(values[0], zero_bits);
         assert!(values[1] > zero_bits && values[1] < values[3]);
         assert!(values[2] < zero_bits && values[2] > values[4]);
+    }
+
+    #[test]
+    fn does_not_cycle_forever() {
+        assert_eq!(State::any_exhaustive(&mut 100, []), None);
+        assert_eq!(State::any_exhaustive(&mut 100, [Some(0)]), None);
+        assert_eq!(State::any_exhaustive(&mut 100, [Some(0); 10]), None);
+        assert_eq!(
+            State::any_exhaustive(&mut 100, [Some(0), Some(1), Some(0)]),
+            Some(1)
+        );
+        assert_eq!(
+            State::any_exhaustive(&mut 100, [Some(0), Some(1), Some(0), Some(0), Some(100)]),
+            Some(4)
+        );
     }
 }
