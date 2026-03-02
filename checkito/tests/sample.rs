@@ -76,4 +76,28 @@ mod check {
         assert_eq!(left.sample(0.5), right.sample(0.5));
         assert_eq!(left.sample(1.0), right.sample(1.0));
     }
+
+    #[check(2usize..=100)]
+    fn samples_iterator_has_exact_size_for_arbitrary_count(count: usize) {
+        let mut samples = (0u8..=10).samples(count);
+        assert_eq!(samples.size_hint(), (count, Some(count)));
+        assert_eq!(samples.len(), count);
+
+        let _ = samples.next().unwrap();
+        let _ = samples.next_back().unwrap();
+        assert_eq!(samples.len(), count - 2);
+    }
+
+    #[check(0usize..=200)]
+    fn sampler_sample_respects_size_for_arbitrary_count(count: usize) {
+        let sampler = Generate::collect::<Vec<_>>(0u8..=u8::MAX).sampler();
+        let at_zero = sampler.sample(0.0);
+        assert!(at_zero.is_empty());
+        let at_one = sampler.sample(1.0);
+        assert!(at_one.len() >= at_zero.len());
+        // The sampler produces the correct number of samples for this count.
+        let mut s = (0u8..=100).sampler();
+        s.count = count;
+        assert_eq!(s.samples().count(), count);
+    }
 }

@@ -25,6 +25,31 @@ mod range {
                     }
                 }
 
+                #[cfg(feature = "check")]
+                mod check {
+                    use super::*;
+
+                    #[check(1usize..=500)]
+                    fn has_sample_for_arbitrary_count(count: usize) {
+                        <$type>::generator().samples(count).next().unwrap();
+                    }
+
+                    #[check(0usize..=500)]
+                    fn sample_has_exact_count(count: usize) {
+                        assert_eq!(<$type>::generator().samples(count).len(), count);
+                    }
+
+                    #[check(1usize..=2000)]
+                    fn shrinks_to_zero_for_arbitrary_sample_count(count: usize) {
+                        for mut outer in shrinker(number::<$type>()).samples(count) {
+                            while let Some(inner) = outer.shrink() {
+                                outer = inner;
+                            }
+                            assert_eq!(0 as $type, outer.item());
+                        }
+                    }
+                }
+
                 #[test]
                 fn empty_range() {
                     assert!(number::<$type>().flat_map(|value| value..value).check(|_| true).is_none());

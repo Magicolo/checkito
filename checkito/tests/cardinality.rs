@@ -226,3 +226,50 @@ fn lazy_delegates_cardinality_to_inner_unbounded() {
     generator.sample(1.0);
     assert_eq!(generator.cardinality(), None);
 }
+
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
+
+    #[check(_, _)]
+    fn u8_range_cardinality_matches_width(start: u8, end: u8) {
+        let (low, high) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        assert_eq!(
+            (low..=high).cardinality(),
+            Some(u128::from(high - low) + 1)
+        );
+    }
+
+    #[check(_, _)]
+    fn i16_range_cardinality_matches_width(start: i16, end: i16) {
+        let (low, high) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        // Use i128 subtraction which cannot overflow for i16 operands.
+        let expected = (high as i128 - low as i128 + 1) as u128;
+        assert_eq!((low..=high).cardinality(), Some(expected));
+    }
+
+    #[check(_)]
+    fn single_value_range_has_cardinality_one(value: u8) {
+        assert_eq!((value..=value).cardinality(), Some(1));
+    }
+
+    #[check(_, _)]
+    fn char_range_cardinality_is_consistent(start: char, end: char) {
+        let (low, high) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        let cardinality = (low..=high).cardinality();
+        // Cardinality should always be at least 1 for a valid range.
+        assert!(cardinality.unwrap() >= 1);
+    }
+}

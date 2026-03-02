@@ -89,3 +89,33 @@ fn nested_quantifiers_dont_become_zero() {
         assert!(value.chars().all(|c| c == 'a'));
     }
 }
+
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
+
+    #[check(10usize..=100)]
+    fn unbounded_star_quantifier_respects_limit_for_arbitrary_sample_count(count: usize) {
+        let generator = regex("a*", None).unwrap();
+        for value in generator.samples(count) {
+            assert!(value.len() <= 64);
+        }
+    }
+
+    #[check(10usize..=100)]
+    fn unbounded_plus_quantifier_is_non_empty_for_arbitrary_sample_count(count: usize) {
+        let generator = regex("a+", None).unwrap();
+        for value in generator.samples(count) {
+            assert!(!value.is_empty());
+            assert!(value.len() <= 64);
+        }
+    }
+
+    #[check(10usize..=100)]
+    fn nested_star_quantifier_generates_valid_strings_for_arbitrary_count(count: usize) {
+        let generator = regex("((a*)*)*", None).unwrap();
+        for value in generator.samples(count) {
+            assert!(value.chars().all(|c| c == 'a'));
+        }
+    }
+}

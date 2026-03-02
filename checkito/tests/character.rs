@@ -194,4 +194,36 @@ mod check {
 
     #[check(_)]
     fn full_does_not_panic(_: char) {}
+
+    #[check(10usize..=2000)]
+    fn surrogate_start_skips_surrogates_for_arbitrary_count(count: usize) {
+        for c in ('\u{D7FF}'..'\u{E010}').samples(count) {
+            let code = c as u32;
+            assert!(
+                code < 0xD800 || code >= 0xE000,
+                "surrogate U+{:04X} generated",
+                code
+            );
+        }
+    }
+
+    #[check(10usize..=2000)]
+    fn range_end_at_e000_skips_surrogates_for_arbitrary_count(count: usize) {
+        for c in ('a'..'\u{E000}').samples(count) {
+            let code = c as u32;
+            assert!(
+                code < 0xD800,
+                "surrogate or post-surrogate U+{:04X} generated",
+                code
+            );
+        }
+    }
+
+    #[check(0usize..=100)]
+    fn collect_with_arbitrary_count_has_requested_length(count: usize) {
+        let value = char::generator()
+            .collect_with::<_, Vec<char>>(count)
+            .sample(1.0);
+        assert_eq!(value.len(), count);
+    }
 }

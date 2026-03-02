@@ -72,4 +72,20 @@ mod check {
         assert_eq!(boxed.cardinality(), Some(u128::from(high - low) + 1));
         assert!(boxed.samples(32).all(|value| value >= low && value <= high));
     }
+
+    #[check(0u8..=u8::MAX)]
+    fn boxed_shrinker_clone_preserves_item(value: u8) {
+        let shrinker = shrinker(boxed(Box::new(value..=value))).sample(1.0);
+        let item = shrinker.item();
+        let clone = shrinker.clone();
+        assert_eq!(item, clone.item());
+        assert_eq!(item, value);
+    }
+
+    #[check(0u8..=u8::MAX)]
+    fn boxed_wrong_downcast_preserves_item(value: u8) {
+        let shrinker = shrinker(boxed(Box::new(value..=value))).sample(1.0);
+        let wrong = shrinker.downcast::<same::Same<u8>>().unwrap_err();
+        assert_eq!(wrong.item(), value);
+    }
 }

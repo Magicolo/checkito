@@ -80,3 +80,27 @@ fn forces_exhaustive_generation_when_requested() {
 
     assert_eq!(values, vec![1, 2, 3, 4, 5, 10, 11, 12]);
 }
+
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
+
+    #[check(500usize..=2000)]
+    fn weighted_any_respects_weight_ordering_for_arbitrary_sample_count(count: usize) {
+        let samples = (
+            Weight::new(1.0, 1),
+            Weight::new(10.0, 10),
+            Weight::new(100.0, 100),
+        )
+            .unify::<i32>()
+            .samples(count)
+            .collect::<Vec<_>>();
+        let one = samples.iter().filter(|&&value| value == 1).count();
+        let ten = samples.iter().filter(|&&value| value == 10).count();
+        let hundred = samples.iter().filter(|&&value| value == 100).count();
+        // With weights 1:10:100 and >= 500 samples, the weak ordering holds
+        // reliably. The <= comparison allows ties but not inversions.
+        assert!(one <= ten);
+        assert!(ten <= hundred);
+    }
+}
