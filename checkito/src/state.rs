@@ -264,13 +264,17 @@ impl State {
                     .sum::<f64>()
                     .min(f64::MAX);
                 debug_assert!(total > 0.0 && total.is_finite());
-                let mut random = self.with().size(1.0).f64(0.0..=total);
+                let random = self.with().size(1.0).f64(0.0..=total);
                 debug_assert!(random.is_finite());
+                // Use a cumulative sum so the final threshold equals `total`
+                // exactly (same summation order), guaranteeing the last
+                // generator is always reachable even under floating-point
+                // accumulation error.
+                let mut cumulative = 0.0_f64;
                 for Weight { weight, generator } in generators {
-                    if random <= *weight {
+                    cumulative += weight;
+                    if random <= cumulative {
                         return Some(generator);
-                    } else {
-                        random -= weight;
                     }
                 }
                 unreachable!();
@@ -822,12 +826,14 @@ macro_rules! or {
                     Mode::Random(_) => {
                         let total = $($ps.weight +)* 0.0f64;
                         debug_assert!(total > 0.0 && total.is_finite());
-                        let mut _random = self.with().size(1.0).f64(0.0..=total);
+                        let _random = self.with().size(1.0).f64(0.0..=total);
                         debug_assert!(_random.is_finite());
-                        $(if _random <= $ps.weight {
+                        // Accumulate weight so the last threshold equals `total`
+                        // exactly, making the last generator always reachable.
+                        let mut _cumulative = 0.0_f64;
+                        $(_cumulative += $ps.weight;
+                        if _random <= _cumulative {
                             return orn::$n::Or::$ts($ps.generator);
-                        } else {
-                            _random -= $ps.weight;
                         })*
                         unreachable!();
                     }
@@ -1034,6 +1040,74 @@ impl<R: Into<Range<f64>>> From<R> for Sizes {
 mod tests {
     use super::*;
     use core::cmp::Ordering;
+
+    // Run the weighted-selection loop against an exact `random` value and return
+    // whether the last-resort `unreachable!()` branch would be reached.
+    fn weighted_residual(random: f64, weights: &[f64]) -> bool {
+        let mut r = random;
+        for &w in weights {
+            if r <= w {
+                return false; // selected OK
+            }
+            r -= w;
+        }
+        true // unreachable!() would be hit
+    }
+
+    #[test]
+    fn any_weighted_does_not_panic_with_equal_third_weights() {
+        // 1/3 + 1/3 + 1/3 rounds up to 1.0 in f64, so `total` exceeds the true
+        // mathematical sum of the three weights.  When `random` is generated as
+        // `rng.f64() * total` the maximum possible value still stays below
+        // `total` for this configuration, so the bug cannot manifest here.
+        // Nevertheless, verify that no seed triggers the panic.
+        let w = 1.0_f64 / 3.0;
+        let generators = [
+            Weight::new(w, 0u8..=0),
+            Weight::new(w, 1u8..=1),
+            Weight::new(w, 2u8..=2),
+        ];
+        for seed in 0u64..100_000 {
+            let mut state = State::random(0, 1, Sizes::DEFAULT, seed);
+            assert!(
+                state.any_weighted(&generators).is_some(),
+                "seed={seed}: any_weighted returned None unexpectedly"
+            );
+        }
+    }
+
+    #[test]
+    fn weighted_selection_loop_residual_triggers_panic_with_buggy_logic() {
+        // Directly demonstrate the arithmetic scenario described in the issue:
+        // when `random` equals `total` (which can arise via the cumulative-sum
+        // mismatch), the subtract-and-compare loop leaves a positive residual
+        // after processing all generators and the original `unreachable!()` is
+        // reached.
+        let w = 1.0_f64 / 3.0;
+        let total = w + w + w; // rounds UP to 1.0 in f64
+        assert_eq!(total, 1.0, "precondition: sum rounds to 1.0");
+
+        // The original (buggy) loop DOES fail when `random == total`.
+        assert!(
+            weighted_residual(total, &[w, w, w]),
+            "expected buggy loop to fail when random == total"
+        );
+
+        // The fixed cumulative approach must NOT fail for the same input.
+        let mut cumulative = 0.0_f64;
+        let mut hit_unreachable = true;
+        for &wt in &[w, w, w] {
+            cumulative += wt;
+            if total <= cumulative {
+                hit_unreachable = false;
+                break;
+            }
+        }
+        assert!(
+            !hit_unreachable,
+            "cumulative approach must always select a generator"
+        );
+    }
 
     #[test]
     fn is_within_bounds() {

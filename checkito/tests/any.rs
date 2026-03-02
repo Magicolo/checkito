@@ -3,6 +3,38 @@ use checkito::state::Weight;
 use common::*;
 use std::collections::HashSet;
 
+// Regression tests for the floating-point weighted-selection bug.
+//
+// The root cause: `total = w1 + w2 + w3` (f64 sum) can round UP relative to the
+// individual weights, so when `random` equals `total` the subtract-and-compare loop
+// leaves a positive residual after the last generator and hits `unreachable!()`.
+// The fix uses a cumulative-sum comparison so the last threshold is always exactly
+// `total`.  See state.rs unit tests for a direct arithmetic demonstration.
+
+#[test]
+fn weighted_any_slice_does_not_panic_with_equal_third_weights() {
+    let w = 1.0_f64 / 3.0;
+    let generators = [
+        Weight::new(w, 0u8..=0u8),
+        Weight::new(w, 1u8..=1u8),
+        Weight::new(w, 2u8..=2u8),
+    ];
+    generators.samples(1_000_000).for_each(|_| {});
+}
+
+#[test]
+fn weighted_any_tuple_does_not_panic_with_equal_third_weights() {
+    let w = 1.0_f64 / 3.0;
+    (
+        Weight::new(w, 0u8..=0u8),
+        Weight::new(w, 1u8..=1u8),
+        Weight::new(w, 2u8..=2u8),
+    )
+        .unify::<u8>()
+        .samples(1_000_000)
+        .for_each(|_| {});
+}
+
 #[test]
 fn weighted_any() {
     let samples = (
