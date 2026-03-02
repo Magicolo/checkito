@@ -864,7 +864,7 @@ ranges!(
     |value: char| {
         let up = u32::saturating_add(value as u32, 1);
         // Skip over the surrogate range U+D800..=U+DFFF when stepping up.
-        let up = if up >= 0xD800 && up <= 0xDFFF {
+        let up = if (0xD800..=0xDFFF).contains(&up) {
             0xE000
         } else {
             up
@@ -876,7 +876,7 @@ ranges!(
     |value: char| {
         let down = u32::saturating_sub(value as u32, 1);
         // Skip over the surrogate range U+D800..=U+DFFF when stepping down.
-        let down = if down >= 0xD800 && down <= 0xDFFF {
+        let down = if (0xD800..=0xDFFF).contains(&down) {
             0xD7FF
         } else {
             down
