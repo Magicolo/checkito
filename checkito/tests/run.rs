@@ -68,4 +68,18 @@ mod check {
         assert_eq!(pass.item, value);
         assert_eq!(pass.proof, value);
     }
+
+    #[check(0u8..=u8::MAX)]
+    fn fail_result_reports_disprove_for_arbitrary_value(value: u8) {
+        let fail = same(value).check(|_| Err::<(), _>("error")).unwrap();
+        assert_eq!(fail.cause, Cause::Disprove("error"));
+        assert_eq!(fail.item, value);
+    }
+
+    #[check(0u8..=u8::MAX)]
+    fn pass_result_has_no_failure_for_arbitrary_value(value: u8) {
+        let pass = same(value).checks(Ok::<_, ()>).next().unwrap();
+        assert!(pass.clone().fail(false).is_none());
+        assert!(pass.into_result().is_ok());
+    }
 }
