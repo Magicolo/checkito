@@ -3,9 +3,9 @@ name = "checkito"
 version = "4.0.3"
 description = "A safe, efficient and simple QuickCheck-inspired library to generate shrinkable random data mainly oriented towards generative/property/exploratory testing."
 documentation = "https://docs.rs/checkito/latest/checkito/"
+readme = "README.md"
 authors = { workspace = true }
 edition = { workspace = true }
-readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 keywords = { workspace = true }

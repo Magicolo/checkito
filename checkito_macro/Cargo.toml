@@ -5,7 +5,6 @@ documentation = "https://docs.rs/checkito_macro/latest/checkito_macro/"
 description = "A set of macros to accompany the `checkito` crate."
 authors = { workspace = true }
 edition = { workspace = true }
-readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 keywords = { workspace = true }
