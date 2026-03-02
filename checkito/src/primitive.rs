@@ -12,7 +12,7 @@ use core::{
     marker::PhantomData,
     ops::{self, Add, Div, Mul, Sub},
 };
-use orn::{Or2, Or5};
+use orn::{Or2, Or3, Or5};
 
 /// Direction for shrinking numeric values.
 ///
@@ -453,6 +453,138 @@ macro_rules! shrink {
     }};
 }
 
+/// Implements `Shrink::shrink` for `Shrinker<$nonzero>`, mirroring the `shrink!` macro but
+/// adapted for NonZero types (no 0, shrink toward MIN for unsigned, toward ±1 for signed).
+macro_rules! shrink_nonzero {
+    (unsigned, $shrink:expr, $inner:ident, $nonzero:ident) => {{
+        match $shrink.direction {
+            Direction::None => {
+                // All unsigned NonZero values are >= 1 = MIN; always shrink toward start.
+                if $shrink.start == $shrink.item {
+                    None
+                } else {
+                    $shrink.direction = Direction::High;
+                    $shrink.end = $shrink.item;
+                    Some(Shrinker {
+                        direction: Direction::High,
+                        start: $shrink.start,
+                        end: $shrink.start,
+                        item: $shrink.start,
+                    })
+                }
+            }
+            Direction::Low => {
+                let start = $shrink.start.get();
+                let end = $shrink.end.get();
+                let delta = end / 2 as $inner - start / 2 as $inner;
+                let middle = start + delta;
+                if middle == start || middle == end {
+                    None
+                } else {
+                    // SAFETY: middle is in (start, end) where start >= 1, so middle >= 1.
+                    let middle = unsafe { ::core::num::$nonzero::new_unchecked(middle) };
+                    let mut shrinker = $shrink.clone();
+                    shrinker.start = middle;
+                    shrinker.item = middle;
+                    $shrink.end = middle;
+                    Some(shrinker)
+                }
+            }
+            Direction::High => {
+                let start = $shrink.start.get();
+                let end = $shrink.end.get();
+                let delta = end / 2 as $inner - start / 2 as $inner;
+                let middle = start + delta;
+                if middle == start || middle == end {
+                    None
+                } else {
+                    // SAFETY: middle is in (start, end) where start >= 1, so middle >= 1.
+                    let middle = unsafe { ::core::num::$nonzero::new_unchecked(middle) };
+                    let mut shrinker = $shrink.clone();
+                    shrinker.end = middle;
+                    shrinker.item = middle;
+                    $shrink.start = middle;
+                    Some(shrinker)
+                }
+            }
+        }
+    }};
+    (signed, $shrink:expr, $inner:ident, $nonzero:ident) => {{
+        match $shrink.direction {
+            Direction::None if $shrink.item.get() > 0 => {
+                // Positive: shrink toward 1 (the smallest positive NonZero value).
+                let one = unsafe { ::core::num::$nonzero::new_unchecked(1 as $inner) };
+                $shrink.start = $shrink.start.max(one);
+                if $shrink.start == $shrink.item {
+                    None
+                } else {
+                    $shrink.direction = Direction::High;
+                    $shrink.end = $shrink.item;
+                    Some(Shrinker {
+                        direction: Direction::High,
+                        start: $shrink.start,
+                        end: $shrink.start,
+                        item: $shrink.start,
+                    })
+                }
+            }
+            Direction::None => {
+                // Negative: shrink toward -1 (the largest negative NonZero value).
+                let neg_one = unsafe { ::core::num::$nonzero::new_unchecked(-1 as $inner) };
+                $shrink.end = $shrink.end.min(neg_one);
+                if $shrink.end == $shrink.item {
+                    None
+                } else {
+                    $shrink.direction = Direction::Low;
+                    $shrink.start = $shrink.item;
+                    Some(Shrinker {
+                        direction: Direction::Low,
+                        start: $shrink.end,
+                        end: $shrink.end,
+                        item: $shrink.end,
+                    })
+                }
+            }
+            Direction::Low => {
+                let start = $shrink.start.get();
+                let end = $shrink.end.get();
+                let delta = end / 2 as $inner - start / 2 as $inner;
+                let middle = start + delta;
+                if middle == start || middle == end {
+                    None
+                } else {
+                    // SAFETY: start and end are in the same-sign sub-range (all negative or all
+                    // positive), so middle shares that sign and is != 0.
+                    let middle = unsafe { ::core::num::$nonzero::new_unchecked(middle) };
+                    let mut shrinker = $shrink.clone();
+                    shrinker.start = middle;
+                    shrinker.item = middle;
+                    $shrink.end = middle;
+                    Some(shrinker)
+                }
+            }
+            Direction::High => {
+                let start = $shrink.start.get();
+                let end = $shrink.end.get();
+                let delta = end / 2 as $inner - start / 2 as $inner;
+                let middle = start + delta;
+                if middle == start || middle == end {
+                    None
+                } else {
+                    // SAFETY: start and end are in the same-sign sub-range (all negative or all
+                    // positive), so middle shares that sign and is != 0.
+                    let middle = unsafe { ::core::num::$nonzero::new_unchecked(middle) };
+                    let mut shrinker = $shrink.clone();
+                    shrinker.end = middle;
+                    shrinker.item = middle;
+                    $shrink.start = middle;
+                    Some(shrinker)
+                }
+            }
+        }
+    }};
+}
+
 same!(&str);
 same!(Box<str>);
 same!(String);
@@ -653,58 +785,237 @@ pub mod char {
 
 macro_rules! nonzero {
     (unsigned, $inner: ident, $constant: ident, $nonzero: ident) => {
-        impl FullGenerate for ::core::num::$nonzero {
-            type Item = ::core::num::$nonzero;
-            type Generator = crate::map::Map<
-                Range<$constant::<{ 1 as $inner }>, $constant::<{ $inner::MAX }>>,
-                fn($inner) -> ::core::num::$nonzero,
-            >;
+        type NZSpecialType = Any<(::core::num::$nonzero, ::core::num::$nonzero)>;
+        const NZ_SPECIAL: NZSpecialType =
+            Any((::core::num::$nonzero::MIN, ::core::num::$nonzero::MAX));
 
-            fn generator() -> Self::Generator {
-                fn to_nonzero(n: $inner) -> ::core::num::$nonzero {
-                    // SAFETY: n is guaranteed to be in [1, $inner::MAX], so n != 0.
-                    unsafe { ::core::num::$nonzero::new_unchecked(n) }
-                }
-                let range: Range<$constant::<{ 1 as $inner }>, $constant::<{ $inner::MAX }>> =
-                    Constant::VALUE;
-                range.map(to_nonzero as fn($inner) -> ::core::num::$nonzero)
+        impl From<Full<::core::num::$nonzero>> for Range<::core::num::$nonzero> {
+            fn from(_: Full<::core::num::$nonzero>) -> Self {
+                Range(::core::num::$nonzero::MIN, ::core::num::$nonzero::MAX)
             }
         }
+
+        impl Generate for Special<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+            type Shrink = ::core::num::$nonzero;
+
+            const CARDINALITY: Option<u128> = NZSpecialType::CARDINALITY;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                NZ_SPECIAL.generate(state).into()
+            }
+
+            fn cardinality(&self) -> Option<u128> {
+                NZ_SPECIAL.cardinality()
+            }
+        }
+
+        impl Generate for Full<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+            type Shrink = Shrinker<::core::num::$nonzero>;
+
+            const CARDINALITY: Option<u128> =
+                cardinality(::core::num::$nonzero::MIN.get(), ::core::num::$nonzero::MAX.get());
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                match (
+                    Weight::one(NZ_SPECIAL),
+                    Weight::new(50.0, Range(::core::num::$nonzero::MIN, ::core::num::$nonzero::MAX)),
+                )
+                .generate(state)
+                {
+                    Or2::T0(item) => Shrinker {
+                        start: ::core::num::$nonzero::MIN,
+                        end: ::core::num::$nonzero::MAX,
+                        item: item.into(),
+                        direction: Direction::None,
+                    },
+                    Or2::T1(shrinker) => shrinker,
+                }
+            }
+        }
+
+        impl Shrink for Shrinker<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+
+            fn item(&self) -> Self::Item {
+                self.item
+            }
+
+            fn shrink(&mut self) -> Option<Self> {
+                shrink_nonzero!(unsigned, self, $inner, $nonzero)
+            }
+        }
+
+        impl Generate for Range<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+            type Shrink = Shrinker<::core::num::$nonzero>;
+
+            const CARDINALITY: Option<u128> =
+                cardinality(::core::num::$nonzero::MIN.get(), ::core::num::$nonzero::MAX.get());
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                let start = self.start().get();
+                let end = self.end().get();
+                // SAFETY: start >= 1 (NonZero guarantees), so the generated item is >= 1.
+                let item =
+                    unsafe { ::core::num::$nonzero::new_unchecked(state.$inner(Range(start, end))) };
+                Shrinker { start: self.start(), end: self.end(), item, direction: Direction::None }
+            }
+
+            fn cardinality(&self) -> Option<u128> {
+                cardinality(self.start().get(), self.end().get())
+            }
+        }
+
+        impl Number for ::core::num::$nonzero {
+            type Full = Full<::core::num::$nonzero>;
+            type Positive = Full<::core::num::$nonzero>;
+            type Negative = Full<::core::num::$nonzero>;
+
+            const ZERO: Self = ::core::num::$nonzero::MIN;
+            const ONE: Self = ::core::num::$nonzero::MIN;
+            const MIN: Self = ::core::num::$nonzero::MIN;
+            const MAX: Self = ::core::num::$nonzero::MAX;
+            const FULL: Self::Full = Constant::VALUE;
+            const POSITIVE: Self::Positive = Constant::VALUE;
+            const NEGATIVE: Self::Negative = Constant::VALUE;
+        }
+
+        full!(::core::num::$nonzero);
+        same!(::core::num::$nonzero);
     };
     (signed, $inner: ident, $constant: ident, $nonzero: ident) => {
-        impl FullGenerate for ::core::num::$nonzero {
-            type Item = ::core::num::$nonzero;
-            type Generator = crate::map::Map<
-                crate::unify::Unify<
-                    Any<(
-                        Range<$constant::<{ $inner::MIN }>, $constant::<{ -1 as $inner }>>,
-                        Range<$constant::<{ 1 as $inner }>, $constant::<{ $inner::MAX }>>,
-                    )>,
-                    $inner,
-                >,
-                fn($inner) -> ::core::num::$nonzero,
-            >;
+        // -1 and 1 are the NonZero values closest to zero; used for shrinking and special values.
+        const NZ_NEG_ONE: ::core::num::$nonzero =
+            unsafe { ::core::num::$nonzero::new_unchecked(-1 as $inner) };
+        const NZ_ONE: ::core::num::$nonzero =
+            unsafe { ::core::num::$nonzero::new_unchecked(1 as $inner) };
 
-            fn generator() -> Self::Generator {
-                fn to_nonzero(n: $inner) -> ::core::num::$nonzero {
-                    // SAFETY: n is guaranteed to be in [$inner::MIN, -1] or [1, $inner::MAX],
-                    // so n != 0.
-                    unsafe { ::core::num::$nonzero::new_unchecked(n) }
-                }
-                let negative: Range<
-                    $constant::<{ $inner::MIN }>,
-                    $constant::<{ -1 as $inner }>,
-                > = Constant::VALUE;
-                let positive: Range<
-                    $constant::<{ 1 as $inner }>,
-                    $constant::<{ $inner::MAX }>,
-                > = Constant::VALUE;
-                (negative, positive)
-                    .any()
-                    .unify::<$inner>()
-                    .map(to_nonzero as fn($inner) -> ::core::num::$nonzero)
+        type NZSpecialType = Any<(
+            ::core::num::$nonzero,
+            ::core::num::$nonzero,
+            ::core::num::$nonzero,
+            ::core::num::$nonzero,
+        )>;
+        const NZ_SPECIAL: NZSpecialType = Any((
+            ::core::num::$nonzero::MIN,
+            NZ_NEG_ONE,
+            NZ_ONE,
+            ::core::num::$nonzero::MAX,
+        ));
+
+        impl From<Full<::core::num::$nonzero>> for Range<::core::num::$nonzero> {
+            fn from(_: Full<::core::num::$nonzero>) -> Self {
+                Range(::core::num::$nonzero::MIN, ::core::num::$nonzero::MAX)
             }
         }
+
+        impl Generate for Special<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+            type Shrink = ::core::num::$nonzero;
+
+            const CARDINALITY: Option<u128> = NZSpecialType::CARDINALITY;
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                NZ_SPECIAL.generate(state).into()
+            }
+
+            fn cardinality(&self) -> Option<u128> {
+                NZ_SPECIAL.cardinality()
+            }
+        }
+
+        impl Generate for Full<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+            type Shrink = Shrinker<::core::num::$nonzero>;
+
+            // Full inner type cardinality minus 1 for the excluded zero.
+            const CARDINALITY: Option<u128> = match cardinality($inner::MIN, $inner::MAX) {
+                Some(c) => c.checked_sub(1),
+                None => None,
+            };
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                // Use two weighted sub-ranges (negative and positive) to avoid generating 0.
+                match (
+                    Weight::one(NZ_SPECIAL),
+                    Weight::new(50.0, Range(::core::num::$nonzero::MIN, NZ_NEG_ONE)),
+                    Weight::new(50.0, Range(NZ_ONE, ::core::num::$nonzero::MAX)),
+                )
+                .generate(state)
+                {
+                    Or3::T0(item) => Shrinker {
+                        start: ::core::num::$nonzero::MIN,
+                        end: ::core::num::$nonzero::MAX,
+                        item: item.into(),
+                        direction: Direction::None,
+                    },
+                    Or3::T1(shrinker) | Or3::T2(shrinker) => shrinker,
+                }
+            }
+        }
+
+        impl Shrink for Shrinker<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+
+            fn item(&self) -> Self::Item {
+                self.item
+            }
+
+            fn shrink(&mut self) -> Option<Self> {
+                shrink_nonzero!(signed, self, $inner, $nonzero)
+            }
+        }
+
+        impl Generate for Range<::core::num::$nonzero> {
+            type Item = ::core::num::$nonzero;
+            type Shrink = Shrinker<::core::num::$nonzero>;
+
+            // Max possible: full non-zero range = inner cardinality minus 1 for excluded zero.
+            const CARDINALITY: Option<u128> = match cardinality($inner::MIN, $inner::MAX) {
+                Some(c) => c.checked_sub(1),
+                None => None,
+            };
+
+            fn generate(&self, state: &mut State) -> Self::Shrink {
+                let start = self.start().get();
+                let end = self.end().get();
+                let inner = state.$inner(Range(start, end));
+                // SAFETY: NonZero bounds guarantee start and end are != 0, so when the range does
+                // not span zero the result is != 0. When it does span zero and 0 is generated we
+                // substitute with start (always a valid NonZero value, since start != 0).
+                let inner = if inner == 0 as $inner { start } else { inner };
+                let item = unsafe { ::core::num::$nonzero::new_unchecked(inner) };
+                Shrinker { start: self.start(), end: self.end(), item, direction: Direction::None }
+            }
+
+            fn cardinality(&self) -> Option<u128> {
+                let start = self.start().get();
+                let end = self.end().get();
+                let c = cardinality(start, end)?;
+                // Subtract 1 when the range spans zero to exclude the missing 0.
+                if start < 0 as $inner && end > 0 as $inner { c.checked_sub(1) } else { Some(c) }
+            }
+        }
+
+        impl Number for ::core::num::$nonzero {
+            type Full = Full<::core::num::$nonzero>;
+            type Positive = Full<::core::num::$nonzero>;
+            type Negative = Full<::core::num::$nonzero>;
+
+            // Zero is represented as 1 (the NonZero value closest to zero).
+            const ZERO: Self = NZ_ONE;
+            const ONE: Self = NZ_ONE;
+            const MIN: Self = ::core::num::$nonzero::MIN;
+            const MAX: Self = ::core::num::$nonzero::MAX;
+            const FULL: Self::Full = Constant::VALUE;
+            const POSITIVE: Self::Positive = Constant::VALUE;
+            const NEGATIVE: Self::Negative = Constant::VALUE;
+        }
+
+        full!(::core::num::$nonzero);
+        same!(::core::num::$nonzero);
     };
 }
 
