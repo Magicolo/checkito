@@ -1,5 +1,3 @@
-#![cfg(feature = "regex")]
-
 use crate::{
     REPEATS, all,
     any::Any,

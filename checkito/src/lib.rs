@@ -19,6 +19,7 @@ pub mod map;
 mod prelude;
 pub mod primitive;
 pub mod prove;
+#[cfg(feature = "regex")]
 pub mod regex;
 #[doc(hidden)]
 pub mod run;
