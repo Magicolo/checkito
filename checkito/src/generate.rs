@@ -184,7 +184,7 @@ pub trait Generate {
     /// let evens = Generate::filter(0..100, |&x| x % 2 == 0);
     ///
     /// // The generated value is an `Option`. `None` means no matching value
-    /// // was found within the retry limit, which is an acceptable outcome.
+    /// // was found within the retry limit.
     /// evens.check(|x: Option<i32>| x.map_or(true, |x| x % 2 == 0));
     /// ```
     fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
