@@ -80,3 +80,32 @@ fn filter_map_with_retries_calls_mapping_for_each_attempt() {
     assert_eq!(values, vec![None, None, None]);
     assert_eq!(calls.load(Ordering::SeqCst), 15);
 }
+
+#[cfg(feature = "check")]
+mod check {
+    use super::*;
+
+    #[check(_, _)]
+    fn filtered_u8_pair_preserves_predicate(left: u8, right: u8) {
+        // Filter ensures left != right; verify the filter is respected.
+        let result = (same(left), same(right))
+            .filter(|(l, r)| l != r)
+            .sample(1.0);
+        match result {
+            Some((l, r)) => assert_ne!(l, r),
+            None => assert_eq!(left, right),
+        }
+    }
+
+    #[check(0u8..=255)]
+    fn filter_map_preserves_mapping(value: u8) {
+        let result = same(value)
+            .filter_map(|v| (v % 2 == 0).then_some(v / 2))
+            .sample(1.0);
+        if value % 2 == 0 {
+            assert_eq!(result, Some(value / 2));
+        } else {
+            assert_eq!(result, None);
+        }
+    }
+}

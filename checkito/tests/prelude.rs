@@ -262,4 +262,53 @@ mod check {
         let converted = same(value).convert::<u16>().samples(1).next().unwrap();
         assert_eq!(converted, u16::from(value));
     }
+
+    #[check(1usize..=200)]
+    fn size_zero_forces_empty_collections_for_arbitrary_sample_count(count: usize) {
+        let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+            .size(|_| 0.0)
+            .samples(count)
+            .collect::<Vec<_>>();
+        assert!(values.iter().all(Vec::is_empty));
+    }
+
+    #[check(1usize..=200)]
+    fn dampen_with_zero_limit_forces_empty_for_arbitrary_sample_count(count: usize) {
+        let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+            .dampen_with(1.0, 8, 0)
+            .samples(count)
+            .collect::<Vec<_>>();
+        assert!(values.iter().all(Vec::is_empty));
+    }
+
+    #[check(1usize..=200)]
+    fn dampen_with_zero_deepest_forces_empty_for_arbitrary_sample_count(count: usize) {
+        let values = Generate::collect::<Vec<_>>(0u8..=u8::MAX)
+            .dampen_with(1.0, 0, usize::MAX)
+            .samples(count)
+            .collect::<Vec<_>>();
+        assert!(values.iter().all(Vec::is_empty));
+    }
+
+    #[check(1usize..=128)]
+    fn lazy_constructs_generator_only_once_for_arbitrary_sample_count(count: usize) {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let lazy = {
+            let calls = Arc::clone(&calls);
+            lazy(move || {
+                calls.fetch_add(1, Ordering::SeqCst);
+                0u8..=1
+            })
+        };
+
+        let samples = lazy.samples(count).collect::<Vec<_>>();
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(samples.iter().all(|value| *value <= 1));
+    }
 }
