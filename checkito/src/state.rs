@@ -862,10 +862,30 @@ tuples!(@any or);
 
 ranges!(
     char,
-    |value: char| char::from_u32(u32::saturating_add(value as _, 1))
-        .unwrap_or(char::REPLACEMENT_CHARACTER),
-    |value: char| char::from_u32(u32::saturating_sub(value as _, 1))
-        .unwrap_or(char::REPLACEMENT_CHARACTER)
+    |value: char| {
+        let up = u32::saturating_add(value as u32, 1);
+        // Skip over the surrogate range U+D800..=U+DFFF when stepping up.
+        let up = if up >= 0xD800 && up <= 0xDFFF {
+            0xE000
+        } else {
+            up
+        };
+        // `up` may exceed 0x10FFFF only when `value` is `char::MAX`; saturate
+        // to `char::MAX` so that stepping past the end stays in range.
+        char::from_u32(up).unwrap_or(char::MAX)
+    },
+    |value: char| {
+        let down = u32::saturating_sub(value as u32, 1);
+        // Skip over the surrogate range U+D800..=U+DFFF when stepping down.
+        let down = if down >= 0xD800 && down <= 0xDFFF {
+            0xD7FF
+        } else {
+            down
+        };
+        // After the surrogate skip, `down` is always a valid code point; the
+        // fallback to `char::MIN` is a safety net that should never be reached.
+        char::from_u32(down).unwrap_or(char::MIN)
+    }
 );
 integer!(
     [u8, u8, U8],
