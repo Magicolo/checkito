@@ -277,13 +277,13 @@ impl State {
                     .sum::<f64>()
                     .min(f64::MAX);
                 debug_assert!(total > 0.0 && total.is_finite());
-                let mut random = self.with().size(1.0).f64(0.0..=total);
+                let random = self.with().size(1.0).f64(0.0..=total);
                 debug_assert!(random.is_finite());
+                let mut sum = 0.0f64;
                 for Weight { weight, generator } in generators {
-                    if random <= *weight {
+                    sum += weight;
+                    if random <= sum {
                         return Some(generator);
-                    } else {
-                        random -= weight;
                     }
                 }
                 unreachable!();
@@ -835,13 +835,15 @@ macro_rules! or {
                     Mode::Random(_) => {
                         let total = $($ps.weight +)* 0.0f64;
                         debug_assert!(total > 0.0 && total.is_finite());
-                        let mut _random = self.with().size(1.0).f64(0.0..=total);
-                        debug_assert!(_random.is_finite());
-                        $(if _random <= $ps.weight {
-                            return orn::$n::Or::$ts($ps.generator);
-                        } else {
-                            _random -= $ps.weight;
-                        })*
+                        let random = self.with().size(1.0).f64(0.0..=total);
+                        debug_assert!(random.is_finite());
+                        let mut sum = 0.0_f64;
+                        $(
+                            sum += $ps.weight;
+                            if random <= sum {
+                                return orn::$n::Or::$ts($ps.generator);
+                            }
+                        )*
                         unreachable!();
                     }
                     Mode::Exhaustive(index) => {
@@ -1047,6 +1049,19 @@ impl<R: Into<Range<f64>>> From<R> for Sizes {
 mod tests {
     use super::*;
     use core::cmp::Ordering;
+
+    #[test]
+    fn any_weighted_does_not_panic_with_random_weights() {
+        let mut random = Rng::new();
+        for count in 1usize..=1000 {
+            let generators = Iterator::map(1..=count, |i| {
+                Weight::new(i as f64 / random.f64() / random.f64() + f64::EPSILON, i)
+            })
+            .collect::<Vec<_>>();
+            let mut state = State::random(0, 1, Sizes::DEFAULT, random.u64(..));
+            assert!(state.any_weighted(&generators).unwrap() <= &count);
+        }
+    }
 
     #[test]
     fn is_within_bounds() {
