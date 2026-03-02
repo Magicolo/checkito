@@ -1040,11 +1040,13 @@ mod tests {
     #[test]
     fn any_weighted_does_not_panic_with_random_weights() {
         let mut random = Rng::new();
-        for count in 1..1_000usize {
-            let generators =
-                Iterator::map(0..count, |i| Weight::new(random.f64(), i)).collect::<Vec<_>>();
+        for count in 1usize..=1000 {
+            let generators = Iterator::map(1..=count, |i| {
+                Weight::new(i as f64 / random.f64() / random.f64(), i)
+            })
+            .collect::<Vec<_>>();
             let mut state = State::random(0, 1, Sizes::DEFAULT, random.u64(..));
-            assert!(state.any_weighted(&generators).unwrap() < &count);
+            assert!(state.any_weighted(&generators).unwrap() <= &count);
         }
     }
 
