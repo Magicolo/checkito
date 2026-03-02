@@ -21,6 +21,9 @@ use core::convert::Infallible;
 ///   `false` fails.
 /// - **`Result<T, E>`**: A function that returns `Ok(T)` passes, and one that
 ///   returns `Err(E)` fails. The success and error types can be anything.
+/// - **`Option<P: Prove>`**: A function that returns `Some(value)` delegates to
+///   `value.prove()`, while `None` is treated as a failure (`Err(None)`). This
+///   allows ergonomic use of `filter` and `filter_map` combinators with `check`.
 ///
 /// # Examples
 ///
@@ -87,5 +90,17 @@ impl<T, E> Prove for Result<T, E> {
 
     fn prove(self) -> Self {
         self
+    }
+}
+
+impl<P: Prove> Prove for Option<P> {
+    type Error = Option<P::Error>;
+    type Proof = P::Proof;
+
+    fn prove(self) -> Result<Self::Proof, Self::Error> {
+        match self {
+            Some(value) => value.prove().map_err(Some),
+            None => Err(None),
+        }
     }
 }

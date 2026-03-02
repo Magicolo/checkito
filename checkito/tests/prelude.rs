@@ -253,6 +253,33 @@ fn lazy_lock_generator_is_forced_and_reused() {
     assert!(values.iter().all(|value| *value <= 2));
 }
 
+#[test]
+fn option_some_true_proves() {
+    use checkito::prove::Prove;
+    assert!(Some(true).prove().is_ok());
+}
+
+#[test]
+fn option_some_false_fails() {
+    use checkito::prove::Prove;
+    assert!(Some(false).prove().is_err());
+}
+
+#[test]
+fn option_none_fails() {
+    use checkito::prove::Prove;
+    assert!(<Option<bool>>::None.prove().is_err());
+    let err = <Option<bool>>::None.prove().unwrap_err();
+    assert_eq!(err, None);
+}
+
+#[test]
+fn option_some_err_wraps_inner_error() {
+    use checkito::prove::Prove;
+    let result: Result<(), Option<()>> = Some(false).prove();
+    assert_eq!(result, Err(Some(())));
+}
+
 #[cfg(feature = "check")]
 mod check {
     use super::*;
