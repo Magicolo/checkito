@@ -22,7 +22,6 @@ pub struct Check {
     pub constant: Option<bool>,
     #[cfg(feature = "asynchronous")]
     pub asynchronous: Option<bool>,
-    pub verbose: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -178,7 +177,6 @@ impl Check {
             rest: None,
             debug: parse("CHECKITO_DEBUG"),
             color: parse("CHECKITO_COLOR"),
-            verbose: parse("CHECKITO_VERBOSE"),
             #[cfg(feature = "constant")]
             constant: parse("CHECKITO_CONSTANT"),
             #[cfg(feature = "asynchronous")]
@@ -273,7 +271,10 @@ impl Check {
                 Key::ShrinkErrors => {
                     quote_spanned!(left.span() => _checker.shrink.errors = #right;)
                 }
-                Key::Debug | Key::Color | Key::Verbose => continue,
+                Key::Verbose => {
+                    quote_spanned!(left.span() => _checker.verbose(#right);)
+                }
+                Key::Debug | Key::Color => continue,
                 #[cfg(feature = "constant")]
                 Key::Constant => continue,
                 #[cfg(feature = "asynchronous")]
@@ -283,7 +284,6 @@ impl Check {
 
         let name = &signature.ident;
         let color = self.color.unwrap_or(true);
-        let verbose = self.verbose.unwrap_or(false);
         let mut module = "synchronous";
         #[cfg(feature = "asynchronous")]
         if self.asynchronous.unwrap_or(signature.asyncness.is_some()) {
@@ -309,7 +309,6 @@ impl Check {
                 |_checker| { #(#updates)* },
                 |(#(#arguments,)*)| #name(#(#arguments,)*),
                 #color,
-                #verbose,
             )),
         )
     }
@@ -331,10 +330,6 @@ impl Parse for Check {
                             }
                             Key::Color => {
                                 check.color = Some(as_bool(&right)?);
-                                continue;
-                            }
-                            Key::Verbose => {
-                                check.verbose = Some(as_bool(&right)?);
                                 continue;
                             }
                             #[cfg(feature = "constant")]

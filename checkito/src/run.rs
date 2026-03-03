@@ -6,9 +6,8 @@ use core::{
     any::type_name,
     cell::Cell,
     fmt::{self, Arguments},
-    str::FromStr,
 };
-use std::{env, panic};
+use std::panic;
 
 struct Colors {
     red: &'static str,
@@ -47,12 +46,8 @@ fn prepare<G: Generate + ?Sized, R, U: FnOnce(&mut Checker<G, R>)>(
     checker: &mut Checker<G, R>,
     update: U,
     color: bool,
-    verbose: bool,
 ) -> Colors {
-    checker.generate.items = verbose;
-    checker.shrink.items = verbose;
-    checker.shrink.errors = verbose;
-    environment::update(checker);
+    checker.environment();
     update(checker);
     Colors::new(color)
 }
@@ -180,9 +175,8 @@ pub mod synchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, print_default)
+        with(generator, update, check, color, print_default)
     }
 
     #[track_caller]
@@ -196,9 +190,8 @@ pub mod synchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, print_debug);
+        with(generator, update, check, color, print_debug);
     }
 
     #[track_caller]
@@ -207,9 +200,8 @@ pub mod synchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, print_minimal);
+        with(generator, update, check, color, print_minimal);
     }
 
     #[track_caller]
@@ -224,11 +216,10 @@ pub mod synchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
         handle: H,
     ) {
         let mut checker = generator.checker();
-        let colors = prepare(&mut checker, update, color, verbose);
+        let colors = prepare(&mut checker, update, color);
         let guard = hook::capture();
         checker
             .checks(move |input| {
@@ -262,9 +253,8 @@ pub mod asynchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, print_default)
+        with(generator, update, check, color, print_default)
     }
 
     #[track_caller]
@@ -278,9 +268,8 @@ pub mod asynchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, print_debug)
+        with(generator, update, check, color, print_debug)
     }
 
     #[track_caller]
@@ -294,9 +283,8 @@ pub mod asynchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
     ) {
-        with(generator, update, check, color, verbose, print_minimal)
+        with(generator, update, check, color, print_minimal)
     }
 
     #[track_caller]
@@ -311,12 +299,10 @@ pub mod asynchronous {
         update: U,
         check: C,
         color: bool,
-        verbose: bool,
         handle: H,
     ) {
         let mut checker = generator.checker().asynchronous(None);
-        // Keep the canonical run option order as `(color, verbose)`.
-        let colors = prepare(&mut checker, update, color, verbose);
+        let colors = prepare(&mut checker, update, color);
         let guard = hook::capture();
         let check = &check;
         block_on(
@@ -402,85 +388,6 @@ mod hook {
     }
 }
 
-mod environment {
-    use super::*;
-
-    mod generate {
-        use super::*;
-
-        pub fn count() -> Option<usize> {
-            parse("CHECKITO_GENERATE_COUNT")
-        }
-
-        pub fn size() -> Option<f64> {
-            parse("CHECKITO_GENERATE_SIZE")
-        }
-
-        pub fn seed() -> Option<u64> {
-            parse("CHECKITO_GENERATE_SEED")
-        }
-
-        pub fn items() -> Option<bool> {
-            parse("CHECKITO_GENERATE_ITEMS")
-        }
-
-        pub fn update<G: ?Sized, R>(checker: &mut Checker<G, R>) {
-            if let Some(value) = size() {
-                checker.generate.sizes = (value..=value).into();
-            }
-            if let Some(value) = count() {
-                checker.generate.count = value;
-            }
-            if let Some(value) = seed() {
-                checker.generate.seed = value;
-            }
-            if let Some(value) = items() {
-                checker.generate.items = value;
-            }
-        }
-    }
-
-    mod shrink {
-        use super::*;
-
-        pub fn count() -> Option<usize> {
-            parse("CHECKITO_SHRINK_COUNT")
-        }
-
-        pub fn items() -> Option<bool> {
-            parse("CHECKITO_SHRINK_ITEMS")
-        }
-
-        pub fn errors() -> Option<bool> {
-            parse("CHECKITO_SHRINK_ERRORS")
-        }
-
-        pub fn update<G: ?Sized, R>(checker: &mut Checker<G, R>) {
-            if let Some(value) = count() {
-                checker.shrink.count = value;
-            }
-            if let Some(value) = items() {
-                checker.shrink.items = value;
-            }
-            if let Some(value) = errors() {
-                checker.shrink.errors = value;
-            }
-        }
-    }
-
-    pub fn update<G: ?Sized, R>(checker: &mut Checker<G, R>) {
-        generate::update(checker);
-        shrink::update(checker);
-    }
-
-    fn parse<T: FromStr>(key: &str) -> Option<T> {
-        match env::var(key) {
-            Ok(value) => value.parse().ok(),
-            Err(_) => None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -491,7 +398,8 @@ mod tests {
         let mut checker = bool::generator().checker();
 
         {
-            let guard = prepare(&mut checker, |_| {}, false, true);
+            checker.verbose(true);
+            let guard = prepare(&mut checker, |_| {}, false);
             assert_eq!(guard.green, "");
             assert!(checker.generate.items);
             assert!(checker.shrink.items);
@@ -499,7 +407,8 @@ mod tests {
         }
 
         {
-            let guard = prepare(&mut checker, |_| {}, true, false);
+            checker.verbose(false);
+            let guard = prepare(&mut checker, |_| {}, true);
             assert_eq!(guard.green, "\x1b[32m");
             assert!(!checker.generate.items);
             assert!(!checker.shrink.items);

@@ -16,7 +16,7 @@ use core::{
     panic::AssertUnwindSafe,
     result,
 };
-use std::{borrow::Cow, panic::catch_unwind, thread::available_parallelism};
+use std::{borrow::Cow, env, panic::catch_unwind, thread::available_parallelism};
 
 /// Configures the generation process.
 #[derive(Clone, Debug)]
@@ -264,7 +264,80 @@ impl<G: Generate> Checker<G, synchronous::Run> {
     }
 }
 
-impl<G: Generate, R> Checker<G, R> {
+impl<G: ?Sized, R> Checker<G, R> {
+    #[doc(hidden)]
+    pub fn verbose(&mut self, verbose: bool) {
+        self.generate.items = verbose;
+        self.shrink.items = verbose;
+        self.shrink.errors = verbose;
+    }
+
+    pub(crate) fn environment(&mut self) {
+        self.variables(
+            env::vars_os().filter_map(|(key, value)| {
+                Some((key.into_string().ok()?, value.into_string().ok()?))
+            }),
+        )
+    }
+
+    pub(crate) fn variables<K: AsRef<str>, V: AsRef<str>, I: IntoIterator<Item = (K, V)>>(
+        &mut self,
+        variables: I,
+    ) {
+        for (key, value) in variables {
+            match key.as_ref() {
+                "CHECKITO_GENERATE_COUNT" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.generate.count = value;
+                    }
+                }
+                "CHECKITO_GENERATE_SIZE" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.generate.sizes = (value..=value).into();
+                    }
+                }
+                "CHECKITO_GENERATE_SEED" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.generate.seed = value;
+                    }
+                }
+                "CHECKITO_GENERATE_ITEMS" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.generate.items = value;
+                    }
+                }
+                "CHECKITO_GENERATE_EXHAUSTIVE" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.generate.exhaustive = Some(value);
+                    }
+                }
+                "CHECKITO_SHRINK_COUNT" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.shrink.count = value;
+                    }
+                }
+                "CHECKITO_SHRINK_ITEMS" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.shrink.items = value;
+                    }
+                }
+                "CHECKITO_SHRINK_ERRORS" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.shrink.errors = value;
+                    }
+                }
+                "CHECKITO_VERBOSE" => {
+                    if let Ok(value) = value.as_ref().parse() {
+                        self.verbose(value);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+impl<G, R> Checker<G, R> {
     fn with<S>(self, run: S) -> Checker<G, S> {
         Checker {
             generate: self.generate,
@@ -327,7 +400,8 @@ impl<T, P: Prove> Result<T, P> {
     }
 
     /// Converts this result into the inner [`Pass`] if it is a `Pass` result,
-    /// or a `Shrink` result when `shrink` is `true`. Returns `Err(self)` otherwise.
+    /// or a `Shrink` result when `shrink` is `true`. Returns `Err(self)`
+    /// otherwise.
     #[allow(clippy::result_large_err)]
     pub fn into_pass(self, shrink: bool) -> result::Result<Pass<T, P::Proof>, Self> {
         match self {
@@ -348,7 +422,8 @@ impl<T, P: Prove> Result<T, P> {
     }
 
     /// Converts this result into the inner [`Fail`] if it is a `Fail` result,
-    /// or a `Shrunk` result when `shrunk` is `true`. Returns `Err(self)` otherwise.
+    /// or a `Shrunk` result when `shrunk` is `true`. Returns `Err(self)`
+    /// otherwise.
     #[allow(clippy::result_large_err)]
     pub fn into_fail(self, shrunk: bool) -> result::Result<Fail<T, P::Error>, Self> {
         match self {
@@ -404,7 +479,8 @@ impl<T, P> Fail<T, P> {
     ///
     /// - For a [`Cause::Panic`] with a message, returns that message.
     /// - For a [`Cause::Panic`] without a message, returns `"panicked"`.
-    /// - For a [`Cause::Disprove`], returns the `Debug` representation of the error.
+    /// - For a [`Cause::Disprove`], returns the `Debug` representation of the
+    ///   error.
     pub fn message(&self) -> Cow<'static, str>
     where
         P: Debug,
@@ -1057,10 +1133,10 @@ pub(crate) mod asynchronous {
     ) -> Pin<&mut Entry<S, P>> {
         let count = entries.len();
         // SAFETY: `index % count` is always in bounds (assuming count > 0, which is
-        // guaranteed by the caller since the buffer is allocated with at least one slot).
-        // `Pin::map_unchecked_mut` is sound because the `Entry` values inside the
-        // `Box<[Entry]>` are never moved — the `Box` itself may move, but its contents
-        // stay at a stable address.
+        // guaranteed by the caller since the buffer is allocated with at least one
+        // slot). `Pin::map_unchecked_mut` is sound because the `Entry` values
+        // inside the `Box<[Entry]>` are never moved — the `Box` itself may
+        // move, but its contents stay at a stable address.
         unsafe { entries.map_unchecked_mut(|entries| &mut entries[index % count]) }
     }
 
