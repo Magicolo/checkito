@@ -60,10 +60,10 @@ fn prepare<G: Generate + ?Sized, R, U: FnOnce(&mut Checker<G, R>)>(
 fn handle<
     T,
     P: Prove,
-    WP: Fn(Arguments, Pass<T, P::Proof>),
-    WF: Fn(Arguments, Fail<T, P::Error>),
+    WP: Fn(Arguments, &Pass<T, P::Proof>),
+    WF: Fn(Arguments, &Fail<T, P::Error>),
 >(
-    result: Result<T, P>,
+    result: &Result<T, P>,
     &Colors {
         red,
         green,
@@ -102,11 +102,11 @@ fn handle<
 }
 
 fn print_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
-    result: Result<T, P>,
+    result: &Result<T, P>,
     colors: &Colors,
 ) {
     handle(
-        result,
+        &result,
         colors,
         |prefix, pass| {
             println!(
@@ -130,7 +130,7 @@ fn print_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
 }
 
 fn print_debug<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
-    result: Result<T, P>,
+    result: &Result<T, P>,
     colors: &Colors,
 ) {
     handle(
@@ -141,7 +141,7 @@ fn print_debug<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
     )
 }
 
-fn print_minimal<T, P: Prove>(result: Result<T, P>, colors: &Colors) {
+fn print_minimal<T, P: Prove>(result: &Result<T, P>, colors: &Colors) {
     handle(
         result,
         colors,
@@ -218,7 +218,7 @@ pub mod synchronous {
         U: FnOnce(&mut Checker<G, Run>),
         P: Prove,
         C: Fn(G::Item) -> P,
-        H: Fn(Result<G::Item, P>, &Colors),
+        H: Fn(&Result<G::Item, P>, &Colors),
     >(
         generator: G,
         update: U,
@@ -237,7 +237,7 @@ pub mod synchronous {
                 drop(guard);
                 output
             })
-            .for_each(|result| handle(result, &colors));
+            .for_each(|result| handle(&result, &colors));
         drop(guard);
     }
 }
@@ -305,7 +305,7 @@ pub mod asynchronous {
         U: FnOnce(&mut Checker<G, Run>),
         P: Future<Output: Prove>,
         C: Fn(G::Item) -> P,
-        H: Fn(Result<G::Item, P::Output>, &Colors),
+        H: Fn(&Result<G::Item, P::Output>, &Colors),
     >(
         generator: G,
         update: U,
@@ -327,7 +327,7 @@ pub mod asynchronous {
                     drop(guard);
                     proof
                 })
-                .for_each(|result| handle(result, &colors)),
+                .for_each(|result| handle(&result, &colors)),
         );
         drop(guard);
     }
