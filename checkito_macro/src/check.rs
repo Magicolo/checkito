@@ -272,7 +272,7 @@ impl Check {
                     quote_spanned!(left.span() => _checker.shrink.errors = #right;)
                 }
                 Key::Verbose => {
-                    quote_spanned!(left.span() => _checker.verbose(#right);)
+                    quote_spanned!(left.span() => _checker.verbose(#right, #right);)
                 }
                 Key::Debug | Key::Color => continue,
                 #[cfg(feature = "constant")]

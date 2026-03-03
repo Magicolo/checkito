@@ -398,7 +398,7 @@ mod tests {
         let mut checker = bool::generator().checker();
 
         {
-            checker.verbose(true);
+            checker.verbose(true, true);
             let guard = prepare(&mut checker, |_| {}, false);
             assert_eq!(guard.green, "");
             assert!(checker.generate.items);
@@ -407,7 +407,7 @@ mod tests {
         }
 
         {
-            checker.verbose(false);
+            checker.verbose(false, false);
             let guard = prepare(&mut checker, |_| {}, true);
             assert_eq!(guard.green, "\x1b[32m");
             assert!(!checker.generate.items);

@@ -266,10 +266,10 @@ impl<G: Generate> Checker<G, synchronous::Run> {
 
 impl<G: ?Sized, R> Checker<G, R> {
     #[doc(hidden)]
-    pub fn verbose(&mut self, verbose: bool) {
-        self.generate.items = verbose;
-        self.shrink.items = verbose;
-        self.shrink.errors = verbose;
+    pub fn verbose(&mut self, items: bool, errors: bool) {
+        self.generate.items = items;
+        self.shrink.items = items;
+        self.shrink.errors = errors;
     }
 
     pub(crate) fn environment(&mut self) {
@@ -328,7 +328,7 @@ impl<G: ?Sized, R> Checker<G, R> {
                 }
                 "CHECKITO_VERBOSE" => {
                     if let Ok(value) = value.as_ref().parse() {
-                        self.verbose(value);
+                        self.verbose(value, value);
                     }
                 }
                 _ => {}
