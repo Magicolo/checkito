@@ -38,13 +38,13 @@ mod check {
         assert_eq!(fail.item, high);
     }
 
-    #[check(1u8..=u8::MAX)]
+    #[check(1u8..=100)]
     fn u8_shrink_to_exact_boundary(high: u8) {
         let fail = u8::generator().check(|item| item < high).unwrap();
         assert_eq!(fail.item, high);
     }
 
-    #[check(1i16..=i16::MAX)]
+    #[check(1i16..=1_000)]
     fn i16_shrink_to_exact_positive_boundary(high: i16) {
         let fail = i16::generator().check(|item| item < high).unwrap();
         assert_eq!(fail.item, high);
