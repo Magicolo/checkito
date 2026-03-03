@@ -18,49 +18,13 @@ jobs:
                     - cargo hack nextest run --release --lib --bins --benches --tests --verbose --feature-powerset --rust-version
                     - cargo hack test --release --doc --verbose --all-features
                     - cargo hack test --release --examples --verbose --all-features
+                    - cargo llvm-cov --fail-under-regions 75 --all-features --all-targets --release --verbose
+                    - cargo hack clippy --release --all-targets --verbose --all-features -- --deny warnings --allow clippy::test-attr-in-doctest
+                    - cargo hack doc --no-deps --release --verbose --all-features
+                    - cargo semver-checks --verbose
+                    - cargo msrv verify --manifest-path checkito/Cargo.toml
+                    - cargo msrv verify --manifest-path checkito_macro/Cargo.toml
+                    - cargo audit --deny warnings
         steps:
             - uses: actions/checkout@v6
             - run: ${{ matrix.command }}
-    clippy:
-        runs-on: ubuntu-latest
-        container:
-            image: ghcr.io/magicolo/rust
-        steps:
-            - uses: actions/checkout@v6
-            - run: cargo hack clippy --release --all-targets --verbose --all-features -- --deny warnings --allow clippy::test-attr-in-doctest
-    doc:
-        runs-on: ubuntu-latest
-        container:
-            image: ghcr.io/magicolo/rust
-        steps:
-            - uses: actions/checkout@v6
-            - run: cargo hack doc --no-deps --release --verbose --all-features
-    semver:
-        runs-on: ubuntu-latest
-        container:
-            image: ghcr.io/magicolo/rust
-        steps:
-            - uses: actions/checkout@v6
-            - run: cargo semver-checks --verbose
-    msrv:
-        runs-on: ubuntu-latest
-        container:
-            image: ghcr.io/magicolo/rust
-        steps:
-            - uses: actions/checkout@v6
-            - run: cargo msrv verify --manifest-path checkito/Cargo.toml
-            - run: cargo msrv verify --manifest-path checkito_macro/Cargo.toml
-    audit:
-        runs-on: ubuntu-latest
-        container:
-            image: ghcr.io/magicolo/rust
-        steps:
-            - uses: actions/checkout@v6
-            - run: cargo audit --deny warnings
-    coverage:
-        runs-on: ubuntu-latest
-        container:
-            image: ghcr.io/magicolo/rust
-        steps:
-            - uses: actions/checkout@v6
-            - run: cargo llvm-cov --fail-under-regions 75 --all-features --all-targets --release --verbose
