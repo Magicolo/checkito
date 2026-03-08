@@ -22,8 +22,8 @@ jobs:
                     - cargo hack clippy --release --all-targets --verbose --all-features -- --deny warnings --allow clippy::test-attr-in-doctest
                     - cargo hack doc --no-deps --release --verbose --all-features
                     - cargo semver-checks --verbose
-                    - cargo msrv verify --manifest-path checkito/Cargo.toml
-                    - cargo msrv verify --manifest-path checkito_macro/Cargo.toml
+                    - cargo msrv verify --all-features --path checkito
+                    - cargo msrv verify --all-features --path checkito_macro
                     - cargo audit --deny warnings
         steps:
             - uses: actions/checkout@v6
