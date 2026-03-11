@@ -101,7 +101,7 @@ fn print_default<T: fmt::Debug, P: Prove<Proof: fmt::Debug, Error: fmt::Debug>>(
     colors: &Colors,
 ) {
     handle(
-        &result,
+        result,
         colors,
         |prefix, pass| {
             println!(

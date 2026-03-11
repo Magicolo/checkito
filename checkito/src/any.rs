@@ -118,13 +118,11 @@ macro_rules! slice {
     };
 }
 
-fn as_self<'a, T>(slice: &'a [T]) -> impl ExactSizeIterator<Item = &'a T> + Clone {
-    slice.into_iter()
+fn as_self<T>(slice: &[T]) -> impl ExactSizeIterator<Item = &T> + Clone {
+    slice.iter()
 }
 
-fn as_ref<'a, T: 'a>(
-    slice: &'a [Weight<T>],
-) -> impl ExactSizeIterator<Item = Weight<&'a T>> + Clone {
+fn as_ref<T>(slice: &[Weight<T>]) -> impl ExactSizeIterator<Item = Weight<&T>> + Clone {
     slice.iter().map(Weight::as_ref)
 }
 

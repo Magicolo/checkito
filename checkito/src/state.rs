@@ -4,7 +4,7 @@ use crate::{
     utility,
 };
 use core::{
-    iter::{FusedIterator, repeat},
+    iter::{FusedIterator, repeat_n},
     mem::replace,
     ops::{self, Bound},
 };
@@ -298,8 +298,8 @@ impl State {
         }
     }
 
-    pub(crate) fn repeat<'a, G: Generate + Clone>(
-        &'a mut self,
+    pub(crate) fn repeat<G: Generate + Clone>(
+        &mut self,
         generator: G,
         range: Range<usize>,
     ) -> impl Iterator<Item = G> {
@@ -392,7 +392,7 @@ impl State {
                 None => range.generate(self).item(),
             },
         };
-        repeat(generator).take(count)
+        repeat_n(generator, count)
     }
 }
 
