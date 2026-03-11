@@ -3,13 +3,12 @@ use crate::{generate::Generate, shrink::Shrink, state::State};
 #[derive(Debug, Clone)]
 pub struct FilterMap<G: ?Sized, F> {
     pub(crate) filter: F,
-    pub(crate) retries: usize,
     pub(crate) generator: G,
 }
 
 #[derive(Debug, Clone)]
 pub struct Shrinker<S, F> {
-    shrinker: Option<S>,
+    shrinker: S,
     map: F,
 }
 
@@ -21,9 +20,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Shrinker {
-            shrinker: state.retry(&self.generator, self.retries, |shrink| {
-                (self.filter)(shrink.item()).is_some()
-            }),
+            shrinker: self.generator.generate(state),
             map: self.filter.clone(),
         }
     }
@@ -37,12 +34,12 @@ impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, F
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {
-        (self.map)(self.shrinker.as_ref()?.item())
+        (self.map)(self.shrinker.item())
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Self {
-            shrinker: Some(self.shrinker.as_mut()?.shrink()?),
+            shrinker: self.shrinker.shrink()?,
             map: self.map.clone(),
         })
     }

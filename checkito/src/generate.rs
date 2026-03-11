@@ -1,5 +1,5 @@
 use crate::{
-    COLLECTS, RETRIES,
+    COLLECTS,
     any::Any,
     array::Array,
     boxed::Boxed,
@@ -171,11 +171,8 @@ pub trait Generate {
     ///
     /// This is analogous to [`Iterator::filter`]. Because the filter might
     /// always fail, this generator produces an [`Option<Self::Item>`],
-    /// where `None` indicates that a matching value could not be found
-    /// within a limited number of retries.
-    ///
-    /// This is a shorthand for [`Generate::filter_with`] with a default number
-    /// of retries.
+    /// where `None` indicates that the generated value did not match the
+    /// predicate.
     ///
     /// # Examples
     /// ```
@@ -183,30 +180,15 @@ pub trait Generate {
     /// // A generator for even numbers between 0 and 100.
     /// let evens = Generate::filter(0..100, |&x| x % 2 == 0);
     ///
-    /// // The generated value is an `Option`. `None` means no matching value
-    /// // was found within the retry limit.
+    /// // The generated value is an `Option`. `None` means the generated value
+    /// // did not match the predicate.
     /// evens.check(|x: Option<i32>| x.map_or(true, |x| x % 2 == 0));
     /// ```
     fn filter<F: Fn(&Self::Item) -> bool + Clone>(self, filter: F) -> Filter<Self, F>
     where
         Self: Sized,
     {
-        prelude::filter(self, filter, RETRIES)
-    }
-
-    /// Creates a new generator that discards values that don't match a
-    /// predicate, with a configurable number of retries.
-    ///
-    /// See [`Generate::filter`] for more details.
-    fn filter_with<F: Fn(&Self::Item) -> bool + Clone>(
-        self,
-        retries: usize,
-        filter: F,
-    ) -> Filter<Self, F>
-    where
-        Self: Sized,
-    {
-        prelude::filter(self, filter, retries)
+        prelude::filter(self, filter)
     }
 
     /// Creates a new generator that both filters and maps values
@@ -216,9 +198,6 @@ pub trait Generate {
     /// returns an [`Option`], where `Some(value)` is kept and `None` is
     /// discarded. This is more efficient than chaining [`Generate::filter`]
     /// and [`Generate::map`].
-    ///
-    /// This is a shorthand for [`Generate::filter_map_with`] with a default
-    /// number of retries.
     ///
     /// # Examples
     /// ```
@@ -232,29 +211,14 @@ pub trait Generate {
     ///         None
     ///     }
     /// });
-    /// // `None` means no perfect square was found within the retry limit.
+    /// // `None` means the generated value did not match the predicate.
     /// roots.check(|x: Option<i32>| x.map_or(true, |root| root * root < 100));
     /// ```
     fn filter_map<T, F: Fn(Self::Item) -> Option<T> + Clone>(self, filter: F) -> FilterMap<Self, F>
     where
         Self: Sized,
     {
-        prelude::filter_map(self, filter, RETRIES)
-    }
-
-    /// Creates a new generator that filters and maps, with a configurable
-    /// number of retries.
-    ///
-    /// See [`Generate::filter_map`] for more details.
-    fn filter_map_with<T, F: Fn(Self::Item) -> Option<T> + Clone>(
-        self,
-        retries: usize,
-        filter: F,
-    ) -> FilterMap<Self, F>
-    where
-        Self: Sized,
-    {
-        prelude::filter_map(self, filter, retries)
+        prelude::filter_map(self, filter)
     }
 
     /// Creates a new generator by applying a function to the output of `self`,

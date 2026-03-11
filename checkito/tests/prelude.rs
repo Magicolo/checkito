@@ -18,8 +18,8 @@ macro_rules! generators {
                 is_generator::<$type>(map($value, |value| value));
                 is_generator::<$type>(flat_map($value, same));
                 is_generator::<$type>(flatten(same(same($value))));
-                is_generator::<Option<$type>>(filter($value, |_| true, 1));
-                is_generator::<Option<$type>>(filter_map($value, Some, 1));
+                is_generator::<Option<$type>>(filter($value, |_| true));
+                is_generator::<Option<$type>>(filter_map($value, Some));
                 is_generator::<$type>(boxed(Box::new($value)));
                 is_generator::<[$type; 1]>(array::<_, 1>($value));
                 is_generator::<Vec<$type>>(collect($value, 1usize));

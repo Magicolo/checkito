@@ -84,13 +84,8 @@ where
 pub const fn filter<G: Generate, F: Fn(&G::Item) -> bool + Clone>(
     generator: G,
     filter: F,
-    retries: usize,
 ) -> Filter<G, F> {
-    Filter {
-        generator,
-        filter,
-        retries,
-    }
+    Filter { generator, filter }
 }
 
 /// See [`Generate::filter_map`].
@@ -98,13 +93,8 @@ pub const fn filter<G: Generate, F: Fn(&G::Item) -> bool + Clone>(
 pub const fn filter_map<G: Generate, T, F: Fn(G::Item) -> Option<T> + Clone>(
     generator: G,
     filter: F,
-    retries: usize,
 ) -> FilterMap<G, F> {
-    FilterMap {
-        generator,
-        filter,
-        retries,
-    }
+    FilterMap { generator, filter }
 }
 
 /// See [`Generate::boxed`].

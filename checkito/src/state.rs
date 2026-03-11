@@ -298,30 +298,6 @@ impl State {
         }
     }
 
-    pub(crate) fn retry<F: FnMut(&G::Shrink) -> bool, G: Generate>(
-        &mut self,
-        generator: G,
-        retries: usize,
-        mut filter: F,
-    ) -> Option<G::Shrink> {
-        match &mut self.mode {
-            Mode::Random(_) => {
-                for i in 0..=retries {
-                    let sizes = Sizes::from_ratio(i, retries, self.sizes());
-                    let shrink = generator.generate(self.with().sizes(sizes).as_mut());
-                    if filter(&shrink) {
-                        return Some(shrink);
-                    }
-                }
-                None
-            }
-            Mode::Exhaustive(_) => {
-                let shrink = generator.generate(self);
-                filter(&shrink).then_some(shrink)
-            }
-        }
-    }
-
     pub(crate) fn repeat<'a, G: Generate + Clone>(
         &'a mut self,
         generator: G,
