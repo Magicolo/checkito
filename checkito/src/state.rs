@@ -279,7 +279,11 @@ impl State {
                     .map(|Weight { weight, .. }| weight)
                     .sum::<f64>()
                     .min(f64::MAX);
-                debug_assert!(total > 0.0 && total.is_finite());
+                // An empty iterator sums to 0.0; return `None` instead of panicking.
+                if !(total > 0.0) {
+                    return None;
+                }
+                debug_assert!(total.is_finite());
                 let random = self.with().size(1.0).f64(0.0..=total);
                 debug_assert!(random.is_finite());
                 let mut sum = 0.0f64;
