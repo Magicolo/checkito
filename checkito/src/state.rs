@@ -279,7 +279,7 @@ impl State {
                     .map(|Weight { weight, .. }| weight)
                     .sum::<f64>()
                     .min(f64::MAX);
-                debug_assert!(total > 0.0 && total.is_finite());
+                debug_assert!(total.is_finite());
                 let random = self.with().size(1.0).f64(0.0..=total);
                 debug_assert!(random.is_finite());
                 let mut sum = 0.0f64;
@@ -289,7 +289,7 @@ impl State {
                         return Some(generator);
                     }
                 }
-                unreachable!();
+                None
             }
             Mode::Exhaustive(index) => Self::any_exhaustive(
                 index,
@@ -1192,5 +1192,37 @@ mod tests {
             ),
             Some(5)
         );
+    }
+
+    #[test]
+    fn any_weighted_returns_none_for_empty_random() {
+        let empty: Vec<Weight<u8>> = vec![];
+        let mut state = State::random(0, 1, Sizes::DEFAULT, 42);
+        let result = state.any_weighted(empty);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn any_weighted_returns_none_for_empty_exhaustive() {
+        let empty: Vec<Weight<u8>> = vec![];
+        let mut state = State::exhaustive(0, 1);
+        let result = state.any_weighted(empty);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn any_uniform_returns_none_for_empty_random() {
+        let empty: Vec<u8> = vec![];
+        let mut state = State::random(0, 1, Sizes::DEFAULT, 42);
+        let result = state.any_uniform(empty.iter());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn any_uniform_returns_none_for_empty_exhaustive() {
+        let empty: Vec<u8> = vec![];
+        let mut state = State::exhaustive(0, 1);
+        let result = state.any_uniform(empty.iter());
+        assert_eq!(result, None);
     }
 }
