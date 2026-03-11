@@ -20,6 +20,7 @@ use std::{borrow::Cow, env, panic::catch_unwind, thread::available_parallelism};
 
 /// Configures the generation process.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Generates {
     /// The seed for the random number generator.
     ///
@@ -53,6 +54,7 @@ pub struct Generates {
 
 /// Configures the shrinking process.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Shrinks {
     /// The maximum number of times to shrink a failing value.
     ///
@@ -175,6 +177,7 @@ pub trait Check: Generate {
 
 /// The result of a single step in the property testing process.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Result<T, P: Prove> {
     /// A generated value passed the test.
     Pass(Pass<T, P::Proof>),
@@ -190,6 +193,7 @@ pub enum Result<T, P: Prove> {
 
 /// Represents a successful test case.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Pass<T, P> {
     /// The value that passed the test.
     pub item: T,
@@ -206,6 +210,7 @@ pub struct Pass<T, P> {
 
 /// Represents a failed test case.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Fail<T, E> {
     /// The value that failed the test.
     pub item: T,
@@ -221,6 +226,7 @@ pub struct Fail<T, E> {
 
 /// The cause of a check failure.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Cause<E> {
     /// The property was disproven by the test function's return value
     /// (e.g., it returned `false` or `Err`).

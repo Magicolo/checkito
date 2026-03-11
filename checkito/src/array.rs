@@ -11,10 +11,7 @@ impl<G: Generate + ?Sized, const N: usize> Generate for Array<G, N> {
     const CARDINALITY: Option<u128> = cardinality::all_repeat_static::<N>(G::CARDINALITY);
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        all::Shrinker {
-            index: 0,
-            shrinkers: array::from_fn(|_| self.0.generate(state)),
-        }
+        all::Shrinker::new(array::from_fn(|_| self.0.generate(state)))
     }
 
     fn cardinality(&self) -> Option<u128> {

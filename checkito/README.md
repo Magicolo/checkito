@@ -235,6 +235,7 @@ fn main() {
             check::Result::Shrink(_pass) => {}
             check::Result::Shrunk(_fail) => {}
             check::Result::Fail(_fail) => {}
+            _ => {}
         }
     }
 

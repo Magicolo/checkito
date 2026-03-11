@@ -21,10 +21,17 @@ pub struct Collect<I: ?Sized, C, F: ?Sized> {
 
 #[derive(Debug)]
 pub struct Shrinker<S, F: ?Sized> {
-    pub(crate) shrinkers: Vec<S>,
-    pub(crate) machine: Machine,
-    pub(crate) minimum: usize,
+    shrinkers: Vec<S>,
+    machine: Machine,
+    minimum: usize,
     _marker: PhantomData<F>,
+}
+
+impl<S, F: ?Sized> Shrinker<S, F> {
+    /// Returns a reference to the inner shrinkers.
+    pub fn shrinkers(&self) -> &[S] {
+        &self.shrinkers
+    }
 }
 
 pub trait Count {

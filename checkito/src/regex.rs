@@ -177,12 +177,12 @@ impl Shrink for Shrinker {
                 Shrinker::Text(text) => buffer.push_str(text),
                 Shrinker::Range(shrinker) => buffer.push(shrinker.item()),
                 Shrinker::All(shrinker) => {
-                    for shrinker in shrinker.shrinkers.iter() {
+                    for shrinker in shrinker.shrinkers().iter() {
                         descend(shrinker, buffer);
                     }
                 }
                 Shrinker::Collect(shrinker) => {
-                    for shrinker in shrinker.shrinkers.iter() {
+                    for shrinker in shrinker.shrinkers().iter() {
                         descend(shrinker, buffer);
                     }
                 }

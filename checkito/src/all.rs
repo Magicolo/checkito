@@ -8,8 +8,25 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct Shrinker<S: ?Sized> {
-    pub(crate) index: usize,
-    pub(crate) shrinkers: S,
+    index: usize,
+    shrinkers: S,
+}
+
+impl<S> Shrinker<S> {
+    /// Creates a new shrinker that will try to shrink each element in order.
+    pub(crate) fn new(shrinkers: S) -> Self {
+        Self {
+            index: 0,
+            shrinkers,
+        }
+    }
+}
+
+impl<S: ?Sized> Shrinker<S> {
+    /// Returns a reference to the inner shrinkers.
+    pub fn shrinkers(&self) -> &S {
+        &self.shrinkers
+    }
 }
 
 pub(crate) fn shrink<S: Shrink, I: AsMut<[S]> + Clone>(
@@ -49,10 +66,7 @@ mod array {
         const CARDINALITY: Option<u128> = Array::<G, N>::CARDINALITY;
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            Shrinker {
-                index: 0,
-                shrinkers: array::from_fn(|index| self[index].generate(state)),
-            }
+            Shrinker::new(array::from_fn(|index| self[index].generate(state)))
         }
 
         fn cardinality(&self) -> Option<u128> {
