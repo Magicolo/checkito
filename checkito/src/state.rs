@@ -1193,4 +1193,36 @@ mod tests {
             Some(5)
         );
     }
+
+    #[test]
+    fn any_weighted_returns_none_for_empty_random() {
+        let empty: Vec<Weight<u8>> = vec![];
+        let mut state = State::random(0, 1, Sizes::DEFAULT, 42);
+        let result = state.any_weighted(empty);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn any_weighted_returns_none_for_empty_exhaustive() {
+        let empty: Vec<Weight<u8>> = vec![];
+        let mut state = State::exhaustive(0, 1);
+        let result = state.any_weighted(empty);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn any_uniform_returns_none_for_empty_random() {
+        let empty: Vec<u8> = vec![];
+        let mut state = State::random(0, 1, Sizes::DEFAULT, 42);
+        let result = state.any_uniform(empty.iter());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn any_uniform_returns_none_for_empty_exhaustive() {
+        let empty: Vec<u8> = vec![];
+        let mut state = State::exhaustive(0, 1);
+        let result = state.any_uniform(empty.iter());
+        assert_eq!(result, None);
+    }
 }
