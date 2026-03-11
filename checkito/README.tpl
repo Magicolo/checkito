@@ -34,6 +34,18 @@ The library is built around a few core traits:
 -   [`Check`](src/check.rs): A trait (implemented for all `Generate` types) that provides the main entry points for running property tests: `check` and `checks`.
 
 ---
+### Features
+- Composable generators with 17+ combinators.
+- Automatic shrinking with multi-phase strategies and *log(N)* convergence.
+- Exhaustive vs Random modes with cardinality-based detection.
+- Recursive structure support via lazy, dampen, flatten, boxed.
+- Type-safe regex generation with compile-time validation.
+- Weighted random choices with `Weight<T>`.
+- Comprehensive macro `#[check]` with 14+ configuration options.
+- Async support with concurrent test execution.
+- Rich test reporting with configurable verbosity and colors.
+
+---
 ### Environment Variables
 
 The behavior of the test runner can be configured through environment variables, which is
