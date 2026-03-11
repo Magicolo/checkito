@@ -19,13 +19,8 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
-        let shrinker = self.generator.generate(state);
         Shrinker {
-            shrinker: if (self.filter)(shrinker.item()).is_some() {
-                Some(shrinker)
-            } else {
-                None
-            },
+            shrinker: Some(self.generator.generate(state)),
             map: self.filter.clone(),
         }
     }
