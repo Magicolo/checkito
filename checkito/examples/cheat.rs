@@ -1,4 +1,6 @@
 use checkito::*;
+#[cfg(test)]
+use checkito::state::Weight;
 
 /// The `#[check]` attribute is designed to be as thin as possible and
 /// everything that is expressible with it is also ergonomically expressible as
@@ -155,6 +157,208 @@ fn has_even_hundred() {
         .any()
         .unify::<i32>()
         .check(|value| assert!((value / 100) % 2 == 0));
+}
+
+/// [`Generate::flat_map`] creates a generator that depends on a previously
+/// generated value. Here, the generated `length` drives how many items
+/// the inner [`Vec`] will contain.
+///
+/// This is useful when two inputs are logically related: for example a
+/// container's size determines its contents, or one field constrains another.
+#[check(Generate::flat_map(1usize..20, |length| (0i32..100).collect_with::<_, Vec<_>>(length)))]
+fn flat_map_dependent_generation(vector: Vec<i32>) {
+    assert!(!vector.is_empty());
+    assert!(vector.len() < 20);
+    assert!(vector.iter().all(|&x| (0..100).contains(&x)));
+}
+
+/// [`Generate::filter`] discards values that don't match a predicate.
+///
+/// Crucially, the result is [`Option<T>`]: `Some` when the predicate passes,
+/// `None` when it doesn't. This design avoids hidden retry loops and makes
+/// the partial nature of the filter explicit during both generation and
+/// shrinking.
+#[check(Generate::filter(0i32..100, |&x| x % 2 == 0))]
+fn filter_produces_option(value: Option<i32>) -> bool {
+    match value {
+        Some(x) => x % 2 == 0 && (0..100).contains(&x),
+        None => true, // The filter rejected the candidate; this is expected.
+    }
+}
+
+/// [`Generate::filter_map`] combines filtering and mapping in one step.
+/// Like [`Generate::filter`], it produces [`Option<T>`].
+#[check(Generate::filter_map(0u32..100, |x| (x % 3 == 0).then(|| x / 3)))]
+fn filter_map_combines_filter_and_transform(value: Option<u32>) -> bool {
+    match value {
+        Some(third) => third < 34,
+        None => true,
+    }
+}
+
+/// [`Generate::keep`] prevents a value from being shrunk.
+///
+/// When a property fails, `checkito` shrinks all inputs toward simpler values.
+/// Wrapping a generator with `.keep()` pins that input in place, so only the
+/// *other* inputs are simplified. This is useful for isolating failures when
+/// one parameter should be held constant during shrinking.
+#[check(0u64..1_000_000, (0u64..1_000_000).keep())]
+#[should_panic]
+fn keep_prevents_shrinking(shrinkable: u64, kept: u64) {
+    // `shrinkable` will be shrunk to the boundary, while `kept` stays as
+    // originally generated.
+    assert!(shrinkable + kept < 500_000);
+}
+
+/// [`Weight`] lets you bias the [`Generate::any`] combinator.
+///
+/// In random mode, weights control how often each branch is chosen. In
+/// exhaustive mode weights are ignored and all branches are fully enumerated.
+///
+/// Here, "large" numbers are selected 10× more often than "small" ones.
+#[test]
+fn weighted_choice() {
+    let generator = any((
+        Weight::new(1.0, 0i32..10),   // "small" — chosen ~10% of the time
+        Weight::new(10.0, 90i32..100), // "large" — chosen ~90% of the time
+    ))
+        .unify::<i32>();
+
+    // Despite the bias, both branches are still reachable.
+    assert!(generator.check(|x| (0..100).contains(&x)).is_none());
+}
+
+/// [`same`] creates a constant generator (cardinality 1) that never shrinks.
+/// It effectively turns a literal value into a [`Generate`] implementation.
+///
+/// This can be used together with other generators to fix certain inputs while
+/// letting the rest vary freely.
+#[check(same(42i32), 0i32..100)]
+fn same_as_constant_input(fixed: i32, varied: i32) {
+    assert_eq!(fixed, 42);
+    assert!((0..100).contains(&varied));
+}
+
+/// [`Generate::size`] overrides the internal `size` parameter which ranges
+/// from `0.0` to `1.0`. Generators use `size` to decide how "large" or
+/// "complex" their output should be (e.g. collections use it for length).
+///
+/// Setting `size` to `1.0` always produces maximum-complexity values; setting
+/// it to `0.0` produces the simplest.
+#[test]
+fn size_controls_output_complexity() {
+    let always_large = Generate::collect::<Vec<_>>(0u8..=255).size(|_| 1.0);
+    let always_small = Generate::collect::<Vec<_>>(0u8..=255).size(|_| 0.0);
+
+    // At size 1.0, collections are at their largest; at size 0.0, they are
+    // empty.
+    let large_sample = always_large.sample(0.5);
+    let small_sample = always_small.sample(0.5);
+    assert!(large_sample.len() >= small_sample.len());
+    assert!(small_sample.is_empty());
+}
+
+/// [`Generate::convert`] changes a value's type through a [`From`]
+/// implementation. Shrinking is preserved through the conversion.
+#[check((0u8..=100).convert::<u32>())]
+fn convert_preserves_type_and_shrinking(value: u32) -> bool {
+    value <= 100
+}
+
+/// [`Generate::array`] generates fixed-size arrays by calling the inner
+/// generator `N` times. Each element is independently shrinkable.
+#[check((1u8..=50).array::<5>())]
+fn array_generates_fixed_size(arr: [u8; 5]) -> bool {
+    arr.len() == 5 && arr.iter().all(|&x| (1..=50).contains(&x))
+}
+
+/// [`Sample`] provides a way to draw random values from a generator
+/// *without* running a property test.
+///
+/// [`Sample::samples`] produces an iterator of progressively larger values.
+/// [`Sample::sample`] produces a single value at a specific `size`.
+///
+/// Reproducible sequences are available through the [`sample::Sampler`] API,
+/// which exposes a configurable seed.
+#[test]
+fn sampling_random_values() {
+    // Collect 10 random strings. Sizes increase across the iterator.
+    let strings: Vec<String> = letter().collect::<String>().samples(10).collect();
+    assert_eq!(strings.len(), 10);
+    assert!(strings.iter().all(|s| s.chars().all(|c| c.is_ascii_alphabetic())));
+
+    // Reproducible sampling: same seed → same values.
+    let mut sampler = (0u32..1000).sampler();
+    sampler.seed = 12345;
+    sampler.count = 5;
+    let first_run: Vec<u32> = sampler.clone().samples().collect();
+    let second_run: Vec<u32> = sampler.samples().collect();
+    assert_eq!(first_run, second_run);
+}
+
+/// `generate.seed` fixes the random seed, making a `#[check]` run fully
+/// reproducible. Useful for debugging a specific failure.
+#[check(0u64..1_000_000, generate.seed = 42)]
+fn reproducible_with_seed(value: u64) -> bool {
+    value < 1_000_000
+}
+
+/// `generate.exhaustive = true` forces exhaustive enumeration even when the
+/// cardinality exceeds `generate.count`. Combined with a low
+/// `generate.count`, you can test just the first few exhaustive values.
+///
+/// `generate.exhaustive = false` forces random sampling even for small
+/// domains that would normally be exhaustive.
+#[check(0u8..=5, generate.count = 3, generate.exhaustive = true)]
+fn forced_exhaustive(value: u8) -> bool {
+    value <= 5
+}
+
+/// For recursive data structures, [`lazy`], [`Generate::dampen`], and
+/// [`Generate::boxed`] work together to prevent infinite type expansion,
+/// control exponential growth, and erase the recursive type.
+///
+/// See `examples/json.rs` for a full worked example. Here is a minimal sketch:
+#[test]
+fn recursive_generation_sketch() {
+    #[allow(dead_code)]
+    #[derive(Clone, Debug)]
+    enum Tree {
+        Leaf(i32),
+        Branch(Vec<Tree>),
+    }
+
+    impl Tree {
+        fn depth(&self) -> usize {
+            match self {
+                Tree::Leaf(_) => 1,
+                Tree::Branch(children) => {
+                    1 + children.iter().map(Tree::depth).max().unwrap_or(0)
+                }
+            }
+        }
+    }
+
+    fn tree() -> impl Generate<Item = Tree> {
+        (
+            Generate::map(0i32..100, Tree::Leaf),
+            // `lazy` defers the recursive call to avoid infinite recursion.
+            // `dampen` reduces `size` as depth increases, encouraging base cases.
+            // `boxed` erases the infinite recursive type.
+            lazy(tree)
+                .collect_with(..4usize)
+                .dampen()
+                .map(Tree::Branch)
+                .boxed(),
+        )
+            .any()
+            .unify()
+    }
+
+    // Sample a few trees to verify the generator produces bounded structures.
+    for t in tree().samples(10) {
+        assert!(t.depth() < 100);
+    }
 }
 
 fn main() {
