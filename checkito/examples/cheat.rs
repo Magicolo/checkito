@@ -278,8 +278,8 @@ fn array_generates_fixed_size(arr: [u8; 5]) -> bool {
 /// [`Sample::samples`] produces an iterator of progressively larger values.
 /// [`Sample::sample`] produces a single value at a specific `size`.
 ///
-/// Reproducible sequences are available through the [`sample::Sampler`] API,
-/// which exposes a configurable seed.
+/// Reproducible sequences are available through the [`Sampler`](sample::Sampler)
+/// API, which exposes a configurable seed.
 #[test]
 fn sampling_random_values() {
     // Collect 10 random strings. Sizes increase across the iterator.
@@ -343,6 +343,7 @@ fn recursive_generation_sketch() {
         (
             Generate::map(0i32..100, Tree::Leaf),
             // `lazy` defers the recursive call to avoid infinite recursion.
+            // `collect_with(..4)` limits each branch to 0–3 children.
             // `dampen` reduces `size` as depth increases, encouraging base cases.
             // `boxed` erases the infinite recursive type.
             lazy(tree)
