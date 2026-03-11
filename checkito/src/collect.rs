@@ -112,7 +112,10 @@ impl<G: Generate + ?Sized, C: Count, F: FromIterator<G::Item>> Generate for Coll
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         let range = self.count.count();
-        let shrinkers = state.repeat(&self.generator, range).collect();
+        let shrinkers = state
+            .repeat(&self.generator, range)
+            .map(|generator| generator.generate(state))
+            .collect();
         Shrinker::new(shrinkers, range.start())
     }
 

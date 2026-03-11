@@ -1,10 +1,10 @@
 use crate::{
     GENERATES, Generate, Shrink,
     primitive::{Range, u8::U8},
-    utility::{self, tuples},
+    utility,
 };
 use core::{
-    iter::FusedIterator,
+    iter::{FusedIterator, repeat},
     mem::replace,
     ops::{self, Bound},
 };
@@ -73,6 +73,10 @@ impl<T> Weight<T> {
         }
     }
 
+    pub fn into_value(self) -> T {
+        self.generator
+    }
+
     pub fn map<U: Generate>(self, map: impl FnOnce(T) -> U) -> Weight<U> {
         Weight {
             weight: self.weight,
@@ -139,28 +143,29 @@ impl State {
         }
     }
 
-    pub(crate) fn any_exhaustive<I: IntoIterator<Item = Option<u128>, IntoIter: Clone>>(
+    pub(crate) fn any_exhaustive<T, I: IntoIterator<Item = (Option<u128>, T), IntoIter: Clone>>(
         index: &mut u128,
         cardinalities: I,
-    ) -> Option<usize> {
+    ) -> Option<T> {
         let mut last = (usize::MAX, false);
-        for (i, cardinality) in cardinalities.into_iter().enumerate().cycle() {
+        for (i, pair) in cardinalities.into_iter().enumerate().cycle() {
             if last.0 < i {
                 last.0 = i;
             } else if replace(&mut last.1, true) {
+                // A full cycle completed without progress.
                 break;
             } else {
                 last.0 = i;
             }
 
-            match cardinality {
-                Some(cardinality) if *index < cardinality => return Some(i),
+            match pair.0 {
                 Some(0) => continue,
+                Some(cardinality) if *index < cardinality => return Some(pair.1),
                 Some(cardinality) => {
                     *index -= cardinality;
                     last.1 = false;
                 }
-                None => return Some(i),
+                None => return Some(pair.1),
             }
         }
         None
@@ -244,34 +249,33 @@ impl State {
         char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 
-    pub(crate) fn any_uniform<'a, G: Generate>(&mut self, generators: &'a [G]) -> Option<&'a G> {
-        if generators.is_empty() {
-            return None;
-        }
-
+    pub fn any_uniform<I: IntoIterator<IntoIter: ExactSizeIterator + Clone, Item: Generate>>(
+        &mut self,
+        generators: I,
+    ) -> Option<I::Item> {
+        let mut generators = generators.into_iter();
         match &mut self.mode {
             Mode::Random(_) => {
-                generators.get(self.with().size(1.0).usize(Range(0, generators.len() - 1)))
+                let count = generators.len().checked_sub(1)?;
+                let index = self.with().size(1.0).usize(Range(0, count));
+                generators.nth(index)
             }
-            Mode::Exhaustive(index) => generators.get(Self::any_exhaustive(
+            Mode::Exhaustive(index) => Self::any_exhaustive(
                 index,
-                generators.iter().map(G::cardinality),
-            )?),
+                generators.map(|generator| (generator.cardinality(), generator)),
+            ),
         }
     }
 
-    pub(crate) fn any_weighted<'a, G: Generate>(
+    pub fn any_weighted<G: Generate, I: IntoIterator<IntoIter: Clone, Item = Weight<G>>>(
         &mut self,
-        generators: &'a [Weight<G>],
-    ) -> Option<&'a G> {
-        if generators.is_empty() {
-            return None;
-        }
-
+        generators: I,
+    ) -> Option<G> {
+        let generators = generators.into_iter();
         match &mut self.mode {
             Mode::Random(_) => {
                 let total = generators
-                    .iter()
+                    .clone()
                     .map(|Weight { weight, .. }| weight)
                     .sum::<f64>()
                     .min(f64::MAX);
@@ -287,12 +291,10 @@ impl State {
                 }
                 unreachable!();
             }
-            Mode::Exhaustive(index) => generators
-                .get(Self::any_exhaustive(
-                    index,
-                    generators.iter().map(Weight::value).map(G::cardinality),
-                )?)
-                .map(Weight::value),
+            Mode::Exhaustive(index) => Self::any_exhaustive(
+                index,
+                generators.map(|weight| (weight.cardinality(), weight.into_value())),
+            ),
         }
     }
 
@@ -320,11 +322,11 @@ impl State {
         }
     }
 
-    pub(crate) fn repeat<'a, G: Generate>(
+    pub(crate) fn repeat<'a, G: Generate + Clone>(
         &'a mut self,
         generator: G,
         range: Range<usize>,
-    ) -> impl Iterator<Item = G::Shrink> + use<'a, G> {
+    ) -> impl Iterator<Item = G> {
         let count = match &mut self.mode {
             Mode::Random(_) => self.usize(range),
             Mode::Exhaustive(index) => match generator.cardinality() {
@@ -414,7 +416,7 @@ impl State {
                 None => range.generate(self).item(),
             },
         };
-        Iterator::map(0..count, move |_| generator.generate(self))
+        repeat(generator).take(count)
     }
 }
 
@@ -806,59 +808,6 @@ macro_rules! floating {
     }
 }
 
-macro_rules! or {
-    ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
-    ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
-        impl State {
-            #[allow(clippy::too_many_arguments)]
-            pub fn $u<$($ts: Generate,)*>(&mut self, $($ps: $ts,)*) -> orn::$n::Or<$($ts,)*> {
-                match &mut self.mode {
-                    Mode::Random(_) => {
-                        match self.with().size(1.0).u8(Range(0, $c - 1)) {
-                            $($is => orn::$n::Or::$ts($ps),)*
-                            _ => unreachable!(),
-                        }
-                    }
-                    Mode::Exhaustive(index) => {
-                        match Self::any_exhaustive(index, [$($ps.cardinality(),)*]) {
-                            $(Some($is) => orn::$n::Or::$ts($ps),)*
-                            _ => unreachable!(),
-                        }
-                    }
-                }
-            }
-
-            #[allow(clippy::too_many_arguments)]
-            pub(crate) fn $w<$($ts: Generate,)*>(&mut self, $($ps: Weight<$ts>,)*) -> orn::$n::Or<$($ts,)*> {
-                match &mut self.mode {
-                    Mode::Random(_) => {
-                        let total = $($ps.weight +)* 0.0f64;
-                        debug_assert!(total > 0.0 && total.is_finite());
-                        let random = self.with().size(1.0).f64(0.0..=total);
-                        debug_assert!(random.is_finite());
-                        let mut sum = 0.0_f64;
-                        $(
-                            sum += $ps.weight;
-                            if random <= sum {
-                                return orn::$n::Or::$ts($ps.generator);
-                            }
-                        )*
-                        unreachable!();
-                    }
-                    Mode::Exhaustive(index) => {
-                        match Self::any_exhaustive(index, [$($ps.generator.cardinality(),)*]) {
-                            $(Some($is) => orn::$n::Or::$ts($ps.generator),)*
-                            _ => unreachable!(),
-                        }
-                    }
-                }
-            }
-        }
-    };
-}
-
-tuples!(@any or);
-
 ranges!(
     char,
     |value: char| {
@@ -1078,7 +1027,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
             let mut state = State::random(0, 1, Sizes::DEFAULT, random.u64(..));
-            assert!(state.any_weighted(&generators).unwrap() <= &count);
+            assert!(state.any_weighted(generators).unwrap() <= count);
         }
     }
 
@@ -1223,16 +1172,25 @@ mod tests {
 
     #[test]
     fn does_not_cycle_forever() {
-        assert_eq!(State::any_exhaustive(&mut 100, []), None);
-        assert_eq!(State::any_exhaustive(&mut 100, [Some(0)]), None);
-        assert_eq!(State::any_exhaustive(&mut 100, [Some(0); 10]), None);
+        assert_eq!(State::any_exhaustive(&mut 100, []), None::<usize>);
+        assert_eq!(State::any_exhaustive(&mut 100, [(Some(0), 1)]), None);
+        assert_eq!(State::any_exhaustive(&mut 100, [(Some(0), 1); 10]), None);
         assert_eq!(
-            State::any_exhaustive(&mut 100, [Some(0), Some(1), Some(0)]),
-            Some(1)
+            State::any_exhaustive(&mut 100, [(Some(0), 1), (Some(1), 2), (Some(0), 3)]),
+            Some(2)
         );
         assert_eq!(
-            State::any_exhaustive(&mut 100, [Some(0), Some(1), Some(0), Some(0), Some(100)]),
-            Some(4)
+            State::any_exhaustive(
+                &mut 100,
+                [
+                    (Some(0), 1),
+                    (Some(1), 2),
+                    (Some(0), 3),
+                    (Some(0), 4),
+                    (Some(100), 5)
+                ]
+            ),
+            Some(5)
         );
     }
 }

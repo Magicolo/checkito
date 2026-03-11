@@ -65,10 +65,6 @@ impl<C: Constant> Constant for Any<C> {
     const VALUE: Self = Self(C::VALUE);
 }
 
-const fn as_slice<T>(slice: &[T]) -> &[T] {
-    slice
-}
-
 macro_rules! pointer {
     ($t: ident) => {
         impl<G: ?Sized> Generate for Any<$t<G>>
@@ -96,7 +92,7 @@ pointer!(Rc);
 pointer!(Arc);
 
 macro_rules! slice {
-    ($t: ty, $i: ident, [$($n: ident)?]) => {
+    ($t: ty, $i: ident, $r: ident, [$($n: ident)?]) => {
         impl<G: Generate $(, const $n: usize)?> Generate for $t {
             type Item = Option<G::Item>;
             type Shrink = Shrinker<G::Shrink>;
@@ -104,14 +100,11 @@ macro_rules! slice {
             slice!(STATIC, G $(, $n)?);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                Shrinker(
-                    state.$i(self.as_ref()).map(|generator| generator.generate(state)),
-                )
+                Shrinker(state.$i($r(self.as_ref())).map(|generator: &G| generator.generate(state)))
             }
 
             fn cardinality(&self) -> Option<u128> {
-                as_slice(self.as_ref())
-                    .iter()
+                $r(self.as_ref())
                     .map(|generator| generator.cardinality())
                     .fold(Some(0), cardinality::any_sum)
             }
@@ -125,16 +118,26 @@ macro_rules! slice {
     };
 }
 
-slice!(Any<[G]>, any_uniform, []);
-slice!(Any<[G; N]>, any_uniform, [N]);
-slice!(Any<Vec<G>>, any_uniform, []);
-slice!([Weight<G>], any_weighted, []);
-slice!([Weight<G>; N], any_weighted, [N]);
-slice!(Vec<Weight<G>>, any_weighted, []);
+fn as_self<'a, T>(slice: &'a [T]) -> impl ExactSizeIterator<Item = &'a T> + Clone {
+    slice.into_iter()
+}
+
+fn as_ref<'a, T: 'a>(
+    slice: &'a [Weight<T>],
+) -> impl ExactSizeIterator<Item = Weight<&'a T>> + Clone {
+    slice.iter().map(Weight::as_ref)
+}
+
+slice!(Any<[G]>, any_uniform, as_self, []);
+slice!(Any<[Weight<G>]>, any_weighted, as_ref, []);
+slice!(Any<[G; N]>, any_uniform, as_self, [N]);
+slice!(Any<[Weight<G>; N]>, any_weighted, as_ref, [N]);
+slice!(Any<Vec<G>>, any_uniform, as_self, []);
+slice!(Any<Vec<Weight<G>>>, any_weighted, as_ref, []);
 
 macro_rules! tuple {
-    ($n:ident, $c:tt, [$u: ident, $w: ident]) => {};
-    ($n:ident, $c:tt, [$u: ident, $w: ident] $(, $ps:ident, $ts:ident, $is:tt)*) => {
+    ($n:ident, $c:tt) => {};
+    ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)*) => {
         impl<$($ts: Generate,)*> Generate for orn::$n::Or<$($ts,)*> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
@@ -185,7 +188,7 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                state.$u($(&self.0.$is,)*).generate(state)
+                state.any_uniform([$(orn::$n::Or::$ts(&self.0.$is),)*]).unwrap().generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
@@ -195,7 +198,7 @@ macro_rules! tuple {
             }
         }
 
-        impl<$($ts: Generate,)*> Generate for ($(Weight<$ts>,)*) {
+        impl<$($ts: Generate,)*> Generate for Any<($(Weight<$ts>,)*)> {
             type Item = orn::$n::Or<$($ts::Item,)*>;
             type Shrink = orn::$n::Or<$($ts::Shrink,)*>;
 
@@ -206,16 +209,16 @@ macro_rules! tuple {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                state.$w($(self.$is.as_ref(),)*).generate(state)
+                state.any_weighted([$(self.0.$is.as_ref().map(orn::$n::Or::$ts),)*]).unwrap().generate(state)
             }
 
             fn cardinality(&self) -> Option<u128> {
                 let cardinality = Some(0);
-                $(let cardinality = cardinality::any_sum(cardinality, self.$is.cardinality());)*
+                $(let cardinality = cardinality::any_sum(cardinality, self.0.$is.cardinality());)*
                 cardinality
             }
         }
     };
 }
 
-tuples!(@any tuple);
+tuples!(tuple);

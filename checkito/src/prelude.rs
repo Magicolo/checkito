@@ -36,7 +36,7 @@ pub const fn same<T: Clone>(value: T) -> Same<T> {
 ///
 /// See [`any`](crate::any()).
 #[inline]
-pub const fn any<G: Generate>(generators: G) -> Any<G> {
+pub const fn any<G>(generators: G) -> Any<G> {
     Any(generators)
 }
 

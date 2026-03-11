@@ -90,11 +90,11 @@ fn any_slice_exhaustive_covers_all_segments() {
 
 #[test]
 fn weighted_any_exhaustive_ignores_weights_and_still_covers_all() {
-    let values = [
+    let values = any([
         Weight::new(0.1, 1u8..=2),
         Weight::new(1.0, 10u8..=12),
         Weight::new(10.0, 20u8..=21),
-    ]
+    ])
     .checks(Ok::<_, ()>)
     .map(|result| result.into_item())
     .collect::<Vec<_>>();
@@ -360,10 +360,7 @@ fn filter_exhaustive_produces_one_value_per_index() {
 fn weighted_any_tuple_exhaustive_ignores_weights() {
     // Weighted tuple any in exhaustive mode should ignore weights and
     // deterministically cover all sub-generators.
-    let values = (
-        Weight::new(0.1, 0u8..=1),
-        Weight::new(10.0, 10u8..=11),
-    )
+    let values = any((Weight::new(0.1, 0u8..=1), Weight::new(10.0, 10u8..=11)))
         .unify::<u8>()
         .checks(Ok::<_, ()>)
         .map(|result| result.into_item())

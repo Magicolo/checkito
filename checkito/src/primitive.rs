@@ -592,11 +592,11 @@ pub mod char {
         const CARDINALITY: Option<u128> = cardinality(char::MIN, char::MAX);
 
         fn generate(&self, state: &mut State) -> Self::Shrink {
-            match (
+            match Any((
                 Weight::one(SPECIAL),
                 Weight::new(25.0, Range(Char::MIN, Char::MAX)),
-            )
-                .generate(state)
+            ))
+            .generate(state)
             {
                 Or2::T0(item) => Shrinker(super::Shrinker {
                     start: 0,
@@ -684,9 +684,10 @@ macro_rules! integer {
             const CARDINALITY: Option<u128> = cardinality($type::MIN, $type::MAX);
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match (
+                match Any((
                     Weight::one(SPECIAL),
-                    Weight::new(50.0, Range($type::MIN, $type::MAX)))
+                    Weight::new(50.0, Range($type::MIN, $type::MAX))
+                ))
                 .generate(state) {
                     Or2::T0(item) => Shrinker {
                         start: $type::MIN,
@@ -777,13 +778,14 @@ macro_rules! floating {
             };
 
             fn generate(&self, state: &mut State) -> Self::Shrink {
-                match (
+                match Any((
                     Weight::one(SPECIAL),
                     Weight::new(10.0, Range($type::MIN, $type::MAX)),
                     Weight::new(10.0, Range(-$type::EPSILON.recip(), $type::EPSILON.recip())),
                     Weight::new(5.0, Range($type::MIN.recip(), $type::MAX.recip())),
                     Weight::new(5.0, Range(-$type::EPSILON, $type::EPSILON)),
-                ).generate(state) {
+                ))
+                .generate(state) {
                     Or5::T0(item) => Shrinker {
                         start: $type::MIN,
                         end: $type::MAX,
