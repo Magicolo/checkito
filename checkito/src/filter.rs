@@ -3,7 +3,6 @@ use crate::{generate::Generate, shrink::Shrink, state::State};
 #[derive(Clone, Debug)]
 pub struct Filter<G: ?Sized, F> {
     pub(crate) filter: F,
-    pub(crate) retries: usize,
     pub(crate) generator: G,
 }
 
@@ -20,10 +19,13 @@ impl<G: Generate + ?Sized, F: Fn(&G::Item) -> bool + Clone> Generate for Filter<
     const CARDINALITY: Option<u128> = G::CARDINALITY;
 
     fn generate(&self, state: &mut State) -> Self::Shrink {
+        let shrinker = self.generator.generate(state);
         Shrinker {
-            shrinker: state.retry(&self.generator, self.retries, |shrinker| {
-                (self.filter)(&shrinker.item())
-            }),
+            shrinker: if (self.filter)(&shrinker.item()) {
+                Some(shrinker)
+            } else {
+                None
+            },
             filter: self.filter.clone(),
         }
     }

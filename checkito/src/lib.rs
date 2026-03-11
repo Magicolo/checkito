@@ -124,6 +124,5 @@ const GENERATES: usize = 1 << 10;
 const SHRINKS: usize = 1 << 20;
 const SAMPLES: usize = 1 << 7;
 const COLLECTS: usize = 1 << 10;
-const RETRIES: usize = 1 << 8;
 #[cfg(feature = "regex")]
 const REPEATS: u32 = 1 << 6;
