@@ -2,7 +2,7 @@ use crate::{generate::Generate, shrink::Shrink, state::State};
 
 #[derive(Debug, Clone)]
 pub struct FilterMap<G: ?Sized, F> {
-    pub(crate) filter: F,
+    pub(crate) map: F,
     pub(crate) generator: G,
 }
 
@@ -21,7 +21,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Shrinker {
             shrinker: self.generator.generate(state),
-            map: self.filter.clone(),
+            map: self.map.clone(),
         }
     }
 

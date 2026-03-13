@@ -220,7 +220,6 @@ async fn asynchronous_support(value: u64) {
 /// The [`Generate::any`] combinator chooses from its inputs. The produced
 /// `Or<..>` preserves the information about the choice but here, it can be
 /// simply collapsed using [`Generate::unify<T>`].
-#[test]
 fn has_even_hundred() {
     (0..100, 200..300, 400..500)
         .any()
@@ -233,7 +232,6 @@ fn has_even_hundred() {
 ///
 /// Here, "large" numbers are selected 10× more often than their "smaller" one
 /// before.
-#[test]
 fn weighted() {
     any((
         Weight::new(1.0, 9i32..90),
@@ -250,7 +248,6 @@ fn weighted() {
 ///
 /// Reproducible sequences are available through the
 /// [`Sampler`](sample::Sampler), which exposes a configurable seed.
-#[test]
 fn sampling() {
     // Collect 10 random strings. Sizes increase across the iterator.
     let strings = letter().collect::<String>().samples(10).collect::<Vec<_>>();

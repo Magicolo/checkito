@@ -61,7 +61,7 @@ fn string() -> impl Generate<Item = Node> {
 fn node() -> impl Generate<Item = Node> {
     (
         // [`with`] builds a generator based on the provided function.
-        // An alternative would be to use `Same(Node::Null)`, but that would required a [`Clone`]
+        // An alternative would be to use `Same(Node::Null)`, but that would require a [`Clone`]
         // implementation for [`Node`], so the [`with`] solution is preferred.
         with(|| Node::Null),
         // Uses [`bool`]'s canonical [`Generate`] through its [`FullGenerate`] implementation.
@@ -73,7 +73,7 @@ fn node() -> impl Generate<Item = Node> {
         // [`lazy`] is a helper [`Generate`] implementation that prevents from recursing
         // unconditionally (since it would blow up the stack).
         lazy(node)
-            // [`Generate::collect_with`] will call the previous generator a number of time defined
+            // [`Generate::collect_with`] will call the previous generator a number of times defined
             // by the provided [`Generate<Item = usize>`].
             .collect_with(..32usize)
             // [`Generate::dampen`] is used to prevent an exponential explosion of nodes by reducing

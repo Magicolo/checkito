@@ -121,22 +121,41 @@ where
     G::Shrink: 'static,
 {
     Shrinker::new(Box::new(
-        generator.downcast_ref::<G>().unwrap().generate(state),
+        generator
+            .downcast_ref::<G>()
+            .expect("type must match the erased generator type")
+            .generate(state),
     ))
 }
 
 fn cardinality<G: Generate + 'static>(generator: &dyn Any) -> Option<u128> {
-    generator.downcast_ref::<G>().unwrap().cardinality()
+    generator
+        .downcast_ref::<G>()
+        .expect("type must match the erased generator type")
+        .cardinality()
 }
 
 fn clone<S: Shrink + 'static>(shrinker: &dyn Any) -> Box<dyn Any> {
-    Box::new(shrinker.downcast_ref::<S>().unwrap().clone())
+    Box::new(
+        shrinker
+            .downcast_ref::<S>()
+            .expect("type must match the erased shrinker type")
+            .clone(),
+    )
 }
 
 fn item<S: Shrink + 'static>(shrinker: &dyn Any) -> S::Item {
-    shrinker.downcast_ref::<S>().unwrap().item()
+    shrinker
+        .downcast_ref::<S>()
+        .expect("type must match the erased shrinker type")
+        .item()
 }
 
 fn shrink<S: Shrink + 'static>(shrinker: &mut dyn Any) -> Option<Box<dyn Any>> {
-    Some(Box::new(shrinker.downcast_mut::<S>().unwrap().shrink()?))
+    Some(Box::new(
+        shrinker
+            .downcast_mut::<S>()
+            .expect("type must match the erased shrinker type")
+            .shrink()?,
+    ))
 }

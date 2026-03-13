@@ -94,7 +94,7 @@ pub const fn filter_map<G: Generate, T, F: Fn(G::Item) -> Option<T> + Clone>(
     generator: G,
     filter: F,
 ) -> FilterMap<G, F> {
-    FilterMap { generator, filter }
+    FilterMap { generator, map: filter }
 }
 
 /// See [`Generate::boxed`].

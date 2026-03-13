@@ -38,7 +38,7 @@ pub fn constant(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /**
 An in-place replacement for the `#[test]` attribute that allows adding
 parameters to test functions and providing `Generate` expressions as
-arguments to this attribute. See `examples::cheats.` for usage examples.
+arguments to this attribute. See the `cheat` example for usage examples.
 */
 #[cfg(feature = "check")]
 #[proc_macro_attribute]
