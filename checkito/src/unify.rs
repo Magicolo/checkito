@@ -37,7 +37,7 @@ impl<C: Constant, I> Constant for Unify<C, I> {
 macro_rules! tuple {
     ($n:ident, $c:tt) => {};
     ($n:ident, $c:tt $(, $ps:ident, $ts:ident, $is:tt)+) => {
-        impl<I, $($ts: Shrink,)*> Shrink for Unify<orn::$n::Or<$($ts,)*>, I> where $($ts::Item: Into<I>,)* {
+        impl<I, $($ts: Shrink<Item: Into<I>>,)*> Shrink for Unify<orn::$n::Or<$($ts,)*>, I> {
             type Item = I;
 
             fn item(&self) -> Self::Item {

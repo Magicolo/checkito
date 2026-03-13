@@ -648,6 +648,7 @@ fn catch<T, E, F: FnOnce() -> T>(run: F) -> result::Result<T, Cause<E>> {
 pub(crate) mod synchronous {
     use super::*;
 
+    #[derive(Debug, Clone, Copy, Default)]
     pub struct Run;
 
     /// An iterator over the results of a property test.
@@ -852,6 +853,7 @@ pub(crate) mod asynchronous {
     use futures_lite::{StreamExt, stream};
     use pin_project_lite::pin_project;
 
+    #[derive(Debug, Clone, Copy)]
     pub struct Run {
         pub(crate) concurrency: NonZeroUsize,
     }
