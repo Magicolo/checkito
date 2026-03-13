@@ -139,12 +139,7 @@ pub const fn dampen<G: Generate>(
     deepest: usize,
     limit: usize,
 ) -> Dampen<G> {
-    Dampen {
-        pressure,
-        deepest,
-        limit,
-        generator,
-    }
+    Dampen::new(pressure, deepest, limit, generator)
 }
 
 /// See [`Generate::keep`].

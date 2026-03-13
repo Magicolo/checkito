@@ -87,9 +87,14 @@ impl<T> Weight<T> {
 
 impl<G: Generate> Weight<G> {
     pub const fn new(weight: f64, generator: G) -> Self {
-        assert!(weight.is_finite());
-        assert!(weight >= f64::EPSILON);
-        Self { weight, generator }
+        Self {
+            weight: if weight.is_nan() {
+                0.0
+            } else {
+                utility::f64::max(weight, 0.0)
+            },
+            generator,
+        }
     }
 
     pub const fn one(generator: G) -> Self {
@@ -285,7 +290,7 @@ impl State {
                 let mut sum = 0.0f64;
                 for Weight { weight, generator } in generators {
                     sum += weight;
-                    if random <= sum {
+                    if weight >= 0.0 && random <= sum {
                         return Some(generator);
                     }
                 }
@@ -934,13 +939,11 @@ impl Sizes {
 
     #[inline]
     pub(crate) const fn new(start: f64, end: f64, scale: f64) -> Self {
-        assert!(start.is_finite() && end.is_finite() && start <= end);
-        assert!(scale.is_finite() && scale >= 1.0);
-
+        assert!(start.is_finite() && end.is_finite() && scale.is_finite());
         Self {
             range: Range(
-                utility::f64::clamp(start, 0.0, 1.0),
-                utility::f64::clamp(end, 0.0, 1.0),
+                utility::f64::clamp(utility::f64::min(start, end), 0.0, 1.0),
+                utility::f64::clamp(utility::f64::max(start, end), 0.0, 1.0),
             ),
             scale: utility::f64::clamp(scale, 1.0, f64::MAX),
         }

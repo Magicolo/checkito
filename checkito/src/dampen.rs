@@ -1,11 +1,23 @@
-use crate::{generate::Generate, state::State};
+use crate::{generate::Generate, state::State, utility};
 
 #[derive(Clone, Debug)]
 pub struct Dampen<G: ?Sized> {
-    pub(crate) pressure: f64,
-    pub(crate) deepest: usize,
-    pub(crate) limit: usize,
-    pub(crate) generator: G,
+    pressure: f64,
+    deepest: usize,
+    limit: usize,
+    generator: G,
+}
+
+impl<G> Dampen<G> {
+    pub const fn new(pressure: f64, deepest: usize, limit: usize, generator: G) -> Self {
+        assert!(pressure.is_finite());
+        Self {
+            pressure: utility::f64::max(pressure, 0.0),
+            deepest,
+            limit,
+            generator,
+        }
+    }
 }
 
 impl<G: Generate + ?Sized> Generate for Dampen<G> {

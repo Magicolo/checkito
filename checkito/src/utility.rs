@@ -134,6 +134,12 @@ macro_rules! float {
         pub const fn max(left: $type, right: $type) -> $type {
             if left >= right { left } else { right }
         }
+
+        #[inline]
+        #[allow(dead_code)]
+        pub const fn min(left: $type, right: $type) -> $type {
+            if left <= right { left } else { right }
+        }
     };
 }
 
