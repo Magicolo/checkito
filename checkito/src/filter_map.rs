@@ -9,7 +9,7 @@ pub struct FilterMap<G: ?Sized, F> {
 #[derive(Debug, Clone)]
 pub struct Shrinker<S, F> {
     shrinker: S,
-    map: F,
+    filter: F,
 }
 
 impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for FilterMap<G, F> {
@@ -21,7 +21,7 @@ impl<G: Generate + ?Sized, T, F: Fn(G::Item) -> Option<T> + Clone> Generate for 
     fn generate(&self, state: &mut State) -> Self::Shrink {
         Shrinker {
             shrinker: self.generator.generate(state),
-            map: self.filter.clone(),
+            filter: self.filter.clone(),
         }
     }
 
@@ -34,13 +34,13 @@ impl<S: Shrink, T, F: Fn(S::Item) -> Option<T> + Clone> Shrink for Shrinker<S, F
     type Item = Option<T>;
 
     fn item(&self) -> Self::Item {
-        (self.map)(self.shrinker.item())
+        (self.filter)(self.shrinker.item())
     }
 
     fn shrink(&mut self) -> Option<Self> {
         Some(Self {
             shrinker: self.shrinker.shrink()?,
-            map: self.map.clone(),
+            filter: self.filter.clone(),
         })
     }
 }
