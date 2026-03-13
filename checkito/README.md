@@ -208,7 +208,7 @@ fn exhaustive_when_small_domain(sign: bool, digit: u8) {
 /// The function body is an ordinary `async` block, so `.await` can be used
 /// freely.
 #[check(0u64..1000)]
-async fn async_check(value: u64) {
+async fn asynchronous_support(value: u64) {
     let doubled = async { value * 2 }.await;
     assert!(doubled < 2000);
 }
@@ -226,6 +226,43 @@ fn has_even_hundred() {
         .any()
         .unify::<i32>()
         .check(|value| assert!((value / 100) % 2 == 0));
+}
+
+/// [`Weight`] lets you bias the [`Generate::any`] combinator with weights that
+/// control how often each branch is chosen.
+///
+/// Here, "large" numbers are selected 10× more often than their "smaller" one
+/// before.
+#[test]
+fn weighted() {
+    any((
+        Weight::new(1.0, 9i32..90),
+        Weight::new(10.0, 90i32..900),
+        Weight::new(100.0, 900i32..9000),
+    ))
+    .unify::<i32>()
+    .check(|value| assert!((9..9000).contains(&value)));
+}
+
+/// [`Sample`] provides a way to draw random values from a generator.
+/// [`Sample::samples`] produces an iterator of progressively larger values.
+/// [`Sample::sample`] produces a single value of a specific `size`.
+///
+/// Reproducible sequences are available through the
+/// [`Sampler`](sample::Sampler), which exposes a configurable seed.
+#[test]
+fn sampling() {
+    // Collect 10 random strings. Sizes increase across the iterator.
+    let strings = letter().collect::<String>().samples(10).collect::<Vec<_>>();
+    assert_eq!(strings.len(), 10);
+
+    // Reproducible sampling: same seed → same values.
+    let mut sampler = (0u32..1000).sampler();
+    sampler.seed = 12345;
+    sampler.count = 5;
+    let first = sampler.clone().samples().collect::<Vec<_>>();
+    let second = sampler.samples().collect::<Vec<_>>();
+    assert_eq!(first, second);
 }
 
 fn main() {

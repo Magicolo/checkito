@@ -119,6 +119,7 @@ pub use prelude::*;
 pub use prove::Prove;
 pub use sample::Sample;
 pub use shrink::Shrink;
+pub use state::Weight;
 
 const GENERATES: usize = 1 << 10;
 const SHRINKS: usize = 1 << 20;
